@@ -58,7 +58,7 @@ Scopes name **what** changed. Use the crate name without the `lince-` prefix, or
 | `xtask` | Build automation crate |
 | `replay`, `frame-analyzer`, `shader-lab` | Tools in `tools/` |
 | `poc-<n>` | Proof of concept *n* (`poc/<slug>/` and `docs/poc-reports/poc-<n>-*`) |
-| `design` | Design documents `docs/00-*` to `docs/09-*` |
+| `design` | Numbered design documents `docs/NN-*.md` |
 | `adr` | Architecture Decision Records |
 | `research` | `docs/research/` |
 | `backlog` | `docs/backlog.md`, `docs/decisions/` |

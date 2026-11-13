@@ -30,6 +30,8 @@ content using user-provided keys. It is a deliberate legal-risk choice.
 
 ## 3. System functionality without firmware
 
+The full plan, item by item, is in [doc 10](10-firmware-independence.md).
+
 All system services are original HLE implementations. Where a game requires system data
 (e.g. shared fonts), Lince-NX provides freely licensed substitutes with compatible metrics where
 possible, and documents rendering differences.
