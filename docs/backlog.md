@@ -19,16 +19,19 @@ Rules:
 | T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Blocked | T-003 | 0002 |
 | T-005 | Reference crate: `lince-common` written to every convention | Impl | Blocked | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
-| T-010 | PoC-6: cache store prototype and benchmark harness | PoC | In review | — | 0015, 0016 |
-| T-011 | PoC-7: frame ledger prototype | PoC | In review | — | 0027 |
+| T-010 | PoC-6: cache store prototype and benchmark harness | PoC | Done | — | 0015, 0016 |
+| T-011 | PoC-7: frame ledger prototype | PoC | Done | — | 0027 |
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
-| T-013 | Tier-0 micro-op format specification | Docs | In review | — | 0010 |
+| T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
 | T-014 | Ampere SASS test corpus from team-written CUDA kernels | Maintainer | Blocked | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Ready | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Ready | — | 0007 |
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | Ready | — | 0024, 0029 |
 | T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
+| T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | Ready | T-010 | 0015 |
+| T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
+| T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 
 ## Details
 
@@ -117,3 +120,21 @@ licensed substitute, or a documented "unavailable" behavior. Extend
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
+
+### T-020 — PoC-6 XXH3 checksum
+Decision [D-001](decisions/D-001-cache-hash-xxh3.md). Add `xxhash-rust` (`xxh3` feature) to
+`poc/cache-store`, use XXH3-64 for the payload checksum as doc 02 §4.1 specifies, and time
+CRC-32C vs XXH3-64 on 1 KiB–2 MiB payloads in the harness.
+- **Acceptance:** harness writes a checksum-cost CSV; fault-injection tests still pass; report
+  updated (simplification 1 removed or measured).
+
+### T-021 — PoC-7 memory-model checks
+Decision [D-004](decisions/D-004-ledger-memory-model-checks.md). Add `loom` as a
+dev-dependency of `poc/frame-ledger` and model one producer and one concurrent snapshot;
+run the test suite on an ARM host (e.g. an ARM CI runner).
+- **Acceptance:** loom test passes and fails when a fence in `ring.rs` is removed (shown in
+  the PR); ARM run result recorded in the PoC-7 report.
+
+### T-022 — PoC-5 pipeline binaries
+Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add
+the mechanism to `poc/vk-pipelines` and the report.
