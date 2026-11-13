@@ -34,7 +34,7 @@ maintainer — do not decide alone.
 
 | Id | Rule |
 |----|------|
-| LEGAL-20 | **Lince code is original.** No copying, line-by-line translation (e.g. C++ → Rust) or close paraphrase of code from other emulators (yuzu, Eden, Eglantine, Lichii, Ryujinx, Dolphin, Cemu, …), even where licenses would be compatible. Algorithms and behavior may be learned from them and cited. |
+| LEGAL-20 | **Lince code is original**, in Rust and in C++. No copying, line-by-line translation (e.g. C++ → Rust) or close paraphrase of code from other emulators (yuzu, Eden, Eglantine, Lichii, Ryujinx, Dolphin, Cemu, …), even where licenses would be compatible. Algorithms and behavior may be learned from them and cited. |
 | LEGAL-21 | **AI assistants must not reproduce code from memory** of other projects. If generated code resembles a known project's implementation, rewrite it from the behavior description or discard it. |
 | LEGAL-22 | Any exception to LEGAL-20 (e.g. a public-domain table, a permissively licensed algorithm) requires an ADR, the original license notice kept intact, and an entry in `THIRD-PARTY-NOTICES.md`. |
 | LEGAL-23 | Code snippets from Q&A sites or blogs are treated as third-party code (LEGAL-22), not as free to paste. |
@@ -46,11 +46,11 @@ maintainer — do not decide alone.
 | LEGAL-30 | Every source file starts with an SPDX header (see below). Files without one are not merged. |
 | LEGAL-31 | Every crate's `Cargo.toml` declares `license = "GPL-3.0-or-later"` (per the repository `LICENSE`; ADR-0000). |
 | LEGAL-32 | Dependencies must have licenses in the `deny.toml` allow-list, which is limited to GPL-3.0-compatible licenses. Adding a license to the list requires maintainer approval. |
-| LEGAL-33 | Non-Rust code in release builds follows ADR-0026 and records its license in `THIRD-PARTY-NOTICES.md`. |
+| LEGAL-33 | Third-party non-Rust code in release builds follows ADR-0030 and records its license in `THIRD-PARTY-NOTICES.md`. |
 | LEGAL-34 | Fonts, icons, images and sounds shipped with Lince are original or under a license that allows redistribution with GPL software; the license is recorded next to the asset. |
 | LEGAL-35 | Contributors agree that their contributions are their own work and licensed under the project license. Whether to require a DCO `Signed-off-by` footer is a maintainer decision (backlog T-006). |
 
-SPDX header for Rust and shell files:
+SPDX header for Rust, C++ (`.cpp`, `.hpp`, `.h`) and shell files (shell files use `#` instead of `//`):
 
 ```rust
 // SPDX-FileCopyrightText: 2026 Lince contributors

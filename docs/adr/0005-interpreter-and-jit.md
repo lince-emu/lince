@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-11-13
-- **Related:** ADR-0004, ADR-0017, ADR-0026
+- **Related:** ADR-0004, ADR-0017, ADR-0030
 
 ## Context
 CPU translation can cause stutter just like shader compilation: a guest thread hitting new code
@@ -10,7 +10,9 @@ waits for its translation. The charter forbids avoidable interruptions from JIT 
 
 ## Requirements
 New code must run within microseconds; hot code must reach high quality; optimizing work must
-run off guest threads; Rust only in the core (dynarmic is C++ and is excluded).
+run off guest threads. The CPU subsystem is written in C++ inside `lince-cpu-a64`
+(ADR-0030); it is an independent implementation, so existing JITs such as dynarmic are
+neither used nor consulted as code (LEGAL-20).
 
 ## Alternatives
 1. Interpreter only.
@@ -23,11 +25,14 @@ run off guest threads; Rust only in the core (dynarmic is C++ and is excluded).
 ## Decision
 Option 3 as the primary design:
 - **Tier A** interpreter: reference semantics, debugging, rarely executed code.
-- **Tier B** baseline JIT: per-block template emission (`dynasm-rs` or `iced-x86` code assembler
-  on x64; `dynasm-rs` on ARM64), target compile cost of a few microseconds per block, on the
-  guest thread.
-- **Tier C** optimizing JIT: Cranelift over hot regions on governed background workers;
-  published by atomic patching of block entry points.
+- **Tier B** baseline JIT: per-block template emission, target compile cost of a few
+  microseconds per block, on the guest thread.
+- **Tier C** optimizing JIT over hot regions on governed background workers; published by
+  atomic patching of block entry points.
+
+Both tiers are C++ (ADR-0030). The code emitter (an own assembler or a third-party C++
+assembler library) is not decided; a third-party emitter needs its own ADR (ADR-0030).
+The Rust candidates considered earlier (`dynasm-rs`, `iced-x86`, Cranelift) no longer apply.
 
 Option 4 is an ARM64-host experiment after M6. Option 5 is deferred until frame-ledger data
 shows boot-time JIT cost matters (expected small with tier B).
@@ -39,13 +44,13 @@ Mirrors the shader tiering: always-available correct execution, background optim
 bounds the on-thread cost; Tier C gets quality without blocking.
 
 ## Advantages
-No JIT stalls by construction; tiers share the decoder; Cranelift is pure Rust.
+No JIT stalls by construction; tiers share the decoder.
 
 ## Disadvantages
 Three execution engines to keep consistent; code patching needs careful synchronization.
 
 ## Risks
-Tier B quality too low for CPU-heavy titles until Tier C lands; Cranelift compile time for big
+Tier B quality too low for CPU-heavy titles until Tier C lands; Tier C compile time for big
 regions. Mitigation: region size limits; measure.
 
 ## Validation plan

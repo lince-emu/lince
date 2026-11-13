@@ -172,8 +172,8 @@ result and a ledger event (ARCH-31); guessed fields are marked `// GUESS:` with 
 
 ## PAT-10 — Adding a guest shader instruction
 
-1. Decoder entry in the instruction table (`lince-shader-sass-ampere/src/generated/` or the
-   table source), with encoding evidence in `docs/research/ampere-sass-encoding.md`.
+1. Decoder entry in the instruction table (Ampere SASS front-end in `lince-shader/cpp/src/`,
+   or the table source), with encoding evidence in `docs/research/ampere-sass-encoding.md`.
 2. IR lowering in one function per instruction family.
 3. Tier-0 interpreter support (or explicit no-fallback classification).
 4. SPIR-V emission.

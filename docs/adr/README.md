@@ -13,7 +13,7 @@ prototype reports.
 | ID | Title | Status |
 |----|-------|--------|
 | [0000](0000-project-license.md) | Project license | **Accepted** |
-| [0001](0001-rust-toolchain-and-structure.md) | Rust toolchain and project structure | **Accepted** |
+| [0001](0001-rust-toolchain-and-structure.md) | Rust toolchain and project structure | **Accepted** (language clause superseded by ADR-0030) |
 | [0002](0002-build-system.md) | Build system: Cargo workspace + xtask | **Accepted** |
 | [0003](0003-host-platform-support.md) | Host platform support | Proposed |
 | [0004](0004-guest-cpu-model.md) | Guest CPU architecture model | Proposed |
@@ -38,10 +38,11 @@ prototype reports.
 | [0023](0023-frame-pacing.md) | Frame pacing and presentation | Proposed (needs PoC-10) |
 | [0024](0024-hle-architecture.md) | HLE architecture | Proposed |
 | [0025](0025-switch1-switch2-boundaries.md) | Switch 1 / Switch 2 component boundaries | Proposed |
-| [0026](0026-foreign-code-policy.md) | Foreign (non-Rust) code policy | Proposed |
+| [0026](0026-foreign-code-policy.md) | Foreign (non-Rust) code policy | Superseded by ADR-0030 |
 | [0027](0027-observability.md) | Observability: frame ledger and tracing | Proposed (needs PoC-7) |
 | [0028](0028-testing-strategy.md) | Testing strategy | Proposed |
 | [0029](0029-no-keys-no-firmware.md) | No console keys and no firmware, including user-provided ones | **Accepted** |
+| [0030](0030-hybrid-rust-cpp.md) | Hybrid Rust + C++ implementation | **Accepted** (details need PoC-11) |
 
 ## Template
 

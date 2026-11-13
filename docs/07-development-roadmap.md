@@ -18,7 +18,7 @@ Durations are deliberately omitted until PoC results exist.
 | **M10 Resources & memory** | Texture pipeline (GPU ASTC/BC), streaming, eviction, read traps | Scenarios 11, 16 targets | Non-shader stutter |
 | **M11 First playable titles** | 1–3 titles fully playable | PoC-1 and PoC-10 pass on them | End-to-end proof |
 | **M12 Continuous optimization** | Tier C CPU JIT, Tier 2 tuning, parallel recording, PGO | Regression gates; targets tightened | Performance headroom |
-| **M13 Compatibility expansion** | More titles, services, mesh/tensor coverage, video decode (ADR-0026) | Compatibility list with ledger reports | Breadth |
+| **M13 Compatibility expansion** | More titles, services, mesh/tensor coverage, video decode (third-party code ADR, ADR-0030) | Compatibility list with ledger reports | Breadth |
 | **M14 Switch 1** | AArch32, Maxwell front-end, MME, NVN services (ADR-0025) | Switch 1 titles boot on shared core | Second target |
 
 ## Rules

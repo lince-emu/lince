@@ -1,6 +1,6 @@
 # ADR-0026: Foreign (non-Rust) code policy
 
-- **Status:** Proposed
+- **Status:** Superseded by [ADR-0030](0030-hybrid-rust-cpp.md)
 - **Date:** 2026-11-13
 - **Related:** charter §2.1; ADR-0001, ADR-0015, ADR-0000
 

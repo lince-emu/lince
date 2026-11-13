@@ -31,8 +31,10 @@ Violating any of these is a bug, regardless of test results. The complete, numbe
 6. **Translation never reads live guest state** — only the recorded dependency snapshot.
 7. **Background work goes through `lince-sched`** priority classes and the governor; never
    spawn ad-hoc threads.
-8. **`unsafe` only in crates marked `[unsafe]`** in `docs/04-rust-architecture.md`, each block
-   with a `// SAFETY:` comment.
+8. **`unsafe` only in crates marked `[unsafe]`** in `docs/04-rust-architecture.md` (and in
+   the `src/ffi` module of `[c++]` crates), each block with a `// SAFETY:` comment.
+   **C++ only in `[c++]` crates**, behind their C header: no exceptions, RTTI, threads, I/O or
+   mutable globals (ADR-0030, ARCH-50–54).
 9. **No code copied or translated** from other emulators (yuzu, Eden, Eglantine, Lichii,
    Ryujinx, Dolphin, Cemu, …). Behavior knowledge must cite repository + commit + file in
    `docs/research/`.
@@ -62,7 +64,7 @@ Violating any of these is a bug, regardless of test results. The complete, numbe
 
 Ask the maintainer when a change:
 - needs a new ADR or changes an Accepted one,
-- adds a dependency (any non-Rust dependency always needs ADR-0026 review),
+- adds a dependency (any third-party non-Rust dependency always needs an ADR, ADR-0030),
 - changes a public crate API or a cache format,
 - trades correctness for performance in any way.
 
