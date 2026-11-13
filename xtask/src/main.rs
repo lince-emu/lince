@@ -16,6 +16,7 @@
 )]
 
 mod ci;
+mod commits;
 mod error;
 mod license;
 mod process;
@@ -28,14 +29,17 @@ use std::process::ExitCode;
 const USAGE: &str = "usage: cargo xtask <command>
 
 commands:
-  ci    run every check that CI runs (fmt, SPDX, license, invariants, clippy, tests, deny)";
+  ci [--base REV] [--pr-title TITLE]
+        run every check that CI runs (fmt, commit messages, SPDX, license, invariants,
+        clippy, tests, deny); commits are checked from REV (default origin/main) to HEAD";
 
 fn main() -> ExitCode {
-    if std::env::args().nth(1).as_deref() != Some("ci") {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let Some(range) = parse_ci_args(&args) else {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
-    }
-    match ci::run(workspace_root()) {
+    };
+    match ci::run(workspace_root(), &range) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("xtask: {error}");
@@ -44,7 +48,62 @@ fn main() -> ExitCode {
     }
 }
 
+/// Parses `ci [--base REV] [--pr-title TITLE]`; `None` for anything else.
+fn parse_ci_args(args: &[String]) -> Option<commits::Range> {
+    let (command, mut rest) = args.split_first()?;
+    if command != "ci" {
+        return None;
+    }
+    let mut range = commits::Range::default();
+    while let [flag, value, tail @ ..] = rest {
+        match flag.as_str() {
+            "--base" => range.base = Some(value.clone()),
+            "--pr-title" => range.pr_title = Some(value.clone()),
+            _ => return None,
+        }
+        rest = tail;
+    }
+    rest.is_empty().then_some(range)
+}
+
 /// The workspace root: `xtask/` is one of its direct children.
 fn workspace_root() -> &'static Path {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/.."))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_ci_args;
+    use crate::commits::Range;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn ci_accepts_base_and_pr_title_in_any_order() {
+        let range = parse_ci_args(&args(&[
+            "ci",
+            "--pr-title",
+            "feat(x): y",
+            "--base",
+            "origin/main",
+        ]));
+        assert_eq!(
+            range,
+            Some(Range {
+                base: Some("origin/main".to_owned()),
+                pr_title: Some("feat(x): y".to_owned()),
+            })
+        );
+        assert_eq!(parse_ci_args(&args(&["ci"])), Some(Range::default()));
+    }
+
+    #[test]
+    fn unknown_commands_flags_and_missing_values_are_rejected() {
+        assert_eq!(parse_ci_args(&args(&["bench"])), None);
+        assert_eq!(parse_ci_args(&args(&["ci", "--verbose", "1"])), None);
+        assert_eq!(parse_ci_args(&args(&["ci", "--base"])), None);
+        assert_eq!(parse_ci_args(&args(&[])), None);
+    }
 }
