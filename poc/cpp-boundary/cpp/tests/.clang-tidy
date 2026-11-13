@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Lince contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Test drivers: literal inputs and expected values are the test, not magic numbers.
+InheritParentConfig: true
+Checks: >
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers

@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Lince contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+# C++ formatting for every [c++] crate and C++ PoC (ARCH-54). Checked by `cargo xtask ci`.
+BasedOnStyle: LLVM
+ColumnLimit: 100

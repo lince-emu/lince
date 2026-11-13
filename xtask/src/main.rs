@@ -17,6 +17,7 @@
 
 mod ci;
 mod commits;
+mod cpp;
 mod error;
 mod license;
 mod process;
@@ -31,7 +32,7 @@ const USAGE: &str = "usage: cargo xtask <command>
 commands:
   ci [--base REV] [--pr-title TITLE]
         run every check that CI runs (fmt, commit messages, SPDX, license, invariants,
-        clippy, tests, deny); commits are checked from REV (default origin/main) to HEAD";
+        C++ format/lint/sanitizers, clippy, tests, deny); commits are checked from REV (default origin/main) to HEAD";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
