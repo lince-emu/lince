@@ -5,6 +5,9 @@ Status: Proposed · Related ADRs: 0000, 0024, 0026
 > This document records engineering policy. It is not legal advice. Have a qualified lawyer
 > review it before public release.
 
+The operational, numbered rules derived from this policy are in
+[`conventions/legal-rules.md`](conventions/legal-rules.md) (`LEGAL-xx`).
+
 ## 1. What Lince-NX will not do
 
 - Ship, download, extract or derive console keys or firmware.
@@ -12,6 +15,7 @@ Status: Proposed · Related ADRs: 0000, 0024, 0026
   technical protection measures.
 - Ship copyrighted system files (fonts, system applets, shader binaries, game data).
 - Publish captured GPU command streams, shader dumps or screenshots that contain game assets.
+- Use leaked or NDA material (SDKs, headers, documentation, source code) in any form.
 
 ## 2. What it loads
 
