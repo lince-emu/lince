@@ -12,6 +12,10 @@ edition = "2024"
 rust-version = "1.100"
 publish = false
 
+# Shared dependency versions; crates opt in with `<name>.workspace = true` (DEV-80 lists why).
+[workspace.dependencies]
+thiserror = "2.0.21"                 # error enums in library crates (DEV-20, PAT-01)
+
 # docs/conventions/lints.md — every crate opts in with `[lints] workspace = true`.
 [workspace.lints.rust]
 unsafe_code = "deny"                 # allowed per crate with #![allow(unsafe_code)] — ARCH-24 crates only
