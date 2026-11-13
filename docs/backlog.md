@@ -25,7 +25,7 @@ Rules:
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
 | T-014 | Ampere SASS test corpus: compile team-written CUDA kernels (no NVIDIA GPU needed) | PoC | Ready | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
-| T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Ready | — | 0007 |
+| T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | In review | — | 0007 |
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | In review | — | 0024, 0029 |
 | T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
@@ -130,6 +130,7 @@ any Rust crates worth evaluating. Pin commits.
 ### T-016 — Research: Vulkan feature coverage survey
 Use public sources (gpuinfo database, Mesa release notes, vendor driver notes). Output a table
 per vendor/driver for the features in ADR-0007's tiers; mark data dates.
+PR: https://github.com/lince-emu/lince/pull/10
 
 ### T-019 — Research: firmware-free system data and applets
 Use the `research-note` skill. From public documentation and the service calls observed by
