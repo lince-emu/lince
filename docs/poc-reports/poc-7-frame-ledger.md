@@ -1,7 +1,8 @@
 # PoC-7 — Frame ledger
 
 - **Status:** The prototype, the analyzer and the event-cost benchmark are done. Event cost was
-  measured on one machine (below). The Tracy bridge is not part of this PoC.
+  measured on one machine (below). A loom model of the ring passes (T-021); the run on ARM
+  hardware is pending. The Tracy bridge is not part of this PoC.
 - **Enables:** ADR-0027 (observability).
 - **Code:** [`poc/frame-ledger/`](../../poc/frame-ledger/README.md).
 - **Scope:** The maintainer approved this as a single PR (~850 non-test lines, above the
@@ -51,6 +52,21 @@
   - concurrent waits on three critical threads;
   - a wait that started before its frame;
   - a frame whose evidence was overwritten.
+- **Memory-model check (T-021, D-004):** `ring::loom_tests` in `src/ring.rs` is a
+  [loom](https://crates.io/crates/loom) 0.7.3 model. `loom` is a dev-dependency that is
+  resolved only under `--cfg loom`; in that build the ring takes `AtomicU64` and `fence` from
+  loom instead of std, and nothing else in the ring changes.
+  - **Model:** a ring with one slot. Event 0 is pushed first. Then a producer thread pushes
+    events 1 and 2 while the model thread takes a snapshot, so every push overwrites the event
+    the snapshot may be copying. Each word of each event has its own value.
+  - **Property:** entry `i` of a snapshot that reports `head` events must equal event
+    `head - len + i`, all three words. A torn copy, or a stale event accepted under a newer
+    number, fails the assertion.
+  - **Command:** `RUSTFLAGS="--cfg loom" cargo test --release --lib loom` in
+    `poc/frame-ledger/`, rustc 1.100.0, on the machine above.
+  - **Fence check:** the same command with each fence deleted from a copy of `src/ring.rs`,
+    one at a time: the release fence in `Ring::push` and the acquire fence in
+    `Ring::snapshot`. The removals were not committed.
 
 ## Results
 
@@ -81,6 +97,38 @@ The other analyzer tests:
 - A spike whose GPU-back events were overwritten is reported as evidence incomplete, not as
   the game's own behavior.
 
+### Loom model
+
+| Ring as built | Result |
+|---------------|--------|
+| Unchanged | Passes. Loom completed 89,441 executions (`LOOM_LOG=info`) in about 5 s. |
+| Without `fence(Ordering::Release)` in `Ring::push` | Fails: `torn or stale entry for event 0`, `left: [1, 2, 6]`, `right: [1, 2, 3]` |
+| Without `fence(Ordering::Acquire)` in `Ring::snapshot` | Fails with the same assertion and values |
+
+In both failing runs the snapshot accepted event 0 with its third word taken from event 1
+(`6`): the reader saw the producer's new data but still read the old sequence word. So loom
+detects the removal of either fence, and the model needs both.
+
+### ARM run
+
+**Pending.** No ARM host was available; this machine is x86-64, whose strong memory ordering
+cannot expose a missing fence. On any ARM64 host (Linux, macOS or Windows on ARM), from
+`poc/frame-ledger/`:
+
+```bash
+rustc -vV
+cargo test --release
+for i in $(seq 1 100); do
+  cargo test --release --test ledger dumps_taken_during_recording_never_contain_torn_events \
+    || break
+done
+RUSTFLAGS="--cfg loom" cargo test --release --lib loom
+```
+
+Record here: the host (CPU or board model), the OS and its version, the `rustc -vV` output
+(host triple and version), how many of the 100 stress repetitions passed, and the result of
+the other two commands.
+
 ## Comparison with the hypothesis
 
 - **Event cost ≤ 30 ns:**
@@ -107,9 +155,10 @@ The other analyzer tests:
   - many recording threads at once;
   - ring sizing, which ADR-0027's validation plan lists and which is still open;
   - overhead inside a real frame loop, i.e. the < 1 % criterion.
-  - The memory-ordering protocol was checked by argument and by a stress test on x86-64 only.
-    x86-64 orders memory strongly, so the test cannot catch a missing or weakened fence.
-    There is no loom model and no run on weak-memory hardware.
+  - The memory-ordering protocol is checked by the loom model above and by a stress test on
+    x86-64. Loom explores only the weak-memory behaviors it models, and the model covers one
+    producer, one reader and one slot. There is no run on weak-memory hardware yet (see
+    "ARM run").
 
 ## Verdict
 
@@ -118,8 +167,8 @@ The other analyzer tests:
 - The analyzer meets its criterion for duration-based causes.
 - Event cost meets ≤ 30 ns without a concurrent reader, on one machine. With a reader dumping
   continuously, it misses by about 1–1.5 ns.
-- One CPU and an x86-only concurrency test are not enough to accept ADR-0027's overhead
-  budget.
+- One CPU is not enough to accept ADR-0027's overhead budget. The loom model checks the ring's
+  memory ordering, but the run on ARM hardware is still pending.
 
 ## ADR and design changes proposed
 
@@ -130,7 +179,7 @@ None applied. To decide with ADR-0027:
    `ts` = end of interval. Doc 05 currently gives `CompileStart/End` a tier argument only.
    The analyzer needs durations to attribute time.
 2. **Before acceptance:**
-   - Add a loom model (or an equivalent weak-memory check) of the ring.
+   - Run the test suite on ARM hardware (see "ARM run"). The loom model is done (T-021).
    - Re-run on the other tier-1 platforms and with several recording threads.
    - Measure ring sizing and frame-loop overhead.
 3. **Timestamp source:** Measure a cheaper source, such as the CPU timestamp counter. That

@@ -30,7 +30,7 @@ Rules:
 | T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
 | T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | In review | T-010 | 0015 |
-| T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
+| T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | In review | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Ready | T-010 | 0015 |
@@ -172,6 +172,7 @@ only), use any ARM host available to the maintainer or a contributor.
   `Ring::push` and the acquire fence in `Ring::snapshot`. If loom cannot detect the removal
   of one of them, the PR and the PoC-7 report document that loom limitation instead. The ARM
   run result, with the host it ran on, is recorded in the PoC-7 report.
+- **PR:** https://github.com/lince-emu/lince/pull/19
 
 ### T-022 — PoC-5 pipeline binaries
 Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add

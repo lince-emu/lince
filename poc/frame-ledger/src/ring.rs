@@ -14,7 +14,12 @@
 //! Threads: `push` runs on the owning (possibly render-critical) thread and never blocks or
 //! allocates. `snapshot` allocates and copies, so it runs off render-critical threads.
 
-use std::sync::atomic::{AtomicU64, Ordering, fence};
+// The loom model (`loom_tests` below) swaps in loom's atomics; every other build uses std's.
+#[cfg(all(test, loom))]
+use loom::sync::atomic::{AtomicU64, fence};
+use std::sync::atomic::Ordering;
+#[cfg(not(all(test, loom)))]
+use std::sync::atomic::{AtomicU64, fence};
 
 const WORDS_PER_SLOT: usize = 4;
 
@@ -94,7 +99,7 @@ impl Ring {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(loom)))]
 mod tests {
     use super::Ring;
 
@@ -135,5 +140,46 @@ mod tests {
         let kept: Vec<u64> = snap.iter().map(|w| w[0]).collect();
         assert_eq!(kept, (6..16).collect::<Vec<u64>>());
         assert_eq!(pushed, 16);
+    }
+}
+
+/// Loom model of one producer and one concurrent snapshot (D-004, DEV-32). Run with
+/// `RUSTFLAGS="--cfg loom" cargo test --release --lib loom`.
+#[cfg(all(test, loom))]
+mod loom_tests {
+    use super::Ring;
+    use loom::sync::Arc;
+    use loom::thread;
+
+    /// The words of event `n`. Every word differs between events and from the zeroed slots, so
+    /// a torn copy, or one from another event, never matches.
+    fn words(n: u64) -> [u64; 3] {
+        [3 * n + 1, 3 * n + 2, 3 * n + 3]
+    }
+
+    /// One producer pushes events 1 and 2 while the model thread takes a snapshot.
+    fn push_while_snapshotting() {
+        // One slot, so every push overwrites the event the snapshot may be copying.
+        let ring = Arc::new(Ring::new(0));
+        ring.push(words(0));
+        let producer_ring = Arc::clone(&ring);
+        let producer = thread::spawn(move || {
+            producer_ring.push(words(1));
+            producer_ring.push(words(2));
+        });
+        let (snapshot, head) = ring.snapshot();
+        // The seqlock property: the snapshot is the newest run of events below `head`, and each
+        // entry is exactly the event with that number, never torn or stale.
+        let len = u64::try_from(snapshot.len()).expect("a snapshot length fits in u64");
+        assert!(len <= head);
+        for (n, entry) in (head - len..).zip(&snapshot) {
+            assert_eq!(*entry, words(n), "torn or stale entry for event {n}");
+        }
+        producer.join().expect("the producer thread does not panic");
+    }
+
+    #[test]
+    fn a_concurrent_snapshot_returns_only_whole_events_under_their_own_number() {
+        loom::model(push_while_snapshotting);
     }
 }

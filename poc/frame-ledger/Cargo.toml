@@ -8,6 +8,10 @@ description = "PoC-7: always-on frame ledger prototype, analyzer and event-cost 
 
 [dependencies]
 
+# Loom model of the ring (D-004). Only built with `RUSTFLAGS="--cfg loom"`.
+[target.'cfg(loom)'.dev-dependencies]
+loom = "0.7.3"
+
 [lints.rust]
 unsafe_code = "forbid"
 unsafe_op_in_unsafe_fn = "deny"
@@ -16,6 +20,7 @@ unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 let_underscore_drop = "warn"
 static_mut_refs = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(loom)"] }
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }
