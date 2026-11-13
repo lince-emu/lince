@@ -40,10 +40,21 @@ riskiest assumptions are being prototyped first.
 | [07 — Development roadmap](docs/07-development-roadmap.md) | Milestones by dependency and risk |
 | [08 — Switch 2 hardware](docs/08-switch2-hardware.md) | Known / inferred / unknown |
 | [09 — Legal and content](docs/09-legal-and-content.md) | No keys, no firmware, clean-room rules |
+| [10 — Firmware independence](docs/10-firmware-independence.md) | What games expect from the system and how each need is met without firmware |
 | [ADRs](docs/adr/README.md) | 30 architecture decision records |
 | [Conventions](docs/conventions/README.md) | Architecture rules, development rules, Conventional Commits, branches/PRs, versioning |
 | [Backlog](docs/backlog.md) | Task queue for humans and agents |
 | [Autonomous development](docs/autonomous-development.md) | How Claude Code agents work on the project (`.claude/`) |
+
+## No keys, no firmware
+
+Lince-NX **does not need, read or accept console keys or firmware** — not even files you
+already have. All system functionality is implemented originally
+([ADR-0029](docs/adr/0029-no-keys-no-firmware.md),
+[firmware independence plan](docs/10-firmware-independence.md)).
+
+Because it never decrypts anything, Lince-NX runs only content that is already in an
+unencrypted format (such as homebrew). Encrypted retail packages are not supported.
 
 ## Legal
 

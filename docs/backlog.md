@@ -26,6 +26,7 @@ Rules:
 | T-014 | Ampere SASS test corpus from team-written CUDA kernels | Maintainer | Blocked | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Ready | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Ready | — | 0007 |
+| T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | Ready | — | 0024, 0029 |
 | T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
 
@@ -103,6 +104,13 @@ any Rust crates worth evaluating. Pin commits.
 ### T-016 — Research: Vulkan feature coverage survey
 Use public sources (gpuinfo database, Mesa release notes, vendor driver notes). Output a table
 per vendor/driver for the features in ADR-0007's tiers; mark data dates.
+
+### T-019 — Research: firmware-free system data and applets
+Use the `research-note` skill. From public documentation and the service calls observed by
+other projects (never from firmware files or leaked material), list the system data archives
+and applets Switch 2 titles use, and for each propose an original implementation, a freely
+licensed substitute, or a documented "unavailable" behavior. Extend
+`docs/10-firmware-independence.md` §3.
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
