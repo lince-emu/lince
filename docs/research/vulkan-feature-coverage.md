@@ -27,6 +27,12 @@ fast linking, shader objects, pipeline binaries, fragment barycentrics, subgroup
 (and specifically: can the subgroup size be forced to 32?) and mesh/task shaders — and how does
 that map onto tiers V1–V3?
 
+Scope: Vulkan is Lince's **first** host graphics backend; Direct3D 12 and Metal backends are
+planned later, each with its own ADR and capability tiers (ADR-0007, as amended by T-025). V1–V3
+in this note are the **Vulkan backend's** tiers only. Everything here is host-API-specific and
+belongs to the Vulkan backend and the SPIR-V emitter, not to the shader IR or the packets
+(ARCH-28).
+
 ## 2. Short answer
 
 - On current desktop drivers for Windows and Linux, **NVIDIA proprietary, AMD (proprietary and
@@ -45,7 +51,9 @@ that map onto tiers V1–V3?
   (compute only on Xe-LP). **Qualcomm (proprietary and Turnip) cannot run 32 at all**
   (minimum 64).
 - Mobile (Adreno) and Apple (MoltenVK, KosmicKrisp) land in V2 or below; neither is a first-wave
-  platform under ADR-0003.
+  platform under ADR-0003. Apple hosts are planned to use the future Metal backend (ADR-0007);
+  ADR-0003 still lists Metal vs. a translation layer as open for macOS, so the MoltenVK and
+  KosmicKrisp rows are input to that decision, not a target.
 
 ## 3. Per-driver capability snapshot
 
@@ -183,7 +191,7 @@ Everything not in this table (AMD Adrenalin, Intel Windows, Qualcomm, ANV and NV
 extensions, Turnip) has no first-release date from a public source in this pass: UNKNOWN. The
 AMDVLK GPL date is the earliest found on the release pages read; an earlier release may exist.
 
-## 8. Mapping onto ADR-0007 tiers
+## 8. Mapping onto ADR-0007 tiers (Vulkan backend)
 
 Only the six surveyed features are checked here. ADR-0007's V3/V2/V1 also require extended
 dynamic state, descriptor indexing/buffer and buffer device address, which this note does **not**
@@ -202,8 +210,8 @@ Pipeline binary is a separate flag (ADR-0007, D-008), so its column does not cha
 | Intel Windows, Xe-LP (R10) | GPL + fast link | **N** | **N** | compute | **V2** (Tier 0 variants without barycentrics) |
 | Qualcomm proprietary (R12) | GPL + fast link | **N** | Y | no (≥64) | **V2** at best; not an ADR-0003 target |
 | Turnip (R13) | GPL + fast link | **N** | **N** | no (≥64) | **V2** at best; not an ADR-0003 target |
-| MoltenVK (R14) | monolithic only | Y | **N** | not requestable | **V1** at best (other V1 requirements not checked) |
-| KosmicKrisp (R15) | monolithic only | **N** | **N** | fixed 32 | **V1** at best (other V1 requirements not checked) |
+| MoltenVK (R14) | monolithic only | Y | **N** | not requestable | **V1** at best (other V1 requirements not checked); input to the ADR-0003 macOS decision |
+| KosmicKrisp (R15) | monolithic only | **N** | **N** | fixed 32 | **V1** at best (other V1 requirements not checked); input to the ADR-0003 macOS decision |
 
 Mesh/task shaders are a separate flag in ADR-0007; they are present on every desktop driver above
 except Intel Xe-LP on Windows, and absent on all mobile and Apple drivers sampled.
@@ -233,7 +241,9 @@ except Intel Xe-LP on Windows, and absent on all mobile and Apple drivers sample
 ## 11. Affected ADRs, PoCs and tasks
 
 - **ADR-0007:** following this survey, pipeline binary moved from the V3 row to the separate
-  flags (D-008); with that change Intel Arc on Windows meets the surveyed part of V3.
+  flags (D-008); with that change Intel Arc on Windows meets the surveyed part of V3. The planned
+  Direct3D 12 and Metal backends need their own surveys when their ADRs are written; this note
+  does not cover them.
 - **ADR-0013:** the choice between GPL and shader objects per driver waits for PoC-5 results
   (T-012); this note only shows that both are advertised on most desktop drivers.
 - **ADR-0010:** forcing 32-wide subgroups is possible only in some stages on AMD/Intel and never on
