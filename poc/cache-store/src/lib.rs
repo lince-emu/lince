@@ -26,4 +26,4 @@ mod store;
 pub mod workload;
 
 pub use error::StoreError;
-pub use store::{BlobStore, Engine, open_store};
+pub use store::{BlobStore, Engine, open_reader, open_store};

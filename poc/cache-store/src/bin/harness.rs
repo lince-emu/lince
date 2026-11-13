@@ -18,7 +18,7 @@ use std::time::Instant;
 
 use poc_cache_store::checksum::Checksum;
 use poc_cache_store::workload::{self, SizeDist, SplitMix64, Workload};
-use poc_cache_store::{BlobStore, Engine, custom::CustomStore, open_store};
+use poc_cache_store::{BlobStore, Engine, custom::CustomStore, open_reader, open_store};
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -27,6 +27,7 @@ fn main() -> ExitCode {
     let outcome = match args.first().map(String::as_str) {
         Some("open-time") => parse_flags(&args[1..]).and_then(|f| open_time(&f)),
         Some("resolve") => parse_flags(&args[1..]).and_then(|f| resolve(&f)),
+        Some("resolve-reader") => parse_flags(&args[1..]).and_then(|f| resolve_reader(&f)),
         Some("append-forever") => parse_flags(&args[1..]).and_then(|f| append_forever(&f)),
         Some("checksum") => parse_flags(&args[1..]).and_then(|f| checksum_cost(&f)),
         _ => Err(USAGE.to_owned()),
@@ -42,7 +43,7 @@ fn main() -> ExitCode {
 
 const USAGE: &str = "usage:
   harness open-time --engine E --dir D --sizes 1M,64M,1G [--runs 20] [--seed 1] [--dist D] [--out F]
-  harness resolve   --engine E --dir D --size 256M [--lookups 10000] [--writer on|off] [--seed 1] [--dist D] [--out F]
+  harness resolve   --engine E --dir D --size 256M [--lookups 10000] [--writer on|off] [--reader process|thread] [--seed 1] [--dist D] [--out F]
   harness append-forever --dir D [--seed 1] [--dist D] [--limit N]
   harness checksum  [--samples 200] [--seed 1] [--out F]
 engines: custom, redb, sqlite (needs --features sqlite); dist: loguniform:MIN:MAX | uniform:MIN:MAX";
@@ -288,8 +289,58 @@ fn percentile(sorted: &[u64], per_mille: usize) -> u64 {
     sorted[rank - 1]
 }
 
+/// Latency summary of one batch of lookups.
+struct Stats {
+    p50: u64,
+    p99: u64,
+    p999: u64,
+    max: u64,
+    misses: u64,
+}
+
+impl Stats {
+    fn of(mut samples: Vec<u64>, misses: u64) -> Self {
+        samples.sort_unstable();
+        Self {
+            p50: percentile(&samples, 500),
+            p99: percentile(&samples, 990),
+            p999: percentile(&samples, 999),
+            max: samples.last().copied().unwrap_or(0),
+            misses,
+        }
+    }
+
+    /// The `resolve-reader` output line: `served P50 P99 P999 MAX MISSES`.
+    fn to_line(&self) -> String {
+        format!(
+            "served {} {} {} {} {}",
+            self.p50, self.p99, self.p999, self.max, self.misses
+        )
+    }
+
+    fn parse(line: &str) -> Option<Self> {
+        let mut it = line.strip_prefix("served ")?.split(' ').map(str::parse);
+        let mut next = || it.next()?.ok();
+        Some(Self {
+            p50: next()?,
+            p99: next()?,
+            p999: next()?,
+            max: next()?,
+            misses: next()?,
+        })
+    }
+}
+
+/// What the reader reported: latencies, or why it could not open the store.
+enum ReaderOutcome {
+    Served(Stats),
+    Unserved(String),
+}
+
 /// Resolve latency (lookup + read + validate) of random existing keys, optionally while
-/// another thread appends new artifacts.
+/// another thread appends new artifacts. With `--reader process` (the default) the timed
+/// reader runs in a child process (`resolve-reader`), as a second emulator instance would
+/// (doc 02 §5, §10; D-002); with `--reader thread` it shares this process.
 fn resolve(f: &Flags) -> Result<()> {
     let engine = f.engine()?;
     let root = PathBuf::from(f.required("dir")?);
@@ -300,16 +351,33 @@ fn resolve(f: &Flags) -> Result<()> {
         .ok_or("--lookups must be between 1 and usize::MAX")?;
     let (seed, dist) = (f.number("seed", 1)?, f.dist()?);
     let with_writer = f.get("writer") == Some("on");
+    let in_process = match f.get("reader").unwrap_or("process") {
+        "process" => false,
+        "thread" => true,
+        other => {
+            return Err(format!(
+                "--reader: expected process or thread, got `{other}`"
+            ));
+        }
+    };
     let mut pop = populate(engine, &root, target, seed, dist)?;
     // Every writer-on run appends keys no earlier run used, so each engine does real writes.
     let writer_seed = seed ^ 0xFEED ^ (pop.meta.writer_runs << 32);
     let mut writer = open_store(engine, &pop.dir).map_err(err)?;
-    let mut reader = writer.reader().map_err(err)?;
+    let mut thread_reader = if in_process {
+        Some(writer.reader().map_err(err)?)
+    } else {
+        None
+    };
     let stop = AtomicBool::new(false);
-    let (samples, misses, background) = std::thread::scope(|s| {
+    let (outcome, background) = std::thread::scope(|s| {
         let handle =
             with_writer.then(|| s.spawn(|| write_until(&mut *writer, writer_seed, dist, &stop)));
-        let measured = measure_lookups(&mut *reader, &pop.keys, lookups, seed);
+        let outcome = match thread_reader.as_mut() {
+            Some(reader) => measure_lookups(&mut **reader, &pop.keys, lookups, seed)
+                .map(|(samples, misses)| ReaderOutcome::Served(Stats::of(samples, misses))),
+            None => spawn_reader(f, engine, &pop, lookups, seed),
+        };
         stop.store(true, Ordering::Relaxed);
         let background = match handle {
             Some(h) => h
@@ -317,7 +385,7 @@ fn resolve(f: &Flags) -> Result<()> {
                 .map_err(|_| "writer thread panicked".to_owned())??,
             None => (0, 0),
         };
-        measured.map(|(samples, misses)| (samples, misses, background))
+        outcome.map(|o| (o, background))
     })?;
     if with_writer {
         pop.meta.writer_runs += 1;
@@ -325,23 +393,90 @@ fn resolve(f: &Flags) -> Result<()> {
         pop.meta.extra_bytes += background.1;
         pop.meta.write(&pop.dir)?;
     }
-    let mut sorted = samples;
-    sorted.sort_unstable();
+    let (served, latencies) = match &outcome {
+        ReaderOutcome::Served(st) => (
+            "yes",
+            format!("{},{},{},{},{}", st.p50, st.p99, st.p999, st.max, st.misses),
+        ),
+        ReaderOutcome::Unserved(why) => {
+            eprintln!("{} did not serve the reader: {why}", engine.name());
+            ("no", ",,,,".to_owned())
+        }
+    };
     let row = format!(
-        "{},{target},{},{},{},{lookups},{},{},{},{},{misses}",
+        "{},{target},{},{},{},{},{served},{},{lookups},{latencies}",
         engine.name(),
         pop.items_on_disk(),
         if with_writer { "on" } else { "off" },
+        if in_process { "thread" } else { "process" },
+        engine.sharing(),
         background.0,
-        percentile(&sorted, 500),
-        percentile(&sorted, 990),
-        percentile(&sorted, 999),
-        sorted.last().copied().unwrap_or(0),
     );
-    let header = "engine,target_bytes,items_on_disk,writer,background_puts,lookups,\
-                  p50_ns,p99_ns,p999_ns,max_ns,misses";
+    let header = "engine,target_bytes,items_on_disk,writer,reader,sharing,served,background_puts,\
+                  lookups,p50_ns,p99_ns,p999_ns,max_ns,misses";
     append_csv(&f.out("results/resolve.csv"), header, &row)?;
     println!("{row}");
+    Ok(())
+}
+
+/// Runs the timed reader as a child process of this harness and parses its report.
+fn spawn_reader(
+    f: &Flags,
+    engine: Engine,
+    pop: &Population,
+    lookups: usize,
+    seed: u64,
+) -> Result<ReaderOutcome> {
+    let exe = std::env::current_exe().map_err(|e| format!("locate the harness binary: {e}"))?;
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg("resolve-reader")
+        .args(["--engine", engine.name()])
+        .arg("--dir")
+        .arg(&pop.dir)
+        .args(["--items", &pop.meta.base_items.to_string()])
+        .args(["--lookups", &lookups.to_string()])
+        .args(["--seed", &seed.to_string()]);
+    if let Some(dist) = f.get("dist") {
+        cmd.args(["--dist", dist]);
+    }
+    let out = cmd
+        .output()
+        .map_err(|e| format!("start the reader process: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    if !out.status.success() {
+        return Err(format!(
+            "reader process failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let line = stdout.lines().last().unwrap_or_default();
+    if let Some(why) = line.strip_prefix("unserved ") {
+        return Ok(ReaderOutcome::Unserved(why.to_owned()));
+    }
+    Stats::parse(line)
+        .map(ReaderOutcome::Served)
+        .ok_or_else(|| format!("unexpected reader output `{line}`"))
+}
+
+/// Child side of `resolve --reader process`: opens a read-only handle on the store, times the
+/// same lookups the in-process reader would, and prints one line for the parent. A store the
+/// engine cannot open from a second process is reported as `unserved`, not as a failure.
+fn resolve_reader(f: &Flags) -> Result<()> {
+    let engine = f.engine()?;
+    let dir = PathBuf::from(f.required("dir")?);
+    let items = usize::try_from(f.number("items", 0)?).map_err(|_| "--items is too large")?;
+    let lookups = usize::try_from(f.number("lookups", 10_000)?).map_err(|_| "--lookups")?;
+    let (seed, dist) = (f.number("seed", 1)?, f.dist()?);
+    let mut reader = match open_reader(engine, &dir) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("unserved {e}");
+            return Ok(());
+        }
+    };
+    let keys = generate_keys(seed, dist, items);
+    let (samples, misses) = measure_lookups(&mut *reader, &keys, lookups, seed)?;
+    println!("{}", Stats::of(samples, misses).to_line());
     Ok(())
 }
 

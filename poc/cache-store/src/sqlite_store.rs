@@ -35,6 +35,16 @@ impl SqliteStore {
         Ok(Self { conn, path })
     }
 
+    /// Opens the existing database in `dir` for reading only (`query_only`), as a reader in
+    /// another process would while the writer appends in WAL mode.
+    pub fn open_read_only(dir: &Path) -> Result<Self, StoreError> {
+        let path = dir.join("blobs.sqlite");
+        let conn = Self::connect(&path)?;
+        conn.pragma_update(None, "query_only", "ON")
+            .map_err(engine)?;
+        Ok(Self { conn, path })
+    }
+
     fn connect(path: &Path) -> Result<Connection, StoreError> {
         let conn = Connection::open(path).map_err(engine)?;
         conn.pragma_update(None, "journal_mode", "WAL")

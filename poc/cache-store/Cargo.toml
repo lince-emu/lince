@@ -16,6 +16,10 @@ path = "tests/engines.rs"
 name = "faults"
 path = "tests/faults.rs"
 
+[[test]]
+name = "second_process"
+path = "tests/second_process.rs"
+
 [features]
 default = []
 sqlite = ["dep:rusqlite"]
