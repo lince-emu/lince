@@ -124,7 +124,7 @@ decisions with the largest blast radius are:
 | Ubershaders | — | Not the primary tier (see doc 03) | Hybrid use for fixed-function-like shaders | PoC-3 | — |
 | Specialized compile | — | Lince IR → SPIR-V, stage libraries, background LTO | IR details | PoC-4, PoC-5 | 0009 (Ampere-native IR) |
 | CPU | — | Interpreter + baseline JIT + async optimizing tier, in C++ (ADR-0030) | JIT code emitter | PoC-11 | 0005 (tiering principle) |
-| GPU command | Lichii evidence | Front/back pipeline, macro JIT | Back-end parallel recording | PoC-9 | 0008 |
+| GPU command | Lichii evidence | Front/back pipeline, macro interpreter + memoization (JIT if measured) | Back-end parallel recording | PoC-9 | 0008 |
 | Scheduling | R10 | Dedicated threads, priority classes, governor | Policy constants | PoC-8 | 0017 |
 | Memory/resources | — | Fastmem, GPU page table, sparse huge textures | Windows placeholder APIs | — | — |
 | Presentation | — | Present-wait pacing, bounded fences | VRR policy | PoC-10 | 0023 |

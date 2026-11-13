@@ -12,7 +12,7 @@ crates marked `[c++]` contain a C++ library behind a C ABI and expose a safe Rus
                      │                                                                              │
 ┌──────────── Guest CPU ────────────┐   ┌──────── GPU front ────────┐   ┌──────── GPU back ────────┐
 │ 6 guest-core threads              │   │ GPFIFO / pushbuffer parse  │   │ engine methods, state,   │
-│ A64 interp + baseline JIT         │──▶│ MME64 macro JIT + memo     │──▶│ draw/dispatch build,     │
+│ A64 interp + baseline JIT         │──▶│ MME64 interp + memo        │──▶│ draw/dispatch build,     │
 │ kernel (SVC), HLE IPC services    │   │ register mirrors           │   │ binding resolution       │
 └──────────────┬────────────────────┘   └────────────────────────────┘   └───────────┬──────────────┘
                │ guest memory (fastmem)                                              │ draw packets
@@ -36,13 +36,16 @@ lince-emu/
 │   ├── lince-common/           # ids, errors, units, small utilities; no unsafe
 │   ├── lince-trace/            # frame ledger, Tracy bridge, counters
 │   ├── lince-sched/            # thread roles, priority queues, frame governor
-│   ├── lince-mem/              # guest address space, fastmem, page tracking   [unsafe]
-│   ├── lince-cpu-a64/          # A64 decoder, interpreter, JIT tiers, code buffers  [c++]
+│   ├── lince-mem/              # guest address space, fastmem, page tracking,  [unsafe]
+│   │                           #   JIT code memory and W^X (ADR-0031)
+│   ├── lince-cpu-a64/          # A64 decoder, interpreter, JIT tiers; emits into     [c++]
+│   │                           #   buffers from lince-mem; fault lookup (ADR-0031)
 │   ├── lince-kernel/           # Horizon-compatible kernel HLE: threads, sync, SVCs
 │   ├── lince-hle/              # IPC (CMIF/TIPC) framework, common services
 │   ├── lince-hle-nx2/          # Switch 2 specific services (gsv, vi2, syncpt, …)
 │   ├── lince-loader/           # NSO/NPDM/ExeFS/RomFS (already-decrypted content only)
-│   ├── lince-gpu-cmd/          # channels, GPFIFO, MME64 JIT, semaphores, syncpoints
+│   ├── lince-gpu-cmd/          # channels, GPFIFO, MME64 interpreter + memoization,
+│   │                           #   semaphores, syncpoints (a JIT reuses C++ emitters, ADR-0031)
 │   ├── lince-gpu-ampere/       # Ampere class engines (3D, compute/QMD, DMA, 2D)
 │   ├── lince-shader/           # SSA IR + passes, Ampere SASS front-end, SPIR-V emitter,  [c++]
 │   │                           #   Tier-0 micro-op format + interpreter shader generation

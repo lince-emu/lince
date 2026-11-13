@@ -1,7 +1,7 @@
 # Study: what each language should own in Lince (Rust and C++)
 
-- **Status:** Study for the maintainer. It refines ADR-0030 (Accepted) and proposes three
-  amendments; nothing here is binding until an ADR records it.
+- **Status:** Study for the maintainer. Its three amendments were accepted as
+  [ADR-0031](../adr/0031-rust-cpp-placement.md) (2026-11-13).
 - **Source:** ADR-0005, ADR-0019, ADR-0030; doc 04 §2; PoC-11 report
   (`docs/poc-reports/poc-11-cpp-boundary.md`); the architecture rules (ARCH-xx).
 - **Evidence level:** MEASURED where PoC-11 measured it; otherwise Lince design analysis. Claims
