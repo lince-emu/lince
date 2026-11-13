@@ -1,6 +1,6 @@
 # ADR-0019: Guest and host memory management
 
-- **Status:** Proposed
+- **Status:** Proposed. B1 (doc 07) needs only the part marked **B1 scope** below accepted.
 - **Date:** 2026-11-13
 - **Related:** doc 01 E13, doc 04 §4; ADR-0021, ADR-0022
 
@@ -25,9 +25,18 @@ ranges, and read traps for GPU-written data not yet downloaded (the lazy read-ba
 doc 01, Lichii row 150). A GPU-resident page table maps guest GPU VAs to host buffer addresses
 for shaders. Host GPU memory comes from large blocks (≥ 64 MiB) with our own sub-allocation.
 
+Write tracking keeps its state per page in atomics, not behind a shared lock, so CPU writes,
+GPU-cache invalidation and read-back never serialize on one mutex (doc 01 E13).
+
+**B1 scope:** the guest address space only: a 39-bit space (doc 01 E2) of mapped regions with
+permissions, accessed through typed `GuestVa` reads and writes (QUAL-20) by software lookup.
+Fastmem, write tracking and the GPU page table come with the JIT and GPU phases.
+
 ## Technical justification
 Fastmem is the established high-performance approach; large blocks avoid allocation churn seen
-in Lichii (row 114).
+in Lichii (row 114). Lichii also measured lock contention on cache mutexes, 5,500–7,000 fences
+per second and 250–330 MB/s of read-back at fences (doc 01 E13); per-page atomic state and
+lazy read-back are aimed at those costs.
 
 ## Advantages
 Fast guest access; precise invalidation; low allocation rate.
