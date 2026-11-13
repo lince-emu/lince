@@ -28,10 +28,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Full history, so the commit-message check can walk the pull request's commits.
+          fetch-depth: 0
       - name: Install the toolchain pinned in rust-toolchain.toml
         run: rustup toolchain install
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-deny@0.20.2
       - name: cargo xtask ci
-        run: cargo xtask ci
+        shell: bash
+        # Event fields reach the script only as environment variables, never interpolated
+        # into it, so a pull-request title cannot inject shell code.
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            cargo xtask ci --base "origin/$BASE_REF" --pr-title "$PR_TITLE"
+          else
+            cargo xtask ci
+          fi
