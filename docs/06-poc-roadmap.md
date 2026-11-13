@@ -20,8 +20,10 @@ with a short report in `docs/poc-reports/` that updates the ADRs it enables.
 | — | PoC-11 Rust↔C++ boundary | ADR-0030 details (toolchain, bindings, call cost) | — ; must finish before the first `[c++]` crate |
 
 **Matching rule for SASS corpora** ([D-005](decisions/D-005-sass-corpus-without-nvidia-gpu.md)).
-Expected outputs are computed on the CPU from the team-written kernels; no NVIDIA GPU is
-required. A result matches when it is:
+Corpus programs are SASS written with the team's own assembler from public encoding sources
+([D-010](decisions/D-010-cuda-eula-sass-corpus.md), LEGAL-15); no NVIDIA SDK tool is used.
+Expected outputs are computed on the CPU from each program's documented semantics; no NVIDIA
+GPU is required. A result matches when it is:
 - bit-exact where IEEE 754 or the instruction itself defines the result exactly (FADD, FMUL,
   FFMA with the encoded rounding and flush-to-zero modes, integer and logic operations);
 - within NVIDIA's published error bounds for approximate operations (MUFU and the CUDA
@@ -57,7 +59,7 @@ error bounds for the instructions they cover.
   harness (no emulator).
 - **Alternatives:** Raw SASS interpreted directly vs. pre-decoded micro-ops; register-file
   buckets vs. single 256-register file; host subgroup 32 vs. shared-memory warp emulation.
-- **Correctness tests:** Corpus of SASS compiled from team-written CUDA kernels (sm_86) with
+- **Correctness tests:** Corpus of team-assembled `sm_86` SASS programs (T-014) with
   CPU-computed expected outputs; hand-assembled fragment-like programs; comparison vs. Tier-1 output.
 - **Benchmark:** GPU timestamps per dispatch/draw; interpreter pipeline compile time per vendor.
 - **Success:** Every corpus result matches under the matching rule above; cost factor documented per instruction class; derivatives

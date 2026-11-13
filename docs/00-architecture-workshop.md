@@ -96,7 +96,7 @@ decisions with the largest blast radius are:
 | Risk | Impact | Mitigation | PoC |
 |------|--------|-----------|-----|
 | GPU interpreter infeasible or too slow for fragment shaders (derivatives, divergence). | Tier 0 collapses; first-use stalls return. | Explicit quad derivative emulation; per-class fallback list; discovery-time compile. | PoC-2 |
-| Ampere SASS ISA knowledge is incomplete (undocumented by NVIDIA). | Translation gaps → missing rendering. | Differential testing against real SASS compiled from our own CUDA sources; nvdisasm as an oracle for decoding only. | PoC-4 |
+| Ampere SASS ISA knowledge is incomplete (undocumented by NVIDIA). | Translation gaps → missing rendering. | Differential testing against SASS programs the team assembles from public encoding sources; no NVIDIA SDK output is disassembled (LEGAL-15, D-010). | PoC-4 |
 | Tensor-core (DLSS-style) networks. | Correct execution may be seconds per frame (Lichii row 64). | Cooperative-matrix tier on capable hosts; correct slow path; labelled, opt-in approximation. | Later |
 | GPU command processing is CPU-bound on one thread. | Stutter and low FPS independent of shaders (Lichii: GPU thread ~100%, host GPU 20–40%). | Pipelined front/back design from day one (ADR-0008). | PoC-9 |
 | Custom cache store has corruption bugs. | Crashes or wrong rendering. | Every artifact is checksummed and re-derivable; the cache is never trusted. | PoC-6 |

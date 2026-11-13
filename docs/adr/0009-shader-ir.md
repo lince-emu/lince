@@ -52,8 +52,9 @@ Structurizing arbitrary SASS control flow (jump tables, calls, library `EXIT`s) 
 Mitigation: reuse well-known algorithms (e.g. relooper-style structurization) and fuzz.
 
 ## Validation plan
-PoC-4: decode + IR + SPIR-V for a corpus of SASS programs compiled from our own CUDA sources
-(compute) and privately dumped graphics programs; bit-exact differential testing per opcode.
+PoC-4: decode + IR + SPIR-V for a corpus of team-assembled SASS programs (T-014, LEGAL-15)
+and privately dumped graphics programs; differential testing per opcode under the doc 06
+matching rule.
 
 ## Conditions for revisiting
 Never for option 1. Revisit internals if translation P99 latency per instruction blocks Tier 1

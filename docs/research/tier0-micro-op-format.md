@@ -190,8 +190,8 @@ Rules: one guest instruction maps to one opcode; a guest instruction whose varia
 different semantics (e.g. a wide multiply-add versus a 32-bit one) gets one opcode per variant
 so the interpreter never decodes those variants in its hot loop. Mnemonics follow the
 instruction-set reference in NVIDIA's public *CUDA Binary Utilities* documentation (LEGAL-12);
-the documentation version consulted is pinned in `ampere-sass-encoding.md` together with the
-CUDA toolkit used for T-014. The numbering is part of `interp_format`; any renumbering bumps it.
+the documentation version consulted is pinned in `ampere-sass-encoding.md`. T-014 uses no
+CUDA toolkit output (LEGAL-15). The numbering is part of `interp_format`; any renumbering bumps it.
 
 ### 3.5 Illustrative example
 

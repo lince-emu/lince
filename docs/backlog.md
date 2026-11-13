@@ -23,7 +23,7 @@ Rules:
 | T-011 | PoC-7: frame ledger prototype | PoC | Done | — | 0027 |
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | In review | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
-| T-014 | Ampere SASS test corpus: compile team-written CUDA kernels (no NVIDIA GPU needed) | PoC | Ready | — | 0009, 0028 |
+| T-014 | Ampere SASS test corpus: team-written assembler and programs (no NVIDIA SDK or GPU) | PoC | Ready | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | In review | — | 0007 |
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | In review | — | 0024, 0029 |
@@ -109,19 +109,28 @@ the GPU interpreter loop consumes it (doc 03 §4). Propose as input for ADR-0010
 PR: https://github.com/lince-emu/lince/pull/1
 
 ### T-014 — SASS corpus
-Decision [D-005](decisions/D-005-sass-corpus-without-nvidia-gpu.md). Write a set of
-team-written CUDA kernels, compile them for `sm_86` and store the SASS (`cuobjdump`/`nvdisasm`).
-This does not need an NVIDIA GPU. Prerequisite: the maintainer installs the CUDA toolkit
-without the driver. Tools are used only as LEGAL-14 allows. Also write the one-command script
-that T-023 runs, and expected outputs computed on the CPU for each kernel.
-- **Acceptance:** the corpus builds from a clean checkout with one command; every kernel has
-  its SASS and its CPU-computed expected output stored; the T-023 script runs to the point
-  where it needs a GPU.
+Decisions [D-005](decisions/D-005-sass-corpus-without-nvidia-gpu.md) and
+[D-010](decisions/D-010-cuda-eula-sass-corpus.md). No NVIDIA SDK tool is used (LEGAL-15).
+Standalone crate in `poc/sass-corpus/`:
+- a Rust assembler for an initial subset of Ampere (`sm_86`) SASS: integer and logic ops,
+  FADD/FMUL/FFMA, moves, predicates, branches, LDG/STG and EXIT;
+- every encoding used is recorded in `docs/research/ampere-sass-encoding.md` with its public
+  source (LEGAL-11; oboromi's tables only as
+  [D-006](decisions/D-006-oboromi-sass-tables-off-limits.md) allows); encodings that no public
+  source gives are not guessed into the corpus;
+- corpus programs in the assembler's text form, each with deterministic inputs and expected
+  outputs computed on the CPU from the program's documented semantics;
+- the one-command build that assembles every program and stores its binary and expected
+  output, and the T-023 runner, which stops with a clear message where it needs a GPU.
+- **Acceptance:** the corpus builds from a clean checkout with one command; every program has
+  its binary and its CPU-computed expected output stored; each encoding cites its source; the
+  T-023 runner runs to the point where it needs a GPU.
 
 ### T-023 — SASS corpus reference outputs (optional)
-Run the T-014 script once on an NVIDIA GPU of compute capability 8.6–8.9 (GeForce RTX 30 or
-40 series; an `sm_86` cubin runs only on compute capability 8.6 and later 8.x devices), and
-commit the outputs. Anyone with such a GPU can run it. Nothing depends on this task: PoC-2
+Run the T-014 runner once on an NVIDIA GPU of compute capability 8.6–8.9 (GeForce RTX 30 or
+40 series; `sm_86` code runs only on compute capability 8.6 and later 8.x devices), and
+commit the outputs. The runner loads the team-assembled programs through the NVIDIA driver;
+no SDK tool is used (LEGAL-15). Anyone with such a GPU can run it. Nothing depends on this task: PoC-2
 and PoC-4 use the doc 06 matching rule, and these outputs only tighten it.
 
 ### T-015 — Research: other Switch 2 projects

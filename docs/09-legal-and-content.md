@@ -53,8 +53,9 @@ Lince's code original:
 
 ## 5. Test content
 
-- Shader corpora for decoder tests come from: (a) programs compiled by the team from its own
-  CUDA sources for Ampere targets (legal, redistributable SASS for compute); (b) private dumps
+- Shader corpora for decoder tests come from: (a) SASS programs the team writes with its
+  own assembler from public encoding sources (LEGAL-15; NVIDIA SDK output is never
+  disassembled, see D-010); (b) private dumps
   from legally owned games, never committed to the public repository.
 - Frame captures used for CI replay stay on private runners.
 

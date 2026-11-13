@@ -21,8 +21,8 @@ You write tests that would catch real bugs, following `docs/adr/0028-testing-str
 
 ## Rules
 - Test behavior, not implementation details. Name tests after the behavior.
-- No game content in tests. Use synthetic inputs or SASS compiled from the team's own CUDA
-  sources (docs/09 §5).
+- No game content in tests. Use synthetic inputs or SASS from the team's own assembler
+  (T-014, LEGAL-15, docs/09 §5).
 - Keep tests deterministic; seed every RNG.
 
 Report which behaviors are now covered and which remain untested.
