@@ -24,7 +24,7 @@ Rules:
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
 | T-014 | Ampere SASS test corpus: compile team-written CUDA kernels (no NVIDIA GPU needed) | PoC | Ready | — | 0009, 0028 |
-| T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Ready | — | — |
+| T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Ready | — | 0007 |
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | Ready | — | 0024, 0029 |
 | T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
@@ -135,6 +135,7 @@ licensed substitute, or a documented "unavailable" behavior. Extend
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
+T-018: decision [D-006](decisions/D-006-oboromi-sass-tables-off-limits.md) must be answered first.
 
 ### T-020 — PoC-6 XXH3 checksum
 Decision [D-001](decisions/D-001-cache-hash-xxh3.md). Add `xxhash-rust` (`xxh3` feature) to
