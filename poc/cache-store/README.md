@@ -26,6 +26,7 @@ cargo test --features sqlite
 cargo build --release --features sqlite
 ./target/release/harness open-time --engine custom --dir /path/on/test/disk --sizes 1M,64M,1G,4G --runs 20
 ./target/release/harness resolve --engine custom --dir /path/on/test/disk --size 1G --lookups 10000 --writer on
+./target/release/harness checksum --samples 200
 ```
 
 Repeat with `--engine redb` and `--engine sqlite`. The first run for a size populates
@@ -36,6 +37,12 @@ Output:
 
 - `results/open_time.csv`: `engine,target_bytes,stored_bytes,items,run,open_ns`
 - `results/resolve.csv`: `engine,target_bytes,items_on_disk,writer,background_puts,lookups,p50_ns,p99_ns,p999_ns,max_ns,misses`
+- `results/checksum_cost.csv`: `algorithm,bytes,reps,sample,ns`. CRC-32C and XXH3-64 on
+  payloads of 1 KiB to 2 MiB held in CPU cache; `ns` is the mean of `reps` back-to-back checksums.
+
+Record payloads are checked with XXH3-64 seeded with the record's kind and key, and headers
+with CRC-32C, as doc 02 §4.1 specifies. The manifest version is 2 since that change: a store
+populated before it fails to open, so populate a fresh `--dir`.
 
 If a `--writer on` run fails part-way, the items it already wrote stay on disk but are not
 counted in `workload.meta`; use a fresh `--dir` after a failed run.

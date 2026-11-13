@@ -16,6 +16,7 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+use poc_cache_store::checksum::Checksum;
 use poc_cache_store::workload::{self, SizeDist, SplitMix64, Workload};
 use poc_cache_store::{BlobStore, Engine, custom::CustomStore, open_store};
 
@@ -27,6 +28,7 @@ fn main() -> ExitCode {
         Some("open-time") => parse_flags(&args[1..]).and_then(|f| open_time(&f)),
         Some("resolve") => parse_flags(&args[1..]).and_then(|f| resolve(&f)),
         Some("append-forever") => parse_flags(&args[1..]).and_then(|f| append_forever(&f)),
+        Some("checksum") => parse_flags(&args[1..]).and_then(|f| checksum_cost(&f)),
         _ => Err(USAGE.to_owned()),
     };
     match outcome {
@@ -42,6 +44,7 @@ const USAGE: &str = "usage:
   harness open-time --engine E --dir D --sizes 1M,64M,1G [--runs 20] [--seed 1] [--dist D] [--out F]
   harness resolve   --engine E --dir D --size 256M [--lookups 10000] [--writer on|off] [--seed 1] [--dist D] [--out F]
   harness append-forever --dir D [--seed 1] [--dist D] [--limit N]
+  harness checksum  [--samples 200] [--seed 1] [--out F]
 engines: custom, redb, sqlite (needs --features sqlite); dist: loguniform:MIN:MAX | uniform:MIN:MAX";
 
 struct Flags(HashMap<String, String>);
@@ -408,4 +411,81 @@ fn append_forever(f: &Flags) -> Result<()> {
         }
     }
     store.flush().map_err(err)
+}
+
+/// Payload sizes timed by `checksum`: 1 KiB to 2 MiB, the default workload's range.
+const CHECKSUM_SIZES: [usize; 7] = [
+    1 << 10,
+    4 << 10,
+    16 << 10,
+    64 << 10,
+    256 << 10,
+    1 << 20,
+    2 << 20,
+];
+
+/// Bytes each `checksum` sample covers at least: small payloads are checksummed repeatedly
+/// so one sample spans many timer ticks (Windows' `Instant` ticks every 100 ns).
+const CHECKSUM_SAMPLE_BYTES: usize = 1 << 20;
+
+/// Time of one checksum of every payload size, per algorithm (T-020). Payloads are seeded
+/// random bytes held in CPU cache, so the numbers are compute cost only, without I/O. Each
+/// sample checksums the payload `reps` times and records the mean time per checksum.
+fn checksum_cost(f: &Flags) -> Result<()> {
+    let samples = f.number("samples", 200)?;
+    if samples == 0 {
+        return Err("--samples must be positive".to_owned());
+    }
+    let mut rng = SplitMix64::new(f.number("seed", 1)?);
+    let largest = CHECKSUM_SIZES[CHECKSUM_SIZES.len() - 1];
+    let buffer: Vec<u8> = (0..largest.div_ceil(8))
+        .flat_map(|_| rng.next_u64().to_le_bytes())
+        .take(largest)
+        .collect();
+    let out = f.out("results/checksum_cost.csv");
+    let per_series = usize::try_from(samples).map_err(|_| "--samples is too large")?;
+    let mut rows = Vec::with_capacity(CHECKSUM_SIZES.len() * Checksum::ALL.len() * per_series);
+    for size in CHECKSUM_SIZES {
+        let payload = &buffer[..size];
+        let reps = (CHECKSUM_SAMPLE_BYTES / size).max(1);
+        let reps_u64 = u64::try_from(reps).unwrap_or(u64::MAX);
+        for algorithm in Checksum::ALL {
+            std::hint::black_box(algorithm.compute(std::hint::black_box(payload)));
+            let mut times = Vec::with_capacity(per_series);
+            for sample in 0..samples {
+                let ns = time_checksum(algorithm, payload, reps_u64);
+                times.push(ns);
+                rows.push(format!("{},{size},{reps},{sample},{ns}", algorithm.name()));
+            }
+            times.sort_unstable();
+            let p50 = percentile(&times, 500);
+            println!(
+                "{:<8} {:>8} B: p50 {:>9} ns  p99 {:>9} ns  ({} MB/s at p50)",
+                algorithm.name(),
+                size,
+                p50,
+                percentile(&times, 990),
+                megabytes_per_second(size, p50),
+            );
+        }
+    }
+    let rows = rows.join("\n");
+    append_csv(&out, "algorithm,bytes,reps,sample,ns", &rows)?;
+    println!("wrote {}", out.display());
+    Ok(())
+}
+
+/// Mean nanoseconds per checksum over `reps` back-to-back checksums of `payload`.
+fn time_checksum(algorithm: Checksum, payload: &[u8], reps: u64) -> u64 {
+    let start = Instant::now();
+    for _ in 0..reps {
+        std::hint::black_box(algorithm.compute(std::hint::black_box(payload)));
+    }
+    elapsed_ns(start) / reps.max(1)
+}
+
+/// Throughput in megabytes (10^6 bytes) per second.
+fn megabytes_per_second(bytes: usize, ns: u64) -> u64 {
+    let bytes = u64::try_from(bytes).unwrap_or(u64::MAX);
+    bytes.saturating_mul(1000) / ns.max(1)
 }

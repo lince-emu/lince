@@ -33,7 +33,8 @@ pub const SEGMENT_SEAL_BYTES: u64 = 64 << 20;
 /// A new store starts with `2^INITIAL_LOG2_BUCKETS` index buckets.
 pub const INITIAL_LOG2_BUCKETS: u32 = 10;
 const MANIFEST_MAGIC: [u8; 4] = *b"LNXM";
-const MANIFEST_VERSION: u32 = 1;
+/// 2: payload checksums are XXH3-64 (T-020); version-1 stores used CRC-32C.
+const MANIFEST_VERSION: u32 = 2;
 const MANIFEST_LEN: usize = 32;
 
 /// Contents of the `MANIFEST` file.

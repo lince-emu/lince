@@ -24,6 +24,7 @@ sqlite = ["dep:rusqlite"]
 memmap2 = "0.9.12"
 redb = "4.5.0"
 rusqlite = { version = "0.42.0", features = ["bundled"], optional = true }
+xxhash-rust = { version = "0.8.19", features = ["xxh3"] }
 
 [lints.rust]
 unsafe_code = "deny"

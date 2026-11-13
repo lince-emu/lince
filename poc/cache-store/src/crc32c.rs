@@ -3,8 +3,8 @@
 
 //! CRC-32C (Castagnoli polynomial, reflected), table-driven, eight bytes per step.
 //!
-//! Used for record headers (as in docs/02-cache-architecture.md §4.1) and, in this prototype,
-//! also for payloads in place of `XXH3-64`, because no hash dependency is approved for it.
+//! Used for record headers, the manifest and the index (docs/02-cache-architecture.md §4.1).
+//! Payloads use XXH3-64; the harness times both (`checksum` module).
 
 /// Reflected Castagnoli polynomial.
 const POLY: u32 = 0x82F6_3B78;
