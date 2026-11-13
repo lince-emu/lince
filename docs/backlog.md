@@ -33,7 +33,7 @@ Rules:
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
-| T-024 | PoC-6: measure `redb` in `SingleWriter` mode with a reader in another process | PoC | Needs decision | T-010 | 0015 |
+| T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Needs decision | T-010 | 0015 |
 
 ## Details
 
@@ -164,11 +164,14 @@ sub-millisecond is untested until they are measured.
 - **Acceptance:** the PoC-5 harness times pipeline binary load next to the other mechanisms,
   skips it where the extension is unsupported, and the PoC-5 report records the results.
 
-### T-024 — PoC-6 `redb` second-process reader
+### T-024 — PoC-6 second-process readers
 Decision [D-002](decisions/D-002-cache-engine-second-process.md), awaiting maintainer
-reconfirmation; this task becomes Ready when the maintainer reconfirms option A. Open the
-`redb` comparator with `ConcurrencyMode::SingleWriter` (writer and readers in that mode), run
-the `resolve` reader in a separate process while the writer appends, and record whether
-`redb` serves that reader, which ADR-0015's "Conditions for revisiting" requires.
-- **Acceptance:** `harness resolve --writer on` times a `redb` reader in another process in
-  `SingleWriter` mode; the PoC-6 report states the mode and the result.
+reconfirmation; this task becomes Ready when the maintainer reconfirms option A. Let
+`harness resolve --writer on` run the reader in a separate process while the writer appends,
+for every engine: the custom store, `redb` opened with `ConcurrencyMode::SingleWriter`
+(writer and reader in that mode) and SQLite in WAL mode. Record whether each engine serves
+that reader, which ADR-0015's "Conditions for revisiting" requires, so the "within 20%"
+comparison uses the same reader setup for all engines.
+- **Acceptance:** `harness resolve --writer on` times a reader in another process for each
+  engine; the PoC-6 report states, per result row, the reader setup and the `redb` mode, and
+  whether each engine served the second-process reader.

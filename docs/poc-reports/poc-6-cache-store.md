@@ -39,9 +39,9 @@
   redb 4.5.0 also has a `SingleWriter` mode, in which other processes may open the database
   read-only (decision D-002). A reader in another process is required by doc 02 §5 step 1 and
   §10 (a second instance becomes read-only) and by the PoC-6 correctness list ("concurrent
-  reader process"), so redb must be measured in `SingleWriter` mode with its reader in another
-  process before the verdict (task T-024). The custom store's separate-process reading is
-  exercised by the fault tests, but its latency is not timed.
+  reader process"), so before the verdict every engine's reader must be timed in another
+  process, with redb in `SingleWriter` mode (task T-024). The custom store's separate-process
+  reading is exercised by the fault tests, but its latency is not timed yet.
 - **Repeated writer-on runs:** each run appends keys no earlier run used, and the CSV
   records the items actually on disk.
 - **Cache state:** warm OS cache by default. Cold-cache runs need the OS file cache dropped
