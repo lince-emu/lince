@@ -1,6 +1,6 @@
 ---
 name: shader-engineer
-description: Domain specialist for Ampere SASS decoding, Lince shader IR, SPIR-V emission, the Tier-0 GPU interpreter, pipeline creation and shader caching. Use for any work in lince-shader-*, lince-pipeline or the shader parts of lince-cache.
+description: Domain specialist for Ampere SASS decoding, Lince shader IR, SPIR-V emission, the Tier-0 GPU interpreter, pipeline creation and shader caching. Use for any work in lince-shader (C++, ADR-0030), lince-pipeline or the shader parts of lince-cache.
 model: opus
 color: blue
 effort: high

@@ -1,6 +1,6 @@
 # ADR-0001: Rust toolchain and project structure
 
-- **Status:** Accepted (Rust as the language, by charter; toolchain details and structure by the maintainer, 2026-11-13)
+- **Status:** Accepted (Rust as the language, by charter; toolchain details and structure by the maintainer, 2026-11-13). Superseded in part by [ADR-0030](0030-hybrid-rust-cpp.md): Rust is no longer the only language; the toolchain, workspace and `unsafe` rules still apply to all Rust code.
 - **Date:** 2026-11-13
 - **Related:** doc 04 §2, §5, ADR-0002, ADR-0026
 

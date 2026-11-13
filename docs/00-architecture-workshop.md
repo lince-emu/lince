@@ -17,7 +17,7 @@ different approach to guest shaders:
 
 | ID | Requirement | Source |
 |----|-------------|--------|
-| R1 | Implementation language is Rust. | Charter §2.1 |
+| R1 | Implementation languages are Rust and C++: Rust owns the architecture; C++ is used only for the guest CPU and shader subsystems behind a C ABI ([ADR-0030](adr/0030-hybrid-rust-cpp.md)). | Charter §2.1, amended by the maintainer 2026-11-13 |
 | R2 | Switch 2 first; Switch 1 later in the same project; no compromise of Switch 2 design for early Switch 1 support. | §2.2 |
 | R3 | Independent implementation; no forks of yuzu/Ryujinx/Eden/Eglantine/Lichii. | §2.3 |
 | R4 | No proprietary keys or firmware as architectural dependencies; original HLE. No key extraction, no encryption circumvention. | §2.4 |
@@ -31,7 +31,7 @@ different approach to guest shaders:
 
 ## 2. Open technical decisions (tracked as ADRs)
 
-Everything except Rust is open. See [`adr/README.md`](adr/README.md) for the full index. The
+Everything except the language split (ADR-0030) is open. See [`adr/README.md`](adr/README.md) for the full index. The
 decisions with the largest blast radius are:
 
 1. **Tier-0 shader execution strategy** (GPU interpreter vs. generated ubershaders vs. fast
@@ -65,10 +65,12 @@ decisions with the largest blast radius are:
 2. **Immediate correct execution vs. GPU budget.** The fallback tier moves cost from the CPU
    (compile) to the GPU (slow execution). Tier-up must be prioritized by *measured fallback GPU
    cost*, not by first-seen order.
-3. **"Rust only" vs. unavoidable foreign code.** The Vulkan loader and drivers are C; video
-   codecs (VP9/H.264, observed in Switch 2 titles, Lichii rows 105/148) have no mature pure-Rust
-   implementation. Policy: foreign code allowed only behind a crate boundary, never in the
-   emulation core, and each instance needs an ADR ([ADR-0026](adr/0026-foreign-code-policy.md)).
+3. **Own C++ vs. third-party foreign code.** Lince's own C++ is limited to the guest CPU and
+   shader subsystems behind a C ABI ([ADR-0030](adr/0030-hybrid-rust-cpp.md)). The Vulkan
+   loader and drivers are C; video codecs (VP9/H.264, observed in Switch 2 titles, Lichii rows
+   105/148) have no mature pure-Rust implementation. Policy: third-party foreign code is
+   allowed only behind a crate boundary and a feature flag, and each instance needs an ADR
+   (ADR-0030).
 4. **"Initial target Switch 2" vs. "no keys".** Retail content is encrypted. Lince loads
    only content the user has already obtained and decrypted by lawful means, and does not ship
    decryption of protected formats ([`09-legal-and-content.md`](09-legal-and-content.md)).
@@ -121,10 +123,10 @@ decisions with the largest blast radius are:
 | First-run shaders | R6, R9 | Tier 0 GPU interpreter + discovery-time compile | Interpreter viability | PoC-1, PoC-2 | — |
 | Ubershaders | — | Not the primary tier (see doc 03) | Hybrid use for fixed-function-like shaders | PoC-3 | — |
 | Specialized compile | — | Lince IR → SPIR-V, stage libraries, background LTO | IR details | PoC-4, PoC-5 | 0009 (Ampere-native IR) |
-| CPU | — | Interpreter + baseline JIT + async optimizing tier | JIT backend crate | — | 0005 (tiering principle) |
+| CPU | — | Interpreter + baseline JIT + async optimizing tier, in C++ (ADR-0030) | JIT code emitter | PoC-11 | 0005 (tiering principle) |
 | GPU command | Lichii evidence | Front/back pipeline, macro JIT | Back-end parallel recording | PoC-9 | 0008 |
 | Scheduling | R10 | Dedicated threads, priority classes, governor | Policy constants | PoC-8 | 0017 |
 | Memory/resources | — | Fastmem, GPU page table, sparse huge textures | Windows placeholder APIs | — | — |
 | Presentation | — | Present-wait pacing, bounded fences | VRR policy | PoC-10 | 0023 |
 | HLE | R4 | Original services; IPC framework | Switch 2 service protocols | — | 0024 |
-| Build | R1 | Cargo workspace + xtask | Toolchain pin | — | 0001, 0002 |
+| Build | R1 | Cargo workspace + xtask; C++ compiled by `cc` (ADR-0030) | Toolchain pin, clang version | PoC-11 | 0001, 0002, 0030 |

@@ -46,10 +46,9 @@ Scopes name **what** changed. Use the crate name without the `lince-` prefix, or
 
 ### Crates (docs/04-rust-architecture.md §2)
 
-`common` · `trace` · `sched` · `mem` · `cpu-a64` · `jit` · `kernel` · `hle` · `hle-nx2` ·
-`loader` · `gpu-cmd` · `gpu-ampere` · `shader-ir` · `shader-sass-ampere` · `shader-spirv` ·
-`shader-interp` · `pipeline` · `cache` · `texture` · `render-vk` · `audio` · `core` · `app` ·
-`ffi-<name>`
+`common` · `trace` · `sched` · `mem` · `cpu-a64` · `kernel` · `hle` · `hle-nx2` ·
+`loader` · `gpu-cmd` · `gpu-ampere` · `shader` · `pipeline` · `cache` · `texture` ·
+`render-vk` · `audio` · `core` · `app`
 
 ### Tools and areas
 

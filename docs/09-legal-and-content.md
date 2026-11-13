@@ -60,5 +60,6 @@ Lince's code original:
 
 ## 6. Third-party code in the product
 
-Each non-Rust dependency needs an ADR (ADR-0026) covering license compatibility and why a
-Rust alternative is not viable.
+Each third-party non-Rust dependency needs an ADR (ADR-0030) covering license compatibility
+and why a Rust alternative is not viable. Lince's own C++ code (ADR-0030) is original code
+under the project license and follows the same clean-room rules as Rust code.
