@@ -17,7 +17,7 @@ Rules:
 | T-002 | Review ADRs ready for acceptance (0001 details, 0002, 0014) | Maintainer | Done | — | 0001, 0002, 0014 |
 | T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | Done | T-001, T-002 | 0001, 0002 |
 | T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Done | T-003 | 0002 |
-| T-005 | Reference crate: `lince-common` written to every convention | Impl | In review | T-003 | 0001 |
+| T-005 | Reference crate: `lince-common` written to every convention | Impl | Done | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
 | T-010 | PoC-6: cache store prototype and benchmark harness | PoC | Done | — | 0015, 0016 |
 | T-011 | PoC-7: frame ledger prototype | PoC | Done | — | 0027 |
@@ -27,7 +27,7 @@ Rules:
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Done | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Done | — | 0007 |
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | Done | — | 0024, 0029 |
-| T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Ready | T-013, T-014 | 0010 |
+| T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
 | T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | Done | T-010 | 0015 |
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Done | T-011 | 0027 |
@@ -35,7 +35,7 @@ Rules:
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Done | T-010 | 0015 |
 | T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | Done | — | 0006, 0007, 0009, 0030 |
-| T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Ready | T-025 | 0030 |
+| T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | In review | T-025 | 0030 |
 
 ## Details
 
@@ -156,6 +156,7 @@ licensed substitute, or a documented "unavailable" behavior. Extend
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
+T-017 is paused until after B6 (`docs/07-development-roadmap.md`, "What pauses").
 T-018: decision [D-006](decisions/D-006-oboromi-sass-tables-off-limits.md) must be answered first.
 
 ### T-020 — PoC-6 XXH3 checksum
