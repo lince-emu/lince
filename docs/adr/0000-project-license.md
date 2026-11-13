@@ -1,6 +1,6 @@
 # ADR-0000: Project license
 
-- **Status:** Proposed — requires the project owner's decision before the first code commit
+- **Status:** Accepted (owner decision, 2026-11-13)
 - **Date:** 2026-11-13
 - **Related:** doc 09, ADR-0026
 
@@ -22,7 +22,7 @@ a reminder that forks and redistribution are a real concern.
 3. **MIT OR Apache-2.0** — maximal reuse by others; no reuse of GPL code possible; closed forks allowed.
 
 ## Decision
-Recommended: **GPL-3.0-or-later**, pending owner confirmation. Independent of the choice, the
+**GPL-3.0-or-later**, confirmed by the project owner. Independent of the choice, the
 clean-room rules of doc 09 apply (Lince is designed from scratch, not assembled from others'
 code).
 

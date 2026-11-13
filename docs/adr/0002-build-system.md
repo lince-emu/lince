@@ -1,6 +1,6 @@
 # ADR-0002: Build system — Cargo workspace + xtask
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-13)
 - **Date:** 2026-11-13
 - **Related:** ADR-0001, ADR-0026
 

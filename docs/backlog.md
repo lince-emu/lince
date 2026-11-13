@@ -13,9 +13,9 @@ Rules:
 
 | ID | Title | Type | Status | Depends on | ADRs |
 |----|-------|------|--------|------------|------|
-| T-001 | Choose the project license | Maintainer | Needs decision | — | 0000 |
-| T-002 | Review ADRs ready for acceptance (0001 details, 0002, 0014) | Maintainer | Needs decision | — | 0001, 0002, 0014 |
-| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | Blocked | T-001, T-002 | 0001, 0002 |
+| T-001 | Choose the project license | Maintainer | Done | — | 0000 |
+| T-002 | Review ADRs ready for acceptance (0001 details, 0002, 0014) | Maintainer | Done | — | 0001, 0002, 0014 |
+| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | Ready | T-001, T-002 | 0001, 0002 |
 | T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Blocked | T-003 | 0002 |
 | T-005 | Reference crate: `lince-common` written to every convention | Impl | Blocked | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
@@ -34,9 +34,11 @@ Rules:
 
 ### T-001 — Choose the project license
 Owner decision on ADR-0000. Agents must not pick a license.
+- **Done 2026-11-13:** the owner chose GPL-3.0-or-later; ADR-0000 is Accepted.
 
 ### T-002 — Review ADRs ready for acceptance
 Maintainer reviews ADR-0001 (details), ADR-0002 and ADR-0014 and changes their status.
+- **Done 2026-11-13:** the maintainer accepted ADR-0001, ADR-0002 and ADR-0014 in full.
 
 ### T-003 — Bootstrap Cargo workspace, xtask and CI skeleton
 - Workspace `Cargo.toml` with shared lints and profiles (doc 04 §7); `rust-toolchain.toml`

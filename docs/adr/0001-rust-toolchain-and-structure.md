@@ -1,6 +1,6 @@
 # ADR-0001: Rust toolchain and project structure
 
-- **Status:** Accepted (Rust as the language, by charter) · Proposed (toolchain details and structure)
+- **Status:** Accepted (Rust as the language, by charter; toolchain details and structure by the maintainer, 2026-11-13)
 - **Date:** 2026-11-13
 - **Related:** doc 04 §2, §5, ADR-0002, ADR-0026
 
