@@ -188,3 +188,7 @@ plus: total header length ≤ 72, no trailing period, scope present unless the t
 `build` or `revert`, a `BREAKING CHANGE:` footer when `!` is used. Merge commits created by
 GitHub and `fixup!`/`squash!` commits on feature branches are allowed by the local hook but
 never reach `main`.
+
+The same rules run in two places: the `.githooks/commit-msg` hook on every local commit, and
+`cargo xtask ci`, which checks every commit from `--base` (default `origin/main`) to `HEAD`
+and, in CI, the pull-request title (`--pr-title`). A test keeps the two in agreement.

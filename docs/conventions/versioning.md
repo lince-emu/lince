@@ -37,8 +37,8 @@ A change to any of them is a breaking change in the commit message (see
 ## 4. Changelog
 
 - `CHANGELOG.md` is **generated** from Conventional Commits on `main`, grouped by type as in
-  [commits.md §2](commits.md#2-types). Planned tool: `git-cliff` (Rust), configured in
-  `cliff.toml` (task T-004).
+  [commits.md §2](commits.md#2-types). Tool: `git-cliff` (Rust), configured in
+  `cliff.toml`; generate with `git cliff -o CHANGELOG.md`.
 - Hand-written release notes may add context on top, never replace the generated list.
 
 ## 5. Tags
