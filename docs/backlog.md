@@ -36,6 +36,15 @@ Rules:
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Done | T-010 | 0015 |
 | T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | Done | — | 0006, 0007, 0009, 0030 |
 | T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | In review | T-025 | 0030 |
+| T-027 | Review the B1 ADRs for acceptance (0004, 0005 interpreter part, 0019 address-space part, 0024 SVC boundary, 0027 logging part) | Maintainer | Ready | — | 0004, 0005, 0019, 0024, 0027 |
+| T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | Ready | — | 0024 |
+| T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | Ready | T-028 | 0001, 0002 |
+| T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Blocked | T-027 | 0027 |
+| T-031 | `lince-mem`: flat guest address space with typed access | Impl | Blocked | T-027 | 0019 |
+| T-032 | `lince-loader`: load an NRO into guest memory | Impl | Blocked | T-028, T-031 | 0024 |
+| T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Blocked | T-027, T-029 | 0004, 0005, 0030 |
+| T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Blocked | T-027, T-028 | 0024 |
+| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034 | 0001 |
 
 ## Details
 
@@ -223,3 +232,68 @@ Follow `docs/06-poc-roadmap.md` PoC-11 and ADR-0030. Standalone crate in `poc/cp
 - **Acceptance:** `cargo xtask ci` passes from a clean checkout on Windows x64 and Linux x64;
   report in `docs/poc-reports/poc-11-cpp-boundary.md` with the measured call costs, build
   times, chosen binding generator and minimum clang version.
+
+### T-027 — B1 ADR review (maintainer)
+The boot-first roadmap (doc 07, B1) needs these accepted before its `Impl` tasks start:
+ADR-0004 (guest CPU model), ADR-0005 (the interpreter part), ADR-0019 (the guest address-space
+part), ADR-0024 (the SVC boundary) and ADR-0027 (the logging part: B1 logs every stub by name;
+the frame ledger stays with PoC-7 and its ARM run). Accepting a part means recording which
+sections are accepted and which stay Proposed.
+- **Acceptance:** each ADR's status line states what is accepted; T-030 to T-034 become Ready.
+
+### T-028 — Research: NRO format and B1 SVCs
+Use the `research-note` skill. From public sources only (switchbrew and similar, LEGAL-11;
+never SDK material, LEGAL-10): the NRO header and segment layout, how a homebrew program
+receives its entry arguments, and the numbers, arguments and results of the SVCs B1 uses
+(memory query/set, exit, `OutputDebugString`). Note what is Switch 1 knowledge and what is
+known to hold on Switch 2 (doc 08).
+- **Acceptance:** `docs/research/nro-and-b1-svcs.md` with per-field sources and evidence
+  levels; UNKNOWN items listed in doc 08.
+
+### T-029 — Test homebrew programs
+The B1 programs are written by the team, never taken from homebrew projects (LEGAL-20/21):
+- A64 assembly in `tests/homebrew/` (hello via `OutputDebugString`, then exit; plus one
+  program per instruction group the interpreter implements);
+- built with LLVM (`clang --target=aarch64-none-elf`, `ld.lld`), already required by ADR-0030;
+- a team-written ELF→NRO tool in `tools/` (format from T-028), driven by an `xtask` command,
+  with the generated NROs checked in so tests do not need LLVM.
+- **Acceptance:** one command rebuilds every NRO bit-for-bit; the NRO header fields are
+  checked by a test against T-028's note.
+
+### T-030 — `lince-trace` log facade
+Only what B1 needs: a log call that records a named stub or event once per name (no flood),
+usable from every crate, with no I/O on render-critical threads (ARCH-03: records go to a
+buffer drained elsewhere). The frame ledger is promoted from PoC-7 later, by ADR-0027.
+- **Acceptance:** follows the `lince-common` reference layout; tests cover once-per-name and
+  draining; no new dependency without approval.
+
+### T-031 — `lince-mem` flat guest address space
+A flat guest address space (ADR-0019, address-space part) with typed reads and writes by
+`GuestVa`, mapping and permission checks; enough for B1, not the host-backed fast path.
+- **Acceptance:** tests for mapped, unmapped and permission-faulting accesses; access through
+  `GuestVa` only (QUAL-20).
+
+### T-032 — `lince-loader` NRO
+Parse the NRO header and map its segments into `lince-mem` with their permissions; decode raw
+fields once at the boundary (PAT-03).
+- **Acceptance:** loads the T-029 NROs; a corrupt or truncated file is an error, never a panic;
+  fuzz target for the header parser (ADR-0028).
+
+### T-033 — `lince-cpu-a64` decoder and interpreter
+The first `[c++]` crate (ADR-0030 layout validated by PoC-11): decoder and interpreter for
+the instructions the T-029 programs use, with guest memory accessed through the Rust callback
+table. Instruction semantics come from Arm's public specification (LEGAL-11).
+- **Acceptance:** differential tests of every implemented instruction against expected values
+  derived from the specification (and against the host CPU on ARM hosts where available);
+  `cargo xtask ci` C++ checks pass.
+
+### T-034 — `lince-kernel` SVC dispatch
+Dispatch the SVCs from T-028 (memory, exit, `OutputDebugString`); unknown SVCs are logged by
+name and number through `lince-trace` and return the documented error, never a panic.
+- **Acceptance:** each SVC tested through the dispatch API; unknown SVCs logged once.
+
+### T-035 — `lince run` (B1 exit)
+`lince-app` CLI: `lince run <file.nro>` loads the file, runs it on the interpreter and prints
+`OutputDebugString` text on the host terminal.
+- **Acceptance:** the B1 exit criterion of doc 07, demonstrated: the T-029 hello NRO prints
+  "hello"; an integration test runs it in CI on Windows and Linux.
