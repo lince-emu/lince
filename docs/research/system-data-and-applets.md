@@ -42,7 +42,7 @@ Switch 2-only Mii, camera and GameChat data stay **Unknown** and unavailable.
 | F2 | SB-S2TL | Archives found only on Switch 2: …0844 "data for face detection", …0847 "MiiBody.dat and shaders", …0849 "appears to be MiiModel updated for Ounce", …0860 CameraFirmware, …081E JetShared (controller icon footer), …0848 ApplicationCompatibilityInfo, …0828 FunctionBlackList. The fetched table pairs some names and IDs ambiguously. | DOC (row attribution partly unclear) | Partially. These are listed as Unknown in §4. |
 | F3 | Lichii `src/core/file_sys/system_archive/system_archive.cpp` (also Eglantine, same file) | When the user has no firmware, the fork builds the following archives in memory: MiiModel, NgWord, NgWord2, SystemVersion, TimeZoneBinary and the font archives. All other IDs it knows return nothing. A comment names a Switch 2 title that aborts when Switch 2 data …0849 cannot be mounted. For any `04…` data ID, the fork therefore serves an **empty RomFS** by default; an environment variable turns this off. | SRC | Yes for the behavior. Lince keeps an explicit list of IDs instead of covering every `04…` ID. |
 | F4 | Lichii `src/core/hle/service/filesystem/fsp/fsp_srv.cpp` (`OpenDataStorageByDataId`) | Before building an archive, the fork first tries content installed by the user (firmware). If both fail, it returns a placeholder "unknown" result, and a TODO says the real error code is not known. | SRC | Lince never takes the firmware path (ADR-0029). The correct "not found" result is an open question. |
-| F5 | Lichii `NX2_NOTES.md` row 36 | Switch 2 titles read fonts through `pl:u` 2000 (font shared memory plus its size) and 2010 (`GetBuiltInFontData`: a "loaded" bool, then entries of flags, u32 offset and u32 size). The fork puts plain TTF copies after the obfuscated BFTTF copies used on Switch 1. | DOC | Yes. Lince serves fonts through the Switch 2 path; the Switch 1 path is pending decision D-006. |
+| F5 | Lichii `NX2_NOTES.md` row 36 | Switch 2 titles read fonts through `pl:u` 2000 (font shared memory plus its size) and 2010 (`GetBuiltInFontData`: a "loaded" bool, then entries of flags, u32 offset and u32 size). The fork puts plain TTF copies after the obfuscated BFTTF copies used on Switch 1. | DOC | Yes. Lince serves fonts through the Switch 2 path; the Switch 1 path is pending decision D-009. |
 | F6 | SB-PL | `pl:s`/`pl:u` font commands: RequestLoad, GetLoadState, GetSize, GetSharedMemoryAddressOffset, GetSharedMemoryNativeHandle (mapped read-only, **0x1100000 bytes**) and GetSharedFontInOrderOfPriority. Six font types: Standard, ChineseSimplified, ExtChineseSimplified, ChineseTraditional, Korean, NintendoExtended (button and icon glyphs). | DOC | Yes. All substitute fonts must fit in 0x1100000 bytes together. |
 | F7 | Lichii `system_archive/shared_font.cpp`, `system_archive/data/*`, `externals/nx_tzdb/CMakeLists.txt` | The fork's built-in fonts are byte arrays with no recorded upstream font or font license. Its time-zone archive is built from a prebuilt download produced by the third-party `tzdb_to_nx` tool. | SRC | Do not reuse either. The font provenance is unknown. Lince builds its own time-zone data from IANA tzdata. |
 | F8 | Lichii `system_archive/ng_word.cpp`, `src/core/hle/service/ngc/ngc.cpp` | The NgWord archives are built as small, valid files holding one placeholder pattern and a version file. `ngc:u` Check reports no match and Mask/Filter return the input unchanged. | SRC | Yes for the behavior: an empty, permissive filter, written by Lince. |
@@ -68,11 +68,11 @@ archive itself.
 
 | Archive (Switch 2 ID per SB-S2TL) | What games use it for | How the game reaches it | Lince approach | Evidence |
 |---|---|---|---|---|
-| FontStandard (…0811) | Latin and Japanese UI text | Svc `pl:u` (Switch 2 2000/2010; Switch 1 commands 0–5 pending D-006) | **S**: BIZ UDPGothic (Morisawa, SIL OFL-1.1). Fallback: Noto Sans JP (OFL-1.1). Metric compatibility is UNKNOWN until measured (open question 1). | DOC (F5, F6) |
+| FontStandard (…0811) | Latin and Japanese UI text | Svc `pl:u` (Switch 2 2000/2010; Switch 1 commands 0–5 pending D-009) | **S**: BIZ UDPGothic (Morisawa, SIL OFL-1.1). Fallback: Noto Sans JP (OFL-1.1). Metric compatibility is UNKNOWN until measured (open question 1). | DOC (F5, F6) |
 | FontChineseSimple / ExtChineseSimplified (…0814) | Simplified Chinese text | Svc `pl:u` | **S**: Noto Sans SC (OFL-1.1), TrueType outlines, subset to fit the shared memory | DOC (F6) |
 | FontChineseTraditional (…0813) | Traditional Chinese text | Svc `pl:u` | **S**: Noto Sans TC (OFL-1.1), subset | DOC (F6) |
 | FontKorean (…0812) | Hangul text | Svc `pl:u` | **S**: Noto Sans KR (OFL-1.1), subset | DOC (F6) |
-| FontNintendoExtension (…0810) | Button, stick and controller icons in the private-use area | Svc `pl:u` | **O**: glyphs drawn by Lince at the same codepoints (codepoint list still to be researched). Glyphs that would depict Nintendo logos, marks or hardware trade dress are drawn as neutral generic shapes or left blank (LEGAL-40; D-006). Licensed GPL-3.0-or-later with the rest of Lince. | DOC (F1, F6) |
+| FontNintendoExtension (…0810) | Button, stick and controller icons in the private-use area | Svc `pl:u` | **O**: glyphs drawn by Lince at the same codepoints (codepoint list still to be researched). Glyphs that would depict Nintendo logos, marks or hardware trade dress are drawn as neutral generic shapes or left blank (LEGAL-40; D-009). Licensed GPL-3.0-or-later with the rest of Lince. | DOC (F1, F6) |
 | TimeZoneBinary (…080E) | Local time, location name list | Svc `time:*` (the time service reads the rules itself) | **S**: IANA tzdata (public domain), compiled with Lince's own build step to TZif (zic is also public domain), parsed by the HLE time service. Built as an archive only if a title mounts it directly. | DOC (F1), SRC (F7) |
 | NgWord / NgWord2 (…0806, …0823) | Profanity filtering of user text | Svc `ngc:u`/`ngct:u`. Whether any title mounts the archive directly (cmd 202) is UNKNOWN. | **O**: no matches, input returned unchanged. A minimal, well-formed archive with no entries is written by Lince only if a title mounts it. | SRC (F8), DOC (F1) |
 | SystemVersion (…0809) | Version checks | Svc `set:sys` firmware-version queries; archive mount | **O**: a fixed, documented Lince version profile (0x100-byte layout, no digest on Switch 2) | DOC (F1), SRC (F3) |
@@ -110,7 +110,7 @@ Lince decodes both the Switch 1 AppletIds and the Switch 2 variant AppletIds (F1
 
 ## 5. Open questions
 
-1. **Font licensing and metrics.** See D-006 point 1 (OFL-1.1, subsetting, Reserved Font
+1. **Font licensing and metrics.** See D-009 point 1 (OFL-1.1, subsetting, Reserved Font
    Names). The metric differences from the console fonts are not measured, and fitting the
    subsets into 0x1100000 bytes needs a small PoC.
 2. **Correct "not found" result for `OpenDataStorageByDataId`.** Lichii admits it guesses (F4).
@@ -132,7 +132,7 @@ Lince decodes both the Switch 1 AppletIds and the Switch 2 variant AppletIds (F1
    calls the transform a key and encryption). It is a fixed constant in a public open-source
    project, not a console key, and Lince would apply it only to fonts it ships itself, but the
    maintainer must decide whether it falls outside LEGAL-02 and LEGAL-05 before anything is
-   implemented (decision D-006).
+   implemented (decision D-009).
 8. Nothing in this task required protected material. Mii and Mii-body model content for Switch
    2 and the camera or face data are left **unavailable** rather than recreated, because their
    formats are known only from firmware.

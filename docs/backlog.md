@@ -135,7 +135,7 @@ other projects (never from firmware files or leaked material), list the system d
 and applets Switch 2 titles use, and for each propose an original implementation, a freely
 licensed substitute, or a documented "unavailable" behavior. Extend
 `docs/10-firmware-independence.md` §3.
-- **In review:** [lince-emu/lince#9](https://github.com/lince-emu/lince/pull/9); open decision [D-006](decisions/D-006-shared-font-substitutes.md).
+- **In review:** [lince-emu/lince#9](https://github.com/lince-emu/lince/pull/9); open decision [D-009](decisions/D-009-shared-font-substitutes.md).
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
