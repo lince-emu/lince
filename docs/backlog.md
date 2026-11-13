@@ -21,7 +21,7 @@ Rules:
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
 | T-010 | PoC-6: cache store prototype and benchmark harness | PoC | Done | — | 0015, 0016 |
 | T-011 | PoC-7: frame ledger prototype | PoC | Done | — | 0027 |
-| T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
+| T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | In review | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
 | T-014 | Ampere SASS test corpus: compile team-written CUDA kernels (no NVIDIA GPU needed) | PoC | Ready | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
@@ -100,6 +100,7 @@ monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, sharded `VkPipelin
 `DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths. Pipeline
 binary load is deferred to T-022, because `ash` 0.38 has no `VK_KHR_pipeline_binary` bindings.
 - **Acceptance:** runs on any Vulkan 1.3 device, writes per-mechanism latency CSV; report skeleton.
+- **PR:** https://github.com/lince-emu/lince/pull/14
 
 ### T-013 — Tier-0 micro-op format specification
 Write `docs/research/tier0-micro-op-format.md`: encoding, operand descriptors, register-file
