@@ -25,8 +25,12 @@ if [ "$mode" = "changed" ]; then
   mapfile -t files < <( { [ -n "$base" ] && git diff --name-only "$base" -- ; git ls-files --others --exclude-standard; } 2>/dev/null | sort -u )
 fi
 
-# Crates allowed to contain `unsafe` (docs/04-rust-architecture.md §2, ADR-0001, ADR-0026).
-UNSAFE_OK='^crates/(lince-mem|lince-jit|lince-render-vk|lince-ffi-[a-z0-9-]+)/'
+# Crates allowed to contain `unsafe` (docs/04-rust-architecture.md §2, ADR-0001), plus the
+# `src/ffi` module of the `[c++]` crates (ADR-0030).
+CPP_CRATES='lince-cpu-a64|lince-shader'
+UNSAFE_OK="^crates/((lince-mem|lince-render-vk)/|($CPP_CRATES)/src/ffi(\.rs|/))"
+# Lince's own C++ lives only in the [c++] crates (ARCH-25).
+CPP_OK="^crates/($CPP_CRATES)/cpp/"
 # Crates on render-critical threads: no blocking file I/O (AGENTS.md invariant 3).
 CRITICAL='^crates/(lince-gpu-cmd|lince-gpu-ampere|lince-pipeline)/src/'
 
@@ -36,9 +40,10 @@ add() { violations+=("$1"); }
 for f in "${files[@]}"; do
   f="$(rel_path "$f")"
   [ -f "$f" ] || continue
-  # LEGAL-30: SPDX header in every Rust and shell source file of the project.
+  # LEGAL-30: SPDX header in every Rust, C++ and shell source file of the project.
   case "$f" in
-    crates/*.rs|tools/*.rs|xtask/*.rs|poc/*.rs|crates/*.sh|tools/*.sh|xtask/*.sh)
+    crates/*.rs|tools/*.rs|xtask/*.rs|poc/*.rs|crates/*.sh|tools/*.sh|xtask/*.sh|\
+    crates/*.cpp|crates/*.hpp|crates/*.h|poc/*.cpp|poc/*.hpp|poc/*.h)
       if ! head -n 5 "$f" | grep -q 'SPDX-License-Identifier: GPL-3.0-or-later'; then
         add "$f: missing SPDX header (LEGAL-30): '// SPDX-License-Identifier: GPL-3.0-or-later'."
       fi ;;
@@ -78,6 +83,20 @@ for f in "${files[@]}"; do
       # Invariant 3: no blocking file I/O in render-critical crates.
       if [[ "$f" =~ $CRITICAL ]] && grep -nE '\b(std::fs::|File::open|File::create|read_to_end|OpenOptions)\b' "$f" >/dev/null; then
         add "$f: file I/O in a render-critical crate. Route it through lince-cache's I/O thread."
+      fi
+      ;;
+    crates/*.cpp|crates/*.hpp|crates/*.h)
+      # ARCH-25: C++ only in the [c++] crates.
+      if ! [[ "$f" =~ $CPP_OK ]]; then
+        add "$f: C++ outside the cpp/ directory of a [c++] crate (ARCH-25, ADR-0030)."
+      fi
+      # ARCH-51: no exceptions, no RTTI.
+      if grep -nE '(\bthrow\b|\btry[[:space:]]*\{|\bcatch[[:space:]]*\(|\bdynamic_cast\b|\btypeid\b)' "$f" >/dev/null; then
+        add "$f: exceptions or RTTI in C++ (ARCH-51). Report errors as status codes."
+      fi
+      # ARCH-52: no threads, no file or network I/O.
+      if grep -nE '(std::(thread|jthread|async)\b|\bpthread_create\b|\bCreateThread\b|\b_beginthread(ex)?\b|std::[io]?fstream\b|\bf(open|read|write)\b|\bCreateFile[AW]?\b|\bsocket\(|#include <(thread|fstream|iostream)>)' "$f" >/dev/null; then
+        add "$f: thread creation or I/O in C++ (ARCH-52). Use the Rust callback table."
       fi
       ;;
     crates/*/Cargo.toml)
