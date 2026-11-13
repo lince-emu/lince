@@ -37,7 +37,7 @@ Most bugs caught without running games.
 Capture infrastructure needed early.
 
 ## Risks
-Private corpora limit outside contributors. Mitigation: public synthetic corpora (own CUDA SASS,
+Private corpora limit outside contributors. Mitigation: public synthetic corpora (team-assembled SASS,
 synthetic command streams).
 
 ## Validation plan
