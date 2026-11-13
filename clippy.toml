@@ -1,0 +1,33 @@
+# Lince-NX clippy thresholds and disallowed APIs.
+# Lint levels live in [workspace.lints] (docs/conventions/lints.md).
+
+# QUAL-04: functions ≤ 80 lines hard limit, ≤ 5 parameters
+too-many-lines-threshold = 80
+too-many-arguments-threshold = 5
+
+# QUAL-02: nesting ≤ 3 levels inside a function body
+excessive-nesting-threshold = 4
+
+# QUAL-05: at most one bool parameter in a function, three bool fields in a struct
+max-fn-params-bools = 1
+max-struct-bools = 3
+
+cognitive-complexity-threshold = 20
+type-complexity-threshold = 250
+
+# QUAL-44: tests may unwrap
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-dbg-in-tests = true
+allow-print-in-tests = true
+
+# ARCH-04 / ARCH-26 / ARCH-05: APIs replaced by project infrastructure
+disallowed-methods = [
+  { path = "std::thread::spawn", reason = "spawn work through lince-sched (ARCH-04)" },
+  { path = "std::process::exit", reason = "shut down through lince-core so caches flush" },
+  { path = "std::env::var", reason = "behavior comes from typed settings, not env vars (DEV-71, QUAL-53)" },
+]
+disallowed-types = [
+  { path = "std::sync::Mutex", reason = "use parking_lot::Mutex (doc 04 §6)" },
+  { path = "std::sync::RwLock", reason = "use parking_lot::RwLock (doc 04 §6)" },
+]
