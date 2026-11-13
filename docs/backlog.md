@@ -100,6 +100,7 @@ monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, sharded `VkPipelin
 `DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths. Pipeline
 binary load is deferred to T-022, because `ash` 0.38 has no `VK_KHR_pipeline_binary` bindings.
 - **Acceptance:** runs on any Vulkan 1.3 device, writes per-mechanism latency CSV; report skeleton.
+- **PR:** https://github.com/lince-emu/lince/pull/14
 
 ### T-013 — Tier-0 micro-op format specification
 Write `docs/research/tier0-micro-op-format.md`: encoding, operand descriptors, register-file
