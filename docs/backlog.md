@@ -76,6 +76,7 @@ If yes, extend `.githooks/commit-msg` and `docs/conventions/commits.md`.
 - `cliff.toml` for `git-cliff` grouping by type as in `docs/conventions/versioning.md` §4.
 - **Acceptance:** CI fails on a non-conforming commit or PR title; `git cliff` produces a
   grouped `CHANGELOG.md` from the existing history.
+- **PR:** https://github.com/lince-emu/lince/pull/25
 
 ### T-010 — PoC-6 cache store
 Follow `docs/06-poc-roadmap.md` PoC-6 and `docs/02-cache-architecture.md` §4–§9.
