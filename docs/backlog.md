@@ -65,6 +65,7 @@ platform-neutral helper only if three crates need it) as the model every later c
 crate template (STRUCT), module docs, patterns PAT-01/02/03, tests (QUAL-70–73), lints clean.
 - **Acceptance:** maintainer reviews it explicitly as the reference; `docs/conventions/patterns.md`
   links to its real implementations.
+- **PR:** https://github.com/lince-emu/lince/pull/26
 
 ### T-006 — DCO decision
 Decide whether commits must carry `Signed-off-by` (Developer Certificate of Origin, LEGAL-35).
