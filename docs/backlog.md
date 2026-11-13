@@ -33,7 +33,7 @@ Rules:
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
-| T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Needs decision | T-010 | 0015 |
+| T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Ready | T-010 | 0015 |
 
 ## Details
 
@@ -165,8 +165,7 @@ sub-millisecond is untested until they are measured.
   skips it where the extension is unsupported, and the PoC-5 report records the results.
 
 ### T-024 — PoC-6 second-process readers
-Decision [D-002](decisions/D-002-cache-engine-second-process.md), awaiting maintainer
-reconfirmation; this task becomes Ready when the maintainer reconfirms option A. Let
+Decision [D-002](decisions/D-002-cache-engine-second-process.md). Let
 `harness resolve --writer on` run the reader in a separate process while the writer appends,
 for every engine: the custom store, `redb` opened with `ConcurrencyMode::SingleWriter`
 (writer and reader in that mode) and SQLite in WAL mode. Record whether each engine serves

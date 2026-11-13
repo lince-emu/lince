@@ -2,9 +2,9 @@
 
 - **Raised by:** Claude Code (T-010 review) · **Date:** 2026-11-13
 - **Blocks:** T-024; the ADR-0015 verdict after PoC-6 measurements
-- **Status:** Open (awaiting maintainer reconfirmation of option A). The first version of this
-  record, answered on 2026-11-13, rested on a false premise about `redb`; the premise was
-  corrected after review on 2026-11-13.
+- **Status:** Answered (option A, 2026-11-13; reconfirmed by the maintainer in chat after the
+  premise was corrected). The first version of this record, answered on 2026-11-13, rested on
+  a false premise about `redb`; the premise was corrected after review on 2026-11-13.
 
 ## Question
 Doc 02 §5 step 1 and §10 require a second emulator instance to open the store read-only. The
@@ -45,6 +45,3 @@ if every engine's reader runs in the same setup.
   another process, before the ADR-0015 verdict. The custom store's and SQLite's readers run
   in another process too, so the comparison is like for like. This is task T-024.
 - The PoC-6 report no longer claims that `redb` cannot be opened by a second process.
-- Until the maintainer reconfirms, the ADR-0015 amendment and T-024 are provisional. Choosing
-  option B reverts the ADR-0015 Requirements and revisit-clause changes and drops T-024;
-  choosing option C keeps them and removes `redb` from T-024.
