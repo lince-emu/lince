@@ -10,14 +10,8 @@
 //! This crate is also the **reference crate** (backlog T-005): its layout, module docs, error
 //! enum (PAT-01), newtypes (PAT-02) and tests (QUAL-70–73) are the model later crates copy.
 //!
-//! # Contents
-//! - Guest CPU and GPU virtual addresses, [`GuestVa`] and [`GpuVa`].
-//! - Nanoseconds, [`Nanos`].
-//! - The crate's errors, [`CommonError`] and [`Result`].
-//!
 //! # Threads
-//! Plain values; usable from any thread, including render-critical ones (no allocation, no
-//! I/O, no locks).
+//! Plain values: safe on render-critical threads (no allocation, I/O or locks).
 //!
 //! # References
 //! docs/04-rust-architecture.md §2 · ADR-0001 · docs/conventions/patterns.md

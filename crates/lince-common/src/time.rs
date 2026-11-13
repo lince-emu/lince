@@ -4,7 +4,7 @@
 //! `Nanos`: a span or timestamp in nanoseconds (PAT-02, QUAL-20).
 //!
 //! Frame-ledger events, budgets and guest timers all count nanoseconds; one type keeps them
-//! from being mixed with other `u64` counts. `u64` nanoseconds cover about 584 years.
+//! from being mixed with other `u64` counts.
 
 use std::time::Duration;
 
@@ -19,23 +19,23 @@ impl Nanos {
     /// Zero nanoseconds.
     pub const ZERO: Self = Self(0);
 
-    /// Wraps a raw nanosecond count.
+    /// Wraps a raw count.
     pub const fn new(raw: u64) -> Self {
         Self(raw)
     }
 
-    /// The raw nanosecond count.
+    /// The raw count.
     pub const fn get(self) -> u64 {
         self.0
     }
 
-    /// `self + other`, saturating at the largest value instead of overflowing.
+    /// Saturates at `u64::MAX` nanoseconds.
     #[must_use]
     pub const fn saturating_add(self, other: Self) -> Self {
         Self(self.0.saturating_add(other.0))
     }
 
-    /// `self - other`, or zero when `other` is larger (an elapsed time never goes negative).
+    /// Zero when `other` is larger: an elapsed time never goes negative.
     #[must_use]
     pub const fn saturating_sub(self, other: Self) -> Self {
         Self(self.0.saturating_sub(other.0))
@@ -51,7 +51,7 @@ impl From<Nanos> for Duration {
 impl TryFrom<Duration> for Nanos {
     type Error = CommonError;
 
-    /// Fails for durations of about 584 years or more, which `u64` nanoseconds cannot hold.
+    /// Fails from about 584 years on, which `u64` nanoseconds cannot hold.
     fn try_from(d: Duration) -> Result<Self> {
         u64::try_from(d.as_nanos())
             .map(Self)

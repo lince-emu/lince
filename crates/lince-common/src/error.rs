@@ -5,7 +5,7 @@
 
 use thiserror::Error;
 
-/// Errors from the conversions in this crate. Every variant carries the value that failed.
+/// Errors from the conversions in this crate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Error)]
 pub enum CommonError {
     /// A `Duration` longer than [`Nanos`](crate::Nanos) can hold (about 584 years).
