@@ -5,6 +5,7 @@
 
 use std::path::Path;
 
+use crate::commits;
 use crate::error::XtaskError;
 use crate::license;
 use crate::process;
@@ -19,12 +20,13 @@ const PROJECT_DIR_VAR: &str = "CLAUDE_PROJECT_DIR";
 /// Files passed to one run of the invariant script; keeps command lines short on Windows.
 const INVARIANT_BATCH: usize = 200;
 
-/// Runs fmt, SPDX, license, invariant, clippy, test and cargo-deny checks.
-pub(crate) fn run(root: &Path) -> Result<(), XtaskError> {
+/// Runs fmt, commit-message, SPDX, license, invariant, clippy, test and cargo-deny checks.
+pub(crate) fn run(root: &Path, range: &commits::Range) -> Result<(), XtaskError> {
     process::run_step(
         "rustfmt",
         &mut process::command(root, CARGO, &["fmt", "--all", "--check"]),
     )?;
+    commits::check(root, range)?;
     let files = repository::files(root)?;
     spdx::check(root, &files)?;
     license::check(root, &files)?;
