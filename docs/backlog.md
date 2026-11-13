@@ -15,26 +15,26 @@ Rules:
 |----|-------|------|--------|------------|------|
 | T-001 | Choose the project license | Maintainer | Done | — | 0000 |
 | T-002 | Review ADRs ready for acceptance (0001 details, 0002, 0014) | Maintainer | Done | — | 0001, 0002, 0014 |
-| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | In review | T-001, T-002 | 0001, 0002 |
-| T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Blocked | T-003 | 0002 |
-| T-005 | Reference crate: `lince-common` written to every convention | Impl | Blocked | T-003 | 0001 |
+| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | Done | T-001, T-002 | 0001, 0002 |
+| T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Ready | T-003 | 0002 |
+| T-005 | Reference crate: `lince-common` written to every convention | Impl | Ready | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
 | T-010 | PoC-6: cache store prototype and benchmark harness | PoC | Done | — | 0015, 0016 |
 | T-011 | PoC-7: frame ledger prototype | PoC | Done | — | 0027 |
-| T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | In review | — | 0007, 0013 |
+| T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Done | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
-| T-014 | Ampere SASS test corpus: team-written assembler and programs (no NVIDIA SDK or GPU) | PoC | In review | — | 0009, 0028 |
-| T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
-| T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | In review | — | 0007 |
-| T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | In review | — | 0024, 0029 |
-| T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
+| T-014 | Ampere SASS test corpus: team-written assembler and programs (no NVIDIA SDK or GPU) | PoC | Done | — | 0009, 0028 |
+| T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Done | — | — |
+| T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Done | — | 0007 |
+| T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | Done | — | 0024, 0029 |
+| T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Ready | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
-| T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | In review | T-010 | 0015 |
-| T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | In review | T-011 | 0027 |
+| T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | Done | T-010 | 0015 |
+| T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Done | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
-| T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | In review | T-010 | 0015 |
-| T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | In review | — | 0006, 0007, 0009, 0030 |
+| T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Done | T-010 | 0015 |
+| T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | Done | — | 0006, 0007, 0009, 0030 |
 | T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Ready | T-025 | 0030 |
 
 ## Details
