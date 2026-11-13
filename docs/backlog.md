@@ -54,6 +54,7 @@ Maintainer reviews ADR-0001 (details), ADR-0002 and ADR-0014 and changes their s
   `clippy.toml` and `deny.toml` already exist; `xtask ci` runs `cargo deny check` and verifies
   SPDX headers (LEGAL-30) and `license` fields (LEGAL-31).
 - **Acceptance:** clean checkout builds and `cargo xtask ci` passes on both OSes.
+- **PR:** https://github.com/lince-emu/lince/pull/11
 
 ### T-005 — Reference crate `lince-common`
 Write `lince-common` (newtypes such as `GuestVa`/`GpuVa`/`Nanos`, a small error enum, one
