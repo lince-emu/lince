@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(cargo build *)",
+      "Bash(cargo check *)",
+      "Bash(cargo test *)",
+      "Bash(cargo nextest *)",
+      "Bash(cargo clippy *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo doc *)",
+      "Bash(cargo bench *)",
+      "Bash(cargo tree *)",
+      "Bash(cargo deny *)",
+      "Bash(cargo xtask *)",
+      "Bash(cargo run -p xtask *)",
+      "Bash(cargo +nightly miri *)",
+      "Bash(cargo fuzz *)",
+      "Bash(rustfmt *)",
+      "Bash(rustc --version)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(git switch *)",
+      "Bash(git checkout -b *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git stash *)",
+      "Bash(git fetch *)",
+      "Bash(git pull --ff-only *)",
+      "Bash(git worktree *)",
+      "Bash(mkdir *)",
+      "Bash(git rebase origin/main)",
+      "Bash(git merge-base *)",
+      "Bash(git config core.hooksPath .githooks)",
+      "Bash(bash .githooks/commit-msg *)",
+      "Bash(git rev-parse *)",
+      "Bash(git push -u origin lince/*)",
+      "Bash(git push origin lince/*)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr comment *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh issue comment *)",
+      "Bash(ls *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(bash .claude/hooks/*)",
+      "WebSearch",
+      "WebFetch(domain:docs.vulkan.org)",
+      "WebFetch(domain:registry.khronos.org)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:doc.rust-lang.org)",
+      "WebFetch(domain:switchbrew.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ],
+    "ask": [
+      "Bash(cargo add *)",
+      "Bash(cargo remove *)",
+      "Bash(cargo update *)",
+      "Bash(git rebase *)",
+      "Bash(git reset *)",
+      "Bash(git push *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr close *)",
+      "Edit(./Cargo.lock)",
+      "Edit(./rust-toolchain.toml)",
+      "Edit(./LICENSE*)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push origin main *)",
+      "Bash(git push origin master *)",
+      "Bash(git push origin HEAD:main *)",
+      "Bash(git reset --hard origin/main)",
+      "Bash(git clean -fdx *)",
+      "Bash(rm -rf / *)",
+      "Bash(rm -rf ~ *)",
+      "Bash(curl * | sh)",
+      "Bash(curl * | bash)",
+      "Bash(wget * | sh)",
+      "Read(./**/*.keys)",
+      "Read(./**/prod.keys)",
+      "Read(./**/title.keys)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./**/*.keys)"
+    ]
+  },
+  "env": {
+    "CARGO_TERM_COLOR": "never",
+    "RUST_BACKTRACE": "1"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-context.sh\"",
+            "timeout": 20,
+            "statusMessage": "Loading Lince-NX project context"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-bash.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-paths.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit-rust.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/check-invariants.sh\" --stop-hook",
+            "timeout": 60,
+            "statusMessage": "Checking Lince-NX invariants"
+          }
+        ]
+      }
+    ]
+  }
+}
