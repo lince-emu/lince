@@ -172,6 +172,7 @@ only), use any ARM host available to the maintainer or a contributor.
   `Ring::push` and the acquire fence in `Ring::snapshot`. If loom cannot detect the removal
   of one of them, the PR and the PoC-7 report document that loom limitation instead. The ARM
   run result, with the host it ran on, is recorded in the PoC-7 report.
+- **PR:** https://github.com/lince-emu/lince/pull/19
 
 ### T-022 — PoC-5 pipeline binaries
 Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add
