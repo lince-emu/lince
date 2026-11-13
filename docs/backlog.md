@@ -148,9 +148,13 @@ CRC-32C vs XXH3-64 on 1 KiB–2 MiB payloads in the harness.
 ### T-021 — PoC-7 memory-model checks
 Decision [D-004](decisions/D-004-ledger-memory-model-checks.md). Add `loom` as a
 dev-dependency of `poc/frame-ledger` and model one producer and one concurrent snapshot;
-run the test suite on an ARM host (e.g. an ARM CI runner).
-- **Acceptance:** loom test passes and fails when a fence in `ring.rs` is removed (shown in
-  the PR); ARM run result recorded in the PoC-7 report.
+run the test suite on an ARM host. Until CI exists (T-003), use any ARM host available to the
+maintainer or a contributor; afterwards, an ARM CI runner.
+- **Acceptance:** the loom test passes, and it fails when either of these fences in
+  `poc/frame-ledger/src/ring.rs` is removed (shown in the PR): the release fence in
+  `Ring::push` and the acquire fence in `Ring::snapshot`. If loom cannot detect the removal
+  of one of them, the PR and the PoC-7 report document that loom limitation instead. The ARM
+  run result, with the host it ran on, is recorded in the PoC-7 report.
 
 ### T-022 — PoC-5 pipeline binaries
 Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add
