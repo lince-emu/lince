@@ -30,14 +30,15 @@ that map onto tiers V1–V3?
 ## 2. Short answer
 
 - On current desktop drivers for Windows and Linux, **NVIDIA proprietary, AMD (proprietary and
-  RADV) and Intel ANV expose the five V3 features surveyed** (GPL with fast link or shader
-  objects, pipeline binary, barycentrics, subgroup size control) **plus mesh/task shaders**, which
-  ADR-0007 keeps as a separate flag. NVK exposes the same set in a Mesa 26.3 development build
+  RADV) and Intel ANV expose the V3 features surveyed** (GPL with fast link or shader objects,
+  barycentrics, subgroup size control) **plus the separate flags pipeline binary and mesh/task
+  shaders** (ADR-0007, D-008). NVK exposes the same set in a Mesa 26.3 development build
   (R4); its status in released Mesa is only partly known (§3). GPL fast linking is reported `true`
   on every sampled driver that exposes GPL.
 - **Intel's Windows driver** is the outlier among desktop targets: GPL + fast link, but **no
-  shader objects and no pipeline binary** (Arc B580, driver 101.9175, 2026-11-05). By ADR-0007
-  as written it is **V2**, not V3.
+  shader objects and no pipeline binary** (Arc B580, driver 101.9175, 2026-11-05). It meets the
+  surveyed part of **V3** without the pipeline-binary flag, so it uses the sharded
+  `VkPipelineCache` for L6. Before D-008 moved pipeline binary out of the V3 row it was V2.
 - **Subgroup size 32:** NVIDIA is always 32. AMD supports 32–64; current drivers (R5, R7, R8) can
   *require* 32 only in fragment, compute, task and mesh stages, and the older proprietary driver
   in R6 only in compute. Intel supports 16/8–32 and can require it only in compute, task and mesh
@@ -188,14 +189,16 @@ Only the six surveyed features are checked here. ADR-0007's V3/V2/V1 also requir
 dynamic state, descriptor indexing/buffer and buffer device address, which this note does **not**
 survey; a "V3" below means "the surveyed part of V3 is met".
 
-| Driver | Pipeline model available | Barycentric | Pipeline binary | Subgroup 32 | Tier (surveyed part) |
+Pipeline binary is a separate flag (ADR-0007, D-008), so its column does not change the tier.
+
+| Driver | Pipeline model available | Barycentric | Pipeline binary (flag) | Subgroup 32 | Tier (surveyed part) |
 |--------|--------------------------|-------------|-----------------|-------------|----------------------|
 | NVIDIA proprietary (R1–R3) | GPL + fast link, shader object | Y | Y | always | **V3** |
 | NVK (R4, dev build) | GPL + fast link, shader object | Y | Y | always | **V3** (released-Mesa status UNKNOWN) |
 | AMD proprietary (R5, R6) | GPL + fast link, shader object | Y | Y | frag/comp/task/mesh (R5); compute only (R6) | **V3** (GPL vs shader objects: PoC-5 results pending) |
 | RADV (R7, R8) | GPL + fast link, shader object | Y | Y | frag/comp/task/mesh | **V3** |
 | ANV (R11) | GPL + fast link, shader object | Y | Y | comp/task/mesh | **V3** |
-| Intel Windows, Arc (R9) | GPL + fast link | Y | **N** | comp/task/mesh | **V2** (fails V3 on pipeline binary) |
+| Intel Windows, Arc (R9) | GPL + fast link | Y | **N** | comp/task/mesh | **V3** without the pipeline-binary flag |
 | Intel Windows, Xe-LP (R10) | GPL + fast link | **N** | **N** | compute | **V2** (Tier 0 variants without barycentrics) |
 | Qualcomm proprietary (R12) | GPL + fast link | **N** | Y | no (≥64) | **V2** at best; not an ADR-0003 target |
 | Turnip (R13) | GPL + fast link | **N** | **N** | no (≥64) | **V2** at best; not an ADR-0003 target |
@@ -210,7 +213,7 @@ except Intel Xe-LP on Windows, and absent on all mobile and Apple drivers sample
 | Source | Observation | Evidence | Applies to Lince? |
 |--------|-------------|----------|-------------------|
 | gpuinfo R1–R11 | All Windows/Linux desktop drivers sampled advertise GPL with fast link. | DOC-MEASURED | Yes: V2 is the realistic desktop floor; V1 is for old hardware only. |
-| gpuinfo R9, R10 | Intel's Windows driver lacks shader objects and pipeline binary; ANV on the same GPU has both. | DOC-MEASURED | Yes: Intel on Windows is V2; the tier is per driver, not per GPU. |
+| gpuinfo R9, R10 | Intel's Windows driver lacks shader objects and pipeline binary; ANV on the same GPU has both. | DOC-MEASURED | Yes: capabilities are per driver, not per GPU; Arc on Windows is V3 (surveyed part) without the pipeline-binary flag, Xe-LP is V2. |
 | gpuinfo R5–R11 | Required subgroup size cannot be set for vertex, tessellation or geometry stages on AMD and Intel drivers. | DOC-MEASURED | Yes: input for ADR-0010's warp emulation in those stages. |
 | Vulkan spec §9.5.2 | Without varying subgroups (SPIR-V ≤ 1.5, no varying flag) `SubgroupSize` equals `subgroupSize` (64 on AMD); SPIR-V 1.6 allows it to vary outside task/mesh/compute. | DOC | Yes: Lince cannot guarantee 32-wide vertex-pipeline subgroups on AMD; on Intel `subgroupSize` is 32 in R9–R11. |
 | gpuinfo R12, R13 | Adreno minimum subgroup size is 64. | DOC-MEASURED | Partially: only if a mobile port is pursued. |
@@ -229,9 +232,8 @@ except Intel Xe-LP on Windows, and absent on all mobile and Apple drivers sample
 
 ## 11. Affected ADRs, PoCs and tasks
 
-- **ADR-0007:** the tier table is consistent with the data; Intel Windows lands in V2 because of
-  the pipeline-binary requirement. Whether V3 should require pipeline binary or treat it as a
-  separate flag is a maintainer decision, not made here.
+- **ADR-0007:** following this survey, pipeline binary moved from the V3 row to the separate
+  flags (D-008); with that change Intel Arc on Windows meets the surveyed part of V3.
 - **ADR-0013:** the choice between GPL and shader objects per driver waits for PoC-5 results
   (T-012); this note only shows that both are advertised on most desktop drivers.
 - **ADR-0010:** forcing 32-wide subgroups is possible only in some stages on AMD/Intel and never on
