@@ -3,6 +3,50 @@
 Status: Proposed · Ordered by architectural dependency and risk, not by visible features.
 Durations are deliberately omitted until PoC results exist.
 
+## Boot-first track (current priority)
+
+The milestones below stay the architecture plan, but work is now ordered by the shortest path
+to the first commercial title on screen. Charter work that does not block booting (Tier 0,
+production cache, governor, streaming) moves after B5. Every phase ends with something that
+runs, not with a report.
+
+Commercial content is always a **decrypted dump made by the user from a game they own**
+(ADR-0029). Lince never decrypts, never ships keys or firmware, and no game content enters the
+repository or CI. Test programs are written by the team: Rust `aarch64-unknown-none` binaries
+packed as NRO by `xtask`, so no third-party homebrew toolchain is needed.
+
+| Phase | Builds | Exit criterion (demonstrated, not reported) | ADRs to accept first |
+|-------|--------|---------------------------------------------|----------------------|
+| **B0 Base** | T-003 workspace + CI, `lince-common`, `lince-trace` | `cargo xtask ci` green | 0001, 0002 (done) |
+| **B1 Hello homebrew** | `lince-loader` (NRO), `lince-mem` flat guest address space, `lince-cpu-a64` decoder + interpreter for the instructions the test programs use, `lince-kernel` SVC dispatch (memory, exit, `OutputDebugString`), `lince-app` CLI `lince run <file>` | Our NRO prints "hello" on the host terminal; differential tests of every implemented instruction | 0004, 0005 (interpreter part), 0019 (address space part), 0024 (SVC boundary) |
+| **B2 Kernel and IPC** | Threads (one host thread per guest core, simple scheduler), handles, sync objects, events, TLS; CMIF/TIPC framework; `sm:`, `set:`, `fs` (host directory), `time`, `hid` stubs that log | Multi-threaded test NRO talks to services over IPC; coverage tool lists every unimplemented SVC/command | 0017 (core threads only), 0024 |
+| **B3 Commercial loader** | NPDM, NSO segments (decompress), rtld/subsdk chain, RomFS from a user-supplied extracted directory, `am`/`applet` lifecycle, `nvdrv` and `vi` skeletons, Switch 2 services skeleton in `lince-hle-nx2` | A user's dumped title runs its own code until its first GPU submission, with every stub logged by name (M4 exit) | 0025, 0029 (done) |
+| **B4 GPU commands** | GPFIFO, channels, syncpoints/semaphores, Ampere 3D/compute/DMA methods recorded to a null backend; capture tool | Title runs past its first `present` without hanging; capture replays deterministically | 0006, 0008, 0022 (minimum) |
+| **B5 First frame** | Vulkan device + present, render targets, buffers, simple textures (swizzle, BC/ASTC on CPU), shader decode SASS → IR → SPIR-V with **blocking compile allowed** (flagged, M6 rule) | The title's first screen (logo or menu) is visible in a window | 0007, 0009, 0020 (CPU path) |
+| **B6 Input and progress** | Keyboard/gamepad → `hid`, audio to a null sink, the services the title asks for next, fixes driven by the coverage tool | The title reaches gameplay and accepts input | — |
+
+After B6 the plan resumes at M7 (Tier 0, no pipeline waits), M8, M9 and M10, then the M11
+"playable with no stutter" exit criteria.
+
+### What pauses
+
+PoC and research tasks not on this path pause until they block a phase: T-020, T-021, T-022,
+T-024 and further cache/ledger PoCs. T-014 (SASS corpus) and T-018 (decoder) return in B5;
+T-017 (Tier-0 harness) returns after B6. T-026 (Rust↔C++ boundary) is needed in B1, because
+`lince-cpu-a64` is a `[c++]` crate (ADR-0030).
+
+### Main risks
+
+- **Switch 2 public knowledge is thin** (NVN2 driver protocol, Switch 2 services, Ampere SASS
+  encodings). B3–B5 can stall on undocumented behavior; mitigation is a coverage tool that
+  names every missing piece, and research notes per gap (`docs/08-switch2-hardware.md`).
+- **Firmware-free system data** (fonts, shared data, applets) may block menus in B5/B6; see
+  the research in `docs/research/system-data-and-applets.md`.
+- **Interpreter speed**: a title may be too slow to reach its first frame in reasonable time
+  before the JIT (M3). Measure in B3; pull the baseline JIT forward if needed.
+
+## Architecture milestones
+
 | Milestone | Content | Exit criteria | Risk addressed |
 |-----------|---------|---------------|----------------|
 | **M0 Research & specification** | This dossier; license decision (ADR-0000); research notes for NVN2/services in `docs/research/` | ADR-0000 accepted; PoC plans approved | Wrong foundations |
