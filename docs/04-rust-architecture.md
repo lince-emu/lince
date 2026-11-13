@@ -50,6 +50,7 @@ lince-emu/
 │   ├── lince-cache/            # content-addressed store, index, writer, compaction
 │   ├── lince-texture/          # swizzle (GOB/block-linear), ASTC/BC codecs (GPU + CPU ref)
 │   ├── lince-render-vk/        # Vulkan backend: device, memory, resources, sync, present [unsafe]
+│   │                           #   (later: lince-render-d3d12, lince-render-metal; ADR-0006)
 │   ├── lince-audio/
 │   ├── lince-core/             # system composition, lifecycle
 │   └── lince-app/              # CLI first; GUI later

@@ -31,7 +31,11 @@ Option 4.
 - Unsupported instructions become an explicit `Unimplemented` IR op with the raw bits, so a
   program still translates; the op traps into a well-defined debug path and is counted. A
   program with such an op is excluded from Tier 1/2 and stays on Tier 0 if Tier 0 supports it.
-- Structurization to SPIR-V's structured control flow is an IR pass, not part of decoding.
+- Structurization to structured control flow is an IR pass, not part of decoding.
+- The IR is independent of the host shader language. SPIR-V (Vulkan) is the first emitter;
+  DXIL or HLSL (Direct3D 12) and MSL (Metal) emitters are planned later, alongside the
+  SPIR-V emitter, not as translations of its output. Target-specific lowering happens in each
+  emitter.
 
 ## Technical justification
 Options 1 and 2 recreate the whole-program rejection failure; 3 would bend our semantics to a

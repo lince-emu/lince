@@ -43,6 +43,7 @@ the PR).
 | ARCH-25 | Lince's own C++ **MUST** live only in the `[c++]` crates of doc 04. Third-party non-Rust code in release builds **MUST** be approved by its own ADR and isolated behind a crate boundary and a feature flag. | ADR-0030 |
 | ARCH-26 | General-purpose async runtimes and work-stealing pools **MUST NOT** be used in emulation crates (tools only). | ADR-0017 |
 | ARCH-27 | Switch 2–specific behavior **MUST** live in Switch 2 crates or modules; shared crates contain only demonstrated commonality. | ADR-0025 |
+| ARCH-28 | The shader IR, draw/dispatch packets and cache keys **SHOULD NOT** encode concepts of one host graphics API; those live in the backend crate or the matching shader emitter. Vulkan is the first backend, Direct3D 12 and Metal are planned. | ADR-0006, ADR-0009 |
 
 ## D. C++ components
 

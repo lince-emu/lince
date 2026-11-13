@@ -34,7 +34,7 @@ Rules:
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Ready | T-010 | 0015 |
-| T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and update docs, rules and hooks | Docs | In review | — | 0030 |
+| T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | In review | — | 0006, 0007, 0009, 0030 |
 | T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Ready | T-025 | 0030 |
 
 ## Details
@@ -184,7 +184,9 @@ comparison uses the same reader setup for all engines.
 The maintainer decided on 2026-11-13 that the guest CPU and shader subsystems are written in
 C++ behind a C ABI, with Rust owning the rest. Record it as ADR-0030 (superseding ADR-0026 and
 the language clause of ADR-0001) and update the charter, doc 04, ADR-0004/0005, the
-`ARCH`/`LEGAL`/`DEV` rules, `AGENTS.md`, the agents and `check-invariants.sh`.
+`ARCH`/`LEGAL`/`DEV` rules, `AGENTS.md`, the agents and `check-invariants.sh`. Also record
+that Vulkan is the first of several backends (Direct3D 12 and Metal later): ADR-0006/0007/0009,
+backend in the doc 02 cache keys, ARCH-28.
 - **Acceptance:** no document still states that Lince is Rust only; the invariant hook flags
   C++ outside `[c++]` crates, exceptions/RTTI, threads and I/O in C++, and missing SPDX headers
   in C++ files.
