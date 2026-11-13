@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Lince contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+# C++ lint for every [c++] crate and C++ PoC (ARCH-54). `cargo xtask ci` treats every warning
+# as an error. Checks that conflict with the C ABI boundary (C-style structs and pointers in
+# extern "C" functions, ARCH-50) are disabled with the reason below.
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -modernize-use-trailing-return-type,
+  -modernize-use-using,
+  -modernize-deprecated-headers,
+  -readability-identifier-length,
+  -misc-include-cleaner,
+  -cppcoreguidelines-macro-usage,
+  -modernize-macro-to-enum
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/cpp/include/.*'
