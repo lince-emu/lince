@@ -4,7 +4,7 @@ Status: Proposed · Related ADRs: 0017, 0018, 0023 · PoCs: PoC-7, PoC-8, PoC-10
 
 ## 1. What success means
 
-Lince-NX succeeds when frame delivery is consistent across a whole session, from an empty
+Lince succeeds when frame delivery is consistent across a whole session, from an empty
 cache, and every remaining spike can be attributed to a cause outside the emulator. Average
 FPS is reported but never used as a pass/fail criterion.
 

@@ -1,6 +1,6 @@
 # Engineering Conventions
 
-How Lince-NX is built and how work is recorded. These conventions apply to humans and AI
+How Lince is built and how work is recorded. These conventions apply to humans and AI
 agents alike and are enforced by tooling where possible.
 
 ## Rules

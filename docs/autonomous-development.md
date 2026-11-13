@@ -1,6 +1,6 @@
 # Autonomous Development with Claude Code
 
-How agents work on Lince-NX, what they may do on their own, and how the maintainer stays in
+How agents work on Lince, what they may do on their own, and how the maintainer stays in
 control.
 
 ## 1. The loop

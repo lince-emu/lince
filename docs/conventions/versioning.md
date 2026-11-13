@@ -2,7 +2,7 @@
 
 ## 1. Version numbers
 
-Lince-NX uses [Semantic Versioning 2.0.0](https://semver.org/) for the application and tools.
+Lince uses [Semantic Versioning 2.0.0](https://semver.org/) for the application and tools.
 
 - **0.y.z** while the architecture is being established (current phase). Any `0.y` bump may
   contain breaking changes; `z` is for fixes only.

@@ -2,11 +2,11 @@
 
 Status: Living document · Last reviewed: 2026-11-13
 
-This is the entry point of the Lince-NX engineering dossier. It reviews the project charter
+This is the entry point of the Lince engineering dossier. It reviews the project charter
 before any subsystem is designed, and records what is confirmed, what is open, what conflicts,
 and what must be prototyped.
 
-Lince-NX is written **from scratch**. Existing emulators are studied to understand their
+Lince is written **from scratch**. Existing emulators are studied to understand their
 decisions and failure modes, never to inherit their architecture. The defining goal is a
 different approach to guest shaders:
 
@@ -69,7 +69,7 @@ decisions with the largest blast radius are:
    codecs (VP9/H.264, observed in Switch 2 titles, Lichii rows 105/148) have no mature pure-Rust
    implementation. Policy: foreign code allowed only behind a crate boundary, never in the
    emulation core, and each instance needs an ADR ([ADR-0026](adr/0026-foreign-code-policy.md)).
-4. **"Initial target Switch 2" vs. "no keys".** Retail content is encrypted. Lince-NX loads
+4. **"Initial target Switch 2" vs. "no keys".** Retail content is encrypted. Lince loads
    only content the user has already obtained and decrypted by lawful means, and does not ship
    decryption of protected formats ([`09-legal-and-content.md`](09-legal-and-content.md)).
 5. **"P99.9 frame time" vs. session length.** At 60 FPS, a stable P99.9 needs on the order of

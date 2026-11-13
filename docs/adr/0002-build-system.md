@@ -6,7 +6,7 @@
 
 ## Context
 Reference emulators use CMake with vendored C/C++ dependencies; build issues (path lengths,
-compiler versions) consumed real time (Lichii `NX2_NOTES.md` rows 1–2). Lince-NX is Rust-first.
+compiler versions) consumed real time (Lichii `NX2_NOTES.md` rows 1–2). Lince is Rust-first.
 
 ## Requirements
 One command to build and test on Windows and Linux; reproducible; no extra language for build

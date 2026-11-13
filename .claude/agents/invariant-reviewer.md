@@ -1,6 +1,6 @@
 ---
 name: invariant-reviewer
-description: Reviews a diff against Lince-NX invariants, ADRs and code quality before a pull request. Use proactively after writing or modifying code and always before opening a PR.
+description: Reviews a diff against Lince invariants, ADRs and code quality before a pull request. Use proactively after writing or modifying code and always before opening a PR.
 tools: Read, Glob, Grep, Bash(git diff *), Bash(git log *), Bash(bash .claude/hooks/check-invariants.sh *), Bash(cargo clippy *), Bash(cargo test *)
 model: opus
 color: red

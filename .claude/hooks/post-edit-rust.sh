@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: 2026 Lince-NX contributors
+# SPDX-FileCopyrightText: 2026 Lince contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 # PostToolUse(Edit|Write): formats edited Rust files and flags obvious invariant breaks early.
 source "$(dirname "$0")/lib.sh"

@@ -1,6 +1,6 @@
 ---
 name: perf-check
-description: Measures and reports the performance impact of the current change on Lince-NX critical paths (benchmarks, ledger summaries) following docs/05-performance-validation.md. Use before opening a PR that touches a render-critical thread or when a performance claim is made.
+description: Measures and reports the performance impact of the current change on Lince critical paths (benchmarks, ledger summaries) following docs/05-performance-validation.md. Use before opening a PR that touches a render-critical thread or when a performance claim is made.
 argument-hint: "[benchmark filter]"
 context: fork
 agent: perf-analyst

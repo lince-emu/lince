@@ -4,7 +4,7 @@ Status: Living document · Last reviewed: 2026-11-13
 
 Confidence levels: **[Official]** Nintendo/NVIDIA statement or widely confirmed spec sheet ·
 **[RE]** reverse-engineering documentation (switchbrew) · **[EMU]** observed by an emulator
-project, reproducible but not independently verified by Lince-NX · **[Inferred]** engineering
+project, reproducible but not independently verified by Lince · **[Inferred]** engineering
 inference · **[Unknown]**.
 
 ## 1. SoC (NVIDIA T239)
@@ -51,7 +51,7 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
 - Video decoder interfaces beyond what is needed for VP9/H.264 movies.
 - Timing behavior relied on by games (CPU/GPU relative speed, vsync behavior).
 
-## 5. Implications for Lince-NX
+## 5. Implications for Lince
 
 1. A64 decoder covers v8.0–v8.5 features listed above from day one (ADR-0004).
 2. Emulate 6 application cores exactly (doc 01 E3).

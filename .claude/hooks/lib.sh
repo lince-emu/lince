@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: 2026 Lince-NX contributors
+# SPDX-FileCopyrightText: 2026 Lince contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Shared helpers for Lince-NX Claude Code hooks.
+# Shared helpers for Lince Claude Code hooks.
 # Works with jq when available, falls back to python3, then to a crude sed extraction.
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"

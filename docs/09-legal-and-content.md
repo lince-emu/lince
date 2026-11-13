@@ -8,7 +8,7 @@ Status: Proposed · Related ADRs: 0000, 0024, 0026
 The operational, numbered rules derived from this policy are in
 [`conventions/legal-rules.md`](conventions/legal-rules.md) (`LEGAL-xx`).
 
-## 1. What Lince-NX will not do
+## 1. What Lince will not do
 
 - Ship, download, extract or derive console keys or firmware.
 - **Use keys or firmware at all — including files the user supplies.** There is no option,
@@ -33,17 +33,17 @@ content using user-provided keys. It is a deliberate legal-risk choice.
 The full plan, item by item, is in [doc 10](10-firmware-independence.md).
 
 All system services are original HLE implementations. Where a game requires system data
-(e.g. shared fonts), Lince-NX provides freely licensed substitutes with compatible metrics where
+(e.g. shared fonts), Lince provides freely licensed substitutes with compatible metrics where
 possible, and documents rendering differences.
 
 ## 4. Clean-room process
 
 Existing emulators are GPL/MPL/MIT licensed and are useful sources of *knowledge*. To keep
-Lince-NX's code original:
+Lince's code original:
 
 1. **Specifications, not code.** Research outputs are written as behavior descriptions
    (protocol tables, register semantics, observed edge cases) in `docs/research/`.
-2. **No copying or line-by-line translation** of code from other emulators into Lince-NX.
+2. **No copying or line-by-line translation** of code from other emulators into Lince.
    Reading other projects for understanding is allowed; transcribing is not.
 3. **Attribution of knowledge.** Every research note cites repository, commit and file.
 4. **AI assistants follow the same rules** (see `AGENTS.md`): they must not reproduce code from

@@ -7,7 +7,7 @@ isolation: worktree
 effort: high
 ---
 
-You implement exactly one Lince-NX task in Rust.
+You implement exactly one Lince task in Rust.
 
 ## Before coding
 1. Read `AGENTS.md`, the rules in `docs/conventions/` (legal, architecture, code structure,

@@ -8,7 +8,7 @@
 ## Context
 The charter already forbids depending on proprietary keys or firmware. Other Switch emulators
 ask users to supply their own key files and firmware dumps, which they then read to decrypt
-content and to run or extract system data. The previous wording of the Lince-NX documents
+content and to run or extract system data. The previous wording of the Lince documents
 forbade shipping, downloading and extracting keys or firmware, but did not explicitly forbid
 **reading files the user supplies**.
 
@@ -22,7 +22,7 @@ forbade shipping, downloading and extracting keys or firmware, but did not expli
 3. **Never read, accept, request or process keys or firmware, from any source.**
 
 ## Decision
-Option 3, decided by the maintainer. Lince-NX:
+Option 3, decided by the maintainer. Lince:
 - has no code path, setting, import dialog, file picker, command-line flag or documentation
   for keys or firmware;
 - never searches the user's disk for such files;

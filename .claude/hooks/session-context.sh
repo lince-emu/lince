@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: 2026 Lince-NX contributors
+# SPDX-FileCopyrightText: 2026 Lince contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SessionStart hook: injects a short, factual snapshot of the project state.
 source "$(dirname "$0")/lib.sh"
@@ -14,7 +14,7 @@ in_progress="$(grep -E '^\| T-[0-9]+ .*\| In progress \|' docs/backlog.md 2>/dev
 waiting="$(grep -E '^\| T-[0-9]+ .*\| Needs decision \|' docs/backlog.md 2>/dev/null | cut -d'|' -f2,3 | sed 's/^ */- /')"
 crates="$(ls -d crates/*/ 2>/dev/null | wc -l | tr -d ' ')"
 
-ctx="Lince-NX project snapshot.
+ctx="Lince project snapshot.
 Git branch: ${branch}. Uncommitted paths: ${dirty}.
 Crates present: ${crates}. ADRs accepted (fully or partially): ${accepted}; proposed: ${proposed}.
 Tasks in progress:

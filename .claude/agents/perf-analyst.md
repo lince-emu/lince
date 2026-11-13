@@ -1,6 +1,6 @@
 ---
 name: perf-analyst
-description: Analyzes frame-time data, frame-ledger dumps, benchmarks and Tracy captures for Lince-NX; attributes each spike to a cause and checks results against doc 05 targets. Use for any performance question or before claiming a performance change.
+description: Analyzes frame-time data, frame-ledger dumps, benchmarks and Tracy captures for Lince; attributes each spike to a cause and checks results against doc 05 targets. Use for any performance question or before claiming a performance change.
 tools: Read, Glob, Grep, Bash(cargo bench *), Bash(cargo xtask *), Bash(ls *), Write
 model: opus
 color: orange

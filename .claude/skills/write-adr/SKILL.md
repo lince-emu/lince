@@ -1,6 +1,6 @@
 ---
 name: write-adr
-description: Drafts a new Lince-NX Architecture Decision Record (or one that supersedes an existing ADR) using the project template, and updates the ADR index. Use when a design choice is not covered by an Accepted ADR.
+description: Drafts a new Lince Architecture Decision Record (or one that supersedes an existing ADR) using the project template, and updates the ADR index. Use when a design choice is not covered by an Accepted ADR.
 argument-hint: "<title> [supersedes ADR-XXXX]"
 ---
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: 2026 Lince-NX contributors
+# SPDX-FileCopyrightText: 2026 Lince contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Lince-NX commit-msg hook — validates Conventional Commits (docs/conventions/commits.md).
+# Lince commit-msg hook — validates Conventional Commits (docs/conventions/commits.md).
 # Activate once per clone:  git config core.hooksPath .githooks
 # Also used by .claude/hooks/guard-bash.sh to check messages passed with `git commit -m`.
 

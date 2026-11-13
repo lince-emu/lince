@@ -1,6 +1,6 @@
 # Commit Messages — Conventional Commits
 
-Lince-NX follows [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
+Lince follows [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
 with the project-specific types, scopes and footers defined here.
 
 ## 1. Format

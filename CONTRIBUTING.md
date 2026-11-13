@@ -1,6 +1,6 @@
-# Contributing to Lince-NX
+# Contributing to Lince
 
-Thank you for your interest. Lince-NX is in its architecture phase; the most valuable
+Thank you for your interest. Lince is in its architecture phase; the most valuable
 contributions right now are research notes, prototype measurements and design review.
 
 ## Before you start

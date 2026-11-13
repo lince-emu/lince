@@ -1,6 +1,6 @@
 ---
 name: new-poc
-description: Scaffolds a Lince-NX proof of concept from docs/06-poc-roadmap.md — standalone crate in poc/<slug>/, measurement harness, and report skeleton in docs/poc-reports/. Use when starting any PoC task.
+description: Scaffolds a Lince proof of concept from docs/06-poc-roadmap.md — standalone crate in poc/<slug>/, measurement harness, and report skeleton in docs/poc-reports/. Use when starting any PoC task.
 argument-hint: "<PoC-N> <slug>"
 ---
 

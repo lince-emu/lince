@@ -1,6 +1,6 @@
 # Development Rules
 
-How code is written in Lince-NX. Ids (`DEV-xx`) are cited in reviews. Architecture-level rules
+How code is written in Lince. Ids (`DEV-xx`) are cited in reviews. Architecture-level rules
 are in [architecture-rules.md](architecture-rules.md).
 
 Severity: **MUST** (blocks merge) · **SHOULD** (deviation needs a reason in the PR).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: 2026 Lince-NX contributors
+# SPDX-FileCopyrightText: 2026 Lince contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 # PreToolUse(Bash): blocks commands that are dangerous or that break project policy.
 # Exit 2 = block; stderr is shown to Claude as the reason.

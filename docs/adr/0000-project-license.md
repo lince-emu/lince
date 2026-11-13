@@ -23,7 +23,7 @@ a reminder that forks and redistribution are a real concern.
 
 ## Decision
 Recommended: **GPL-3.0-or-later**, pending owner confirmation. Independent of the choice, the
-clean-room rules of doc 09 apply (Lince-NX is designed from scratch, not assembled from others'
+clean-room rules of doc 09 apply (Lince is designed from scratch, not assembled from others'
 code).
 
 ## Technical justification

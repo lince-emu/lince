@@ -108,7 +108,7 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-context.sh\"",
             "timeout": 20,
-            "statusMessage": "Loading Lince-NX project context"
+            "statusMessage": "Loading Lince project context"
           }
         ]
       }
@@ -154,7 +154,7 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/check-invariants.sh\" --stop-hook",
             "timeout": 60,
-            "statusMessage": "Checking Lince-NX invariants"
+            "statusMessage": "Checking Lince invariants"
           }
         ]
       }

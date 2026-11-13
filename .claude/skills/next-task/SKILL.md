@@ -1,6 +1,6 @@
 ---
 name: next-task
-description: Autonomous Lince-NX development loop. Picks the next Ready task from docs/backlog.md (or the task id given), implements it on a branch with tests, gets an independent invariant review, opens a pull request, and stops to ask the maintainer whenever a decision is needed. Use when asked to "continue", "work on the backlog", "pick the next task" or to run unattended.
+description: Autonomous Lince development loop. Picks the next Ready task from docs/backlog.md (or the task id given), implements it on a branch with tests, gets an independent invariant review, opens a pull request, and stops to ask the maintainer whenever a decision is needed. Use when asked to "continue", "work on the backlog", "pick the next task" or to run unattended.
 argument-hint: "[T-xxx | loop]"
 ---
 

@@ -15,7 +15,7 @@ evidence level, guesses marked as guesses.
 Write `docs/research/<kebab-topic>.md` with:
 1. Question
 2. Short answer (3–6 lines)
-3. Findings table: source (repo@commit:file or URL) · observation · evidence level · applies to Lince-NX?
+3. Findings table: source (repo@commit:file or URL) · observation · evidence level · applies to Lince?
 4. Open questions
 5. Affected ADRs / PoCs / backlog tasks
 

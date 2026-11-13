@@ -8,7 +8,7 @@ Sources were inspected directly at the commits below. Each finding carries an ev
 
 - **[SRC]** — read in source code at the cited commit.
 - **[DOC]** — stated in the project's own technical documentation at the cited commit.
-- **[DOC-MEASURED]** — the project's documentation reports a measurement; Lince-NX has not
+- **[DOC-MEASURED]** — the project's documentation reports a measurement; Lince has not
   reproduced it.
 - **[MIRROR]** — read from a third-party mirror of an older version; may be outdated.
 - **[RECALL]** — from prior knowledge; not re-verified in this pass. Treat as a hypothesis.
@@ -21,7 +21,7 @@ Sources were inspected directly at the commits below. Each finding carries an ev
 | github.com/cemu-project/Cemu | `main` | `9cac875` | 2026-11-12 | C++ / MPL-2.0 |
 | Ryujinx (mirror: git.dawidpotocki.com/mirror/ryujinx) | tags 1.1.x | various | ≤ 2024 | C# / MIT |
 
-**Clean-room note.** All of the above are copyleft or differently licensed codebases. Lince-NX
+**Clean-room note.** All of the above are copyleft or differently licensed codebases. Lince
 records *observations about behavior and design*, never code. See
 [`09-legal-and-content.md`](09-legal-and-content.md).
 
@@ -35,15 +35,15 @@ Lichii is a fork of Eglantine; the two share `NX2_NOTES.md` and `NX2_GPU_THREAD_
 
 ### 1.1 Findings
 
-| # | File | Observation | Level | Applies to Lince-NX? |
+| # | File | Observation | Level | Applies to Lince? |
 |---|------|-------------|-------|----------------------|
 | E1 | `NX2_NOTES.md` rows 3, Titles table | Switch 2 executables use ARMv8.1–8.5 instructions heavily: LSE atomics, CAS/CASP, LDAPR, RETAA/RETAB and other PAC instructions, MTE `STG`. Counts in the hundreds of thousands per title. Stock dynarmic did not decode them. | DOC-MEASURED | **Yes.** The A64 decoder must cover v8.1–v8.5 from day one; PAC can be identity, MTE tags zero (their approach) — to be validated. |
 | E2 | `NX2_NOTES.md` Titles | All tested titles: 64-bit, 39-bit address space, core mask `0x3f` (6 cores), new SVC `0x80`. | DOC | **Yes.** Address-space and core model. |
 | E3 | rows 77–79 | Folding the guest's 6 cores onto 4 emulated cores changed which heap a job allocated from and caused crashes. | DOC-MEASURED | **Yes.** Emulate the real 6-core layout; never fold cores. |
 | E4 | rows 31, 53 | NVN2 binds Ampere classes (`C797` 3D, `C7C0` compute, `C7B5` DMA) and drives state through **Turing MME64 macros**; compute uses **QMD 3.0**. | DOC | **Yes.** Needs a native MME64 implementation. |
-| E5 | row 54; `.claude/skills/nx2-shader-triage/SKILL.md` | Shaders are Ampere SASS (they label it SM86). They are **lowered to Maxwell instructions** and fed to yuzu's Maxwell recompiler. "Any instruction it refuses rejects the whole program, and every draw or dispatch using it is skipped." | SRC + DOC | **Key lesson.** Lowering to an older ISA creates whole-program rejection and draw skipping. Lince-NX decodes Ampere natively into its own IR (ADR-0009). |
+| E5 | row 54; `.claude/skills/nx2-shader-triage/SKILL.md` | Shaders are Ampere SASS (they label it SM86). They are **lowered to Maxwell instructions** and fed to yuzu's Maxwell recompiler. "Any instruction it refuses rejects the whole program, and every draw or dispatch using it is skipped." | SRC + DOC | **Key lesson.** Lowering to an older ISA creates whole-program rejection and draw skipping. Lince decodes Ampere natively into its own IR (ADR-0009). |
 | E6 | rows 88, 92, 93, 95 | Many semantic traps: SM70+ `MUFU.SIN/COS` take turns, not radians; predicate save/restore bug in uniform guards caused color casts; jump tables past the first `EXIT`. | DOC-MEASURED | **Yes.** Differential testing of every opcode is mandatory (PoC-4). |
-| E7 | row 64; triage skill | A tensor-core (HMMA) upscaling network is replaced by a **bilinear blit** unless an opt-in emulation is enabled; full emulation took the host driver minutes to compile and would cost seconds per frame. | DOC-MEASURED | **Yes — as a warning.** This is substitution of rendering work. Lince-NX must offer a correct path and label any approximation. |
+| E7 | row 64; triage skill | A tensor-core (HMMA) upscaling network is replaced by a **bilinear blit** unless an opt-in emulation is enabled; full emulation took the host driver minutes to compile and would cost seconds per frame. | DOC-MEASURED | **Yes — as a warning.** This is substitution of rendering work. Lince must offer a correct path and label any approximation. |
 | E8 | row 89 | Task/mesh shaders exist in shipped titles and map to `VK_EXT_mesh_shader`. Those pipelines were kept out of the disk cache. | DOC | **Yes.** Mesh support affects Tier 0 coverage (doc 03). |
 | E9 | row 121 | A 28,102-instruction compute shader took 3.4 s to translate on the GPU thread (0.85 s after optimization). Translation was not moved to workers because "environments read live GPU state (texture types, constant buffer values)". | DOC-MEASURED | **Key lesson.** Translation must consume an explicit dependency snapshot so it can run off-thread (ADR-0009). |
 | E10 | `NX2_GPU_THREAD_SPLIT.md` | In Mario Kart World the single GPU thread was ~100% busy while the host GPU was 20–40% busy. Per second: command processing ~335 ms, macros ~200 ms (1.3 M calls), draw setup ~345 ms (55,000 draws). A front/back split gave 1.46× throughput, frames 17% shorter. | DOC-MEASURED | **Key lesson.** Shader work is not the only stutter source. Design the GPU front-end as a pipeline from day one (ADR-0008). |
@@ -54,9 +54,9 @@ Lichii is a fork of Eglantine; the two share `NX2_NOTES.md` and `NX2_GPU_THREAD_
 | E15 | same doc; `renderer_vulkan/async_draw_policy.h` | Legacy yuzu async-shader mode **discarded draws** by heuristic (depth enabled or > 6 indices). Lichii refuses to discard any native (Switch 2) draw. | SRC + DOC | **Yes.** Confirms R7. |
 | E16 | same doc | Eglantine PR #503 (at `7584d618`) did full async translation with detached environments, but its timeout discards draws and its texture snapshots read live descriptor memory without synchronization. | DOC (third-party description) | Lesson: snapshots must be complete and immutable. |
 | E17 | `shader_cache_v2/cache_format.h` | "Shader cache v2": one **append-only log** per title. 32-byte header; records 8-byte aligned with magic, kind, key, CRC-32 header, payload, XXH3-64 payload hash. Latest record per (kind,key) wins; **tombstones**; unknown kinds preserved; torn tails ignored. | SRC | **Yes — good ideas** (framing, checksums, tombstones, torn-tail handling). |
-| E18 | `shader_cache_v2/cache_file.h`, `vk_pipeline_cache.cpp` `LoadDiskResources` | The **whole log is read into memory at boot** and parsed (in parallel); "used" pipelines from previous sessions are rebuilt at boot ("Loading Shaders" waits for that batch); background prebuild follows. A `.booting` marker disables boot builds after a crash during loading. | SRC | **Counter-example for R8.** Boot cost still grows with the log (bounded by compaction). Lince-NX uses an index and lazy resolution instead. |
+| E18 | `shader_cache_v2/cache_file.h`, `vk_pipeline_cache.cpp` `LoadDiskResources` | The **whole log is read into memory at boot** and parsed (in parallel); "used" pipelines from previous sessions are rebuilt at boot ("Loading Shaders" waits for that batch); background prebuild follows. A `.booting` marker disables boot builds after a crash during loading. | SRC | **Counter-example for R8.** Boot cost still grows with the log (bounded by compaction). Lince uses an index and lazy resolution instead. |
 | E19 | `shader_cache_v2/driver_blobs.h`, `renderer_vulkan/vk_pipeline_binaries.*` | Driver layer uses `VK_KHR_pipeline_binary` in a separate log per device/driver identity; mismatched identity discards the file; size bounds 512/384 MiB. | SRC | **Yes.** Per-pipeline driver binaries enable lazy loading (ADR-0013). |
-| E20 | `shader_jobs.h` | Job priorities `NeedNow` / `Soon` / `Background`; a Background job queued long enough competes with Soon. | SRC | Partially. Lince-NX needs priority by *cost to the frame*, plus a frame-aware governor (ADR-0018). |
+| E20 | `shader_jobs.h` | Job priorities `NeedNow` / `Soon` / `Background`; a Background job queued long enough competes with Soon. | SRC | Partially. Lince needs priority by *cost to the frame*, plus a frame-aware governor (ADR-0018). |
 | E21 | `NX2_NOTES.md` row 55, 59 | The guest ran a full ring of command memory ahead of the GPU thread when presents were not paced; a bounded wait for the frame fence fixed it (250 ms → 4 s timeout because shader compiles exceeded 250 ms). | DOC-MEASURED | **Yes.** Shows how compile stalls propagate into guest pacing. |
 
 ### 1.2 What is cached, when, and what blocks (Lichii `nx2` @ `0da698b`)
@@ -117,7 +117,7 @@ and Lichii.
 | Y1 | Disk cache stores guest shader **environments** (code + the GPU state each translation read), so programs can be retranslated after emulator updates. `LoadDiskResources` rebuilds all cached pipelines behind a "Loading shaders" progress screen at boot. | SRC (in descendants, `LoadDiskResources`, `MigrateLegacyPipelineCache`) + RECALL |
 | Y2 | "Asynchronous shaders" option skips draws while their pipeline compiles (heuristic, see E15). | SRC (descendants) |
 | Y3 | Shader translation reads live GPU state through an `Environment` interface: `ReadInstruction`, `ReadCbufValue`, `ReadTextureType`, `ReadTexturePixelFormat`, `ReadViewportTransformState` (`src/shader_recompiler/environment.h:77-114` in Lichii). | SRC |
-| Y4 | The environment idea is sound: a shader variant is identified by code **plus** the state it depends on. Lince-NX keeps the idea but makes the dependency set explicit and immutable (ADR-0009). | Analysis |
+| Y4 | The environment idea is sound: a shader variant is identified by code **plus** the state it depends on. Lince keeps the idea but makes the dependency set explicit and immutable (ADR-0009). | Analysis |
 
 ---
 
@@ -133,7 +133,7 @@ The current repository was not reachable. Findings come from a mirror of 1.1.x t
 | R4 | Guest translation (Maxwell → IR → GLSL/SPIR-V) is distinct from host driver compilation; on Vulkan the latter remains a major stall source. | RECALL |
 
 **Lesson:** separating guest-derived artifacts (portable) from host-derived artifacts
-(driver-specific) is right and is kept in Lince-NX's layered cache.
+(driver-specific) is right and is kept in Lince's layered cache.
 
 ---
 
@@ -149,7 +149,7 @@ The current repository was not reachable. Findings come from a mirror of 1.1.x t
 | Remaining stutter sources | Translation on GPU thread, driver compile, GPU-thread saturation | Ubershader compile, driver | Driver compile | Driver compile | Driver compile |
 
 **Architectural gap no project fills for a programmable GPU:** an immediate, correct execution
-path for arbitrary unseen shader *code*. That gap is the reason Lince-NX exists.
+path for arbitrary unseen shader *code*. That gap is the reason Lince exists.
 
 ---
 

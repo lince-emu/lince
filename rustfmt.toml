@@ -1,4 +1,4 @@
-# Lince-NX formatting (docs/conventions/development-rules.md DEV-10).
+# Lince formatting (docs/conventions/development-rules.md DEV-10).
 # Stable rustfmt options only, so the pinned stable toolchain formats identically everywhere.
 edition = "2024"
 style_edition = "2024"

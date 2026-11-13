@@ -92,7 +92,7 @@ done
 
 if [ "${#violations[@]}" -gt 0 ]; then
   {
-    echo "Lince-NX invariant check failed (AGENTS.md §2):"
+    echo "Lince invariant check failed (AGENTS.md §2):"
     for v in "${violations[@]}"; do echo "  - $v"; done
     echo "Fix these before finishing, or ask the maintainer if an exception is justified."
   } >&2

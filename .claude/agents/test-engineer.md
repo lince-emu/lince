@@ -1,6 +1,6 @@
 ---
 name: test-engineer
-description: Designs and writes tests for Lince-NX — unit, property, differential (interpreter vs JIT, Tier 0 vs Tier 1/2), fuzzing, fault injection and loom models. Use when a change lacks tests or when a bug needs a regression test.
+description: Designs and writes tests for Lince — unit, property, differential (interpreter vs JIT, Tier 0 vs Tier 1/2), fuzzing, fault injection and loom models. Use when a change lacks tests or when a bug needs a regression test.
 model: sonnet
 color: yellow
 ---

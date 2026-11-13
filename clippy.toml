@@ -1,4 +1,4 @@
-# Lince-NX clippy thresholds and disallowed APIs.
+# Lince clippy thresholds and disallowed APIs.
 # Lint levels live in [workspace.lints] (docs/conventions/lints.md).
 
 # QUAL-04: functions ≤ 80 lines hard limit, ≤ 5 parameters

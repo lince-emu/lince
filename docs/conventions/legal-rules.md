@@ -1,6 +1,6 @@
 # Legal Rules
 
-Operational rules that keep Lince-NX legally clean. Ids (`LEGAL-xx`) are cited in reviews. The
+Operational rules that keep Lince legally clean. Ids (`LEGAL-xx`) are cited in reviews. The
 policy behind them is in [doc 09](../09-legal-and-content.md).
 
 > This is engineering policy, not legal advice. Have a qualified lawyer review it before the
@@ -17,7 +17,7 @@ maintainer — do not decide alone.
 | LEGAL-02 | No code, scripts or documentation that extract keys, decrypt protected formats, or circumvent any technical protection measure — including "helper" scripts and instructions for users. |
 | LEGAL-03 | The loader accepts only content that is already decrypted and fails with a neutral message on encrypted input. It never points users to where or how to obtain keys or decryption tools. |
 | LEGAL-04 | No links to piracy sites, ROM/ISO downloads, key dumps or firmware mirrors anywhere in the project. |
-| LEGAL-05 | **Lince-NX never uses keys or firmware — not even ones the user supplies** (ADR-0029). No code path, setting, import dialog, file picker, CLI flag, environment variable or documentation exists to read, accept, request or process key files or firmware dumps, and the emulator never searches the disk for them. |
+| LEGAL-05 | **Lince never uses keys or firmware — not even ones the user supplies** (ADR-0029). No code path, setting, import dialog, file picker, CLI flag, environment variable or documentation exists to read, accept, request or process key files or firmware dumps, and the emulator never searches the disk for them. |
 | LEGAL-06 | All system services and system data are original HLE implementations or freely licensed substitutes. A feature that would need firmware data is redesigned or left unimplemented, never satisfied with firmware. |
 
 ## B. Sources of knowledge
@@ -34,12 +34,12 @@ maintainer — do not decide alone.
 
 | Id | Rule |
 |----|------|
-| LEGAL-20 | **Lince-NX code is original.** No copying, line-by-line translation (e.g. C++ → Rust) or close paraphrase of code from other emulators (yuzu, Eden, Eglantine, Lichii, Ryujinx, Dolphin, Cemu, …), even where licenses would be compatible. Algorithms and behavior may be learned from them and cited. |
+| LEGAL-20 | **Lince code is original.** No copying, line-by-line translation (e.g. C++ → Rust) or close paraphrase of code from other emulators (yuzu, Eden, Eglantine, Lichii, Ryujinx, Dolphin, Cemu, …), even where licenses would be compatible. Algorithms and behavior may be learned from them and cited. |
 | LEGAL-21 | **AI assistants must not reproduce code from memory** of other projects. If generated code resembles a known project's implementation, rewrite it from the behavior description or discard it. |
 | LEGAL-22 | Any exception to LEGAL-20 (e.g. a public-domain table, a permissively licensed algorithm) requires an ADR, the original license notice kept intact, and an entry in `THIRD-PARTY-NOTICES.md`. |
 | LEGAL-23 | Code snippets from Q&A sites or blogs are treated as third-party code (LEGAL-22), not as free to paste. |
 
-## D. Licensing of Lince-NX and its dependencies
+## D. Licensing of Lince and its dependencies
 
 | Id | Rule |
 |----|------|
@@ -47,13 +47,13 @@ maintainer — do not decide alone.
 | LEGAL-31 | Every crate's `Cargo.toml` declares `license = "GPL-3.0-or-later"` (per the repository `LICENSE`; ADR-0000). |
 | LEGAL-32 | Dependencies must have licenses in the `deny.toml` allow-list, which is limited to GPL-3.0-compatible licenses. Adding a license to the list requires maintainer approval. |
 | LEGAL-33 | Non-Rust code in release builds follows ADR-0026 and records its license in `THIRD-PARTY-NOTICES.md`. |
-| LEGAL-34 | Fonts, icons, images and sounds shipped with Lince-NX are original or under a license that allows redistribution with GPL software; the license is recorded next to the asset. |
+| LEGAL-34 | Fonts, icons, images and sounds shipped with Lince are original or under a license that allows redistribution with GPL software; the license is recorded next to the asset. |
 | LEGAL-35 | Contributors agree that their contributions are their own work and licensed under the project license. Whether to require a DCO `Signed-off-by` footer is a maintainer decision (backlog T-006). |
 
 SPDX header for Rust and shell files:
 
 ```rust
-// SPDX-FileCopyrightText: 2026 Lince-NX contributors
+// SPDX-FileCopyrightText: 2026 Lince contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 ```
 

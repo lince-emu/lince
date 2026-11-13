@@ -1,6 +1,6 @@
-# Lince-NX
+# Lince
 
-**Lince-NX** is a Nintendo Switch 2 emulator written from scratch in Rust,
+**Lince** is a Nintendo Switch 2 emulator written from scratch in Rust,
 with Nintendo Switch 1 support planned later in the same project.
 
 Its defining goal:
@@ -48,17 +48,17 @@ riskiest assumptions are being prototyped first.
 
 ## No keys, no firmware
 
-Lince-NX **does not need, read or accept console keys or firmware** — not even files you
+Lince **does not need, read or accept console keys or firmware** — not even files you
 already have. All system functionality is implemented originally
 ([ADR-0029](docs/adr/0029-no-keys-no-firmware.md),
 [firmware independence plan](docs/10-firmware-independence.md)).
 
-Because it never decrypts anything, Lince-NX runs only content that is already in an
+Because it never decrypts anything, Lince runs only content that is already in an
 unencrypted format (such as homebrew). Encrypted retail packages are not supported.
 
 ## Legal
 
-Lince-NX does not include, download or extract keys, firmware or games, and does not decrypt
+Lince does not include, download or extract keys, firmware or games, and does not decrypt
 protected content. See [docs/09-legal-and-content.md](docs/09-legal-and-content.md).
 Nintendo Switch is a trademark of Nintendo. This project is not affiliated with Nintendo.
 

@@ -6,7 +6,7 @@ Status: Proposed · Related ADRs: 0009, 0010, 0011, 0012, 0013 · Validating PoC
 
 A guest draw references guest shader *code* (Ampere SASS) that the emulator may never have
 seen. Today's Switch emulators translate it, hand the result to the host driver, and wait for
-the driver to compile — or skip the draw. Both are unacceptable for Lince-NX.
+the driver to compile — or skip the draw. Both are unacceptable for Lince.
 
 The vision: **separate "running a shader correctly" from "compiling a shader".** Compilation
 is an optimization that happens in the background. Correct execution is available from the
@@ -152,7 +152,7 @@ expensive under Tier 0 jumps the queue.
 ## 5. Discovery-time compilation
 
 Games upload shader code to GPU memory before first use — typically during loading screens.
-Lince-NX watches writes into the guest's shader program region (and NVN2 program-setup paths
+Lince watches writes into the guest's shader program region (and NVN2 program-setup paths
 once they are understood) and:
 
 1. Scans new code for program headers, computes `GuestProgramId`, pre-decodes micro-ops.
