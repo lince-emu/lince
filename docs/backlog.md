@@ -93,8 +93,9 @@ PR: https://github.com/lince-emu/lince/pull/3
 
 ### T-012 — PoC-5 Vulkan pipeline mechanisms
 Standalone `ash` harness that creates pipelines from generated SPIR-V of several sizes using:
-monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, pipeline binary load, sharded
-`VkPipelineCache`, `DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths.
+monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, sharded `VkPipelineCache`,
+`DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths. Pipeline
+binary load is deferred to T-022, because `ash` 0.38 has no `VK_KHR_pipeline_binary` bindings.
 - **Acceptance:** runs on any Vulkan 1.3 device, writes per-mechanism latency CSV; report skeleton.
 
 ### T-013 — Tier-0 micro-op format specification
@@ -153,7 +154,11 @@ run the test suite on an ARM host (e.g. an ARM CI runner).
 
 ### T-022 — PoC-5 pipeline binaries
 Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add
-the mechanism to `poc/vk-pipelines` and the report.
+pipeline binary load to the PoC-5 harness and the report. Rationale: ADR-0013 relies on
+pipeline binaries for L6 persistence, and PoC-5's hypothesis that their loads are
+sub-millisecond is untested until they are measured.
+- **Acceptance:** the PoC-5 harness times pipeline binary load next to the other mechanisms,
+  skips it where the extension is unsupported, and the PoC-5 report records the results.
 
 ### T-024 — PoC-6 `redb` second-process reader
 Decision [D-002](decisions/D-002-cache-engine-second-process.md), awaiting maintainer
