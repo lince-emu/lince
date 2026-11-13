@@ -34,6 +34,8 @@ Rules:
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Ready | T-010 | 0015 |
+| T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | In review | — | 0006, 0007, 0009, 0030 |
+| T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Ready | T-025 | 0030 |
 
 ## Details
 
@@ -136,7 +138,7 @@ other projects (never from firmware files or leaked material), list the system d
 and applets Switch 2 titles use, and for each propose an original implementation, a freely
 licensed substitute, or a documented "unavailable" behavior. Extend
 `docs/10-firmware-independence.md` §3.
-- **In review:** [lince-emu/lince#9](https://github.com/lince-emu/lince/pull/9); open decision [D-006](decisions/D-006-shared-font-substitutes.md).
+- **In review:** [lince-emu/lince#9](https://github.com/lince-emu/lince/pull/9); open decision [D-009](decisions/D-009-shared-font-substitutes.md).
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
@@ -178,3 +180,28 @@ comparison uses the same reader setup for all engines.
 - **Acceptance:** `harness resolve --writer on` times a reader in another process for each
   engine; the PoC-6 report states, per result row, the reader setup and the `redb` mode, and
   whether each engine served the second-process reader.
+
+### T-025 — Hybrid Rust + C++ decision
+The maintainer decided on 2026-11-13 that the guest CPU and shader subsystems are written in
+C++ behind a C ABI, with Rust owning the rest. Record it as ADR-0030 (superseding ADR-0026 and
+the language clause of ADR-0001) and update the charter, doc 04, ADR-0004/0005, the
+`ARCH`/`LEGAL`/`DEV` rules, `AGENTS.md`, the agents and `check-invariants.sh`. Also record
+that Vulkan is the first of several backends (Direct3D 12 and Metal later): ADR-0006/0007/0009,
+backend in the doc 02 cache keys, ARCH-28.
+- **Acceptance:** no document still states that Lince is Rust only; the invariant hook flags
+  C++ outside `[c++]` crates, exceptions/RTTI, threads and I/O in C++, and missing SPDX headers
+  in C++ files.
+
+### T-026 — PoC-11 Rust↔C++ boundary
+Follow `docs/06-poc-roadmap.md` PoC-11 and ADR-0030. Standalone crate in `poc/cpp-boundary/`.
+- C++20 static library built by `build.rs` with the `cc` crate (`clang-cl` on Windows, `clang`
+  on Linux); one C header; Rust declarations generated from it and checked in, with a CI check
+  that they match; layout tests for every boundary struct.
+- Microbenchmarks: Rust→C++ call and C++→Rust callback vs. a non-inlined Rust call.
+- `xtask ci` gains `clang-format`, `clang-tidy` (warnings as errors), ASan/UBSan runs of the
+  C++ tests, and the SPDX check (LEGAL-30) for `.cpp`, `.hpp` and `.h` files.
+- New dependencies (`cc`, and `bindgen` if chosen) are listed with license and reason
+  (DEV-80).
+- **Acceptance:** `cargo xtask ci` passes from a clean checkout on Windows x64 and Linux x64;
+  report in `docs/poc-reports/poc-11-cpp-boundary.md` with the measured call costs, build
+  times, chosen binding generator and minimum clang version.

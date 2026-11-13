@@ -1,4 +1,4 @@
-# D-006: Shared-font substitutes — OFL-1.1 fonts, button glyphs and the Switch 1 font container
+# D-009: Shared-font substitutes — OFL-1.1 fonts, button glyphs and the Switch 1 font container
 
 - **Raised by:** T-019 research session · **Date:** 2026-11-13
 - **Blocks:** shared-font implementation in `pl:u` (no task yet; follows T-019)

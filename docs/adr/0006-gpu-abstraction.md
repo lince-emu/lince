@@ -10,8 +10,9 @@ abstraction tends to hide exactly the controls that matter for stutter (pipeline
 compile flags, descriptor models).
 
 ## Requirements
-Full access to modern Vulkan features; testable guest GPU logic without a host GPU; room for a
-second backend later without rewriting guest GPU code.
+Full access to modern Vulkan features; testable guest GPU logic without a host GPU. Vulkan is
+the first backend; Direct3D 12 and Metal are planned later (maintainer, 2026-11-13) and must
+not require rewriting guest GPU code, the shader IR or the cache format.
 
 ## Alternatives
 1. Generic multi-API HAL (wgpu-style).
@@ -20,8 +21,11 @@ second backend later without rewriting guest GPU code.
 3. Guest GPU code calls Vulkan directly.
 
 ## Decision
-Option 2. The packet format is the only interface between `lince-gpu-*` and `lince-render-vk`.
-No trait objects on the hot path; the backend is a concrete type selected at compile time.
+Option 2. The packet format is the only interface between `lince-gpu-*` and the backend crate
+(`lince-render-vk` first; later `lince-render-d3d12`, `lince-render-metal`). Packets carry no
+host-API types or concepts. No dynamic dispatch per draw on the hot path. How a build that
+contains two backends (e.g. Vulkan and Direct3D 12 on Windows) selects one at startup is decided
+when the second backend starts.
 
 ## Technical justification
 Keeps the guest side testable (packets can be recorded and asserted) and lets the backend use
@@ -42,4 +46,4 @@ Replay tool consumes recorded packets; packet build time per draw tracked (targe
 vs. ~6.4 µs draw setup measured by Lichii, doc 01 E10).
 
 ## Conditions for revisiting
-A second backend becomes a funded goal.
+Work on the second backend starts (selection mechanism, packet review against that API).

@@ -21,7 +21,7 @@ semantics; correct memory ordering for atomics and acquire/release loads.
 
 ## Decision
 Option 2. One table-driven A64 decoder shared by interpreter and JITs, generated from a single
-instruction description table in Rust. Six emulated application cores, each a guest thread
+instruction description table in C++ (ADR-0030). Six emulated application cores, each a guest thread
 scheduler context; the Horizon-compatible scheduler (ADR-0024) decides which guest thread runs.
 PAC instructions behave as on hardware with keys that make authentication a no-op (identity)
 — to be validated against titles; MTE tag operations treat all tags as zero.

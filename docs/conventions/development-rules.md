@@ -89,7 +89,7 @@ Severity: **MUST** (blocks merge) · **SHOULD** (deviation needs a reason in the
 
 | Id | Rule |
 |----|------|
-| DEV-80 | New dependencies need a reason in the PR: what it replaces, license, maintenance status, compile-time cost. Emulation crates prefer few, well-maintained, pure-Rust crates. |
+| DEV-80 | New dependencies need a reason in the PR: what it replaces, license, maintenance status, compile-time cost. Emulation crates prefer few, well-maintained, pure-Rust crates; third-party C/C++ needs an ADR (ADR-0030). |
 | DEV-81 | `cargo deny` checks licenses, advisories and duplicates. |
 | DEV-82 | Dependency versions are bumped in dedicated `build(deps)` commits. |
 

@@ -17,6 +17,7 @@ with a short report in `docs/poc-reports/` that updates the ADRs it enables.
 | 8 | PoC-8 Governor | ADR-0018 | PoC-7 |
 | 9 | PoC-1 Empty-cache first run | Charter feasibility | M4–M8 |
 | 10 | PoC-10 Continuous stability | ADR-0023, targets of doc 05 | Everything above |
+| — | PoC-11 Rust↔C++ boundary | ADR-0030 details (toolchain, bindings, call cost) | — ; must finish before the first `[c++]` crate |
 
 **Matching rule for SASS corpora** ([D-005](decisions/D-005-sass-corpus-without-nvidia-gpu.md)).
 Expected outputs are computed on the CPU from the team-written kernels; no NVIDIA GPU is
@@ -156,3 +157,24 @@ error bounds for the instructions they cover.
 - **Scope:** Full emulator at M11.
 - **Success/Failure:** doc 05 §7 table.
 - **Enables:** Calibrated targets; ADR-0023 acceptance.
+
+## PoC-11 — Rust↔C++ boundary
+
+- **Objective:** Validate the build, binding and call-cost assumptions of ADR-0030 before the
+  first `[c++]` crate is written.
+- **Hypothesis:** A `cc`-built C++20 static library links into a Cargo crate on Windows x64
+  (`clang-cl`) and Linux x64 (`clang`) from a clean checkout with `cargo xtask ci`; a
+  Rust→C++ call and a C++→Rust callback through the C ABI cost about as much as a
+  non-inlined call (to be measured, not assumed).
+- **Scope:** `poc/cpp-boundary/`: one C header, a few C++ functions (one taking a callback
+  table), generated and checked-in Rust declarations, a safe wrapper, microbenchmarks,
+  `clang-format`/`clang-tidy` and ASan/UBSan runs.
+- **Alternatives:** Binding generator (`bindgen` run by `xtask` vs. hand-written declarations
+  with a layout test); compiler discovery (environment vs. `xtask`-pinned path).
+- **Correctness:** Layout tests for every struct crossing the boundary; sanitizers clean.
+- **Benchmark:** Per-call cost (Rust→C++, C++→Rust callback) vs. a Rust non-inlined call;
+  clean and incremental build time on both OSes.
+- **Success:** Builds and checks pass on both OSes; measured call cost recorded.
+- **Failure:** No reliable `cc` build on Windows, or a call cost that would put JIT slow paths
+  over budget → revisit ADR-0030 (build or boundary).
+- **Enables:** ADR-0030 details (minimum clang version, binding generator).

@@ -25,8 +25,8 @@ Status: Proposed (highest-priority deliverable) · Related ADRs: 0014, 0015, 001
 | L1 | Dependency schema (which guest state the translator read) | `GuestProgramId` + `translator_epoch` | Drivers | Yes | < 1 KiB |
 | L2 | Tier-0 micro-op stream (interpreter input) | `GuestProgramId` + `interp_format` | Drivers | Optional (PoC decides: regenerate vs read) | ~1.5× L0 |
 | L3 | Lince IR (optimized) | — | — | **No** (in-memory only; re-derive) | — |
-| L4 | Host shader (SPIR-V) per tier | `HostShaderKey` | Drivers with same feature profile | Yes | 2–500 KiB |
-| L5 | Pipeline description (stage keys + normalized fixed-function state + layout) | `PipelineKey` | Drivers with same capability tier | Yes | < 512 B |
+| L4 | Host shader per tier and backend (SPIR-V for Vulkan) | `HostShaderKey` | Drivers of the same backend with same feature profile | Yes | 2–500 KiB |
+| L5 | Pipeline description (stage keys + normalized fixed-function state + layout) | `PipelineKey` | Drivers of the same backend with same capability tier | Yes | < 512 B |
 | L6 | Driver binaries (`VK_KHR_pipeline_binary` or sharded `VkPipelineCache`) | `PipelineKey` within a `DriverIdentity` namespace | Nothing | Yes | 10 KiB–2 MiB |
 | L7 | Session profile (usage, measured costs, co-occurrence) | `title` + session | Drivers | Yes, bounded ring | ≤ 1 MiB |
 | L8 | Boot manifest (prefetch hint list) | `title` | Drivers | Yes | ≤ 64 KiB |
@@ -44,11 +44,14 @@ signatures.
 ```text
 GuestProgramId = H("LNX/prog/v1", stage, sph_header, reachable_code_bytes)
 DependencyKey  = H(GuestProgramId, translator_epoch, [(location, value) for each dependency])
-HostShaderKey  = H(DependencyKey | GuestProgramId, tier, translator_version, host_feature_profile)
-PipelineKey    = H(capability_tier, [HostShaderKey per stage], normalized_static_state, layout_id)
-DriverIdentity = H(vendor_id, device_id, driver_version, pipeline_cache_uuid, api_version)
+HostShaderKey  = H(DependencyKey | GuestProgramId, tier, translator_version, backend, host_feature_profile)
+PipelineKey    = H(backend, capability_tier, [HostShaderKey per stage], normalized_static_state, layout_id)
+DriverIdentity = H(backend, vendor_id, device_id, driver_version, pipeline_cache_uuid, api_version)
 ```
 
+- **`backend`** identifies the host graphics API (Vulkan first; Direct3D 12 and Metal later,
+  ADR-0006). It is part of every host-derived key from the start so a second backend never
+  needs a cache format change; L0–L2 stay backend-independent.
 - **`reachable_code_bytes`**: SASS has no length field; extent comes from a control-flow scan
   of the program (fast linear decode). The GPU memory tracker caches `address → GuestProgramId`
   and invalidates on writes to those pages, so the scan and hash happen once per upload, not

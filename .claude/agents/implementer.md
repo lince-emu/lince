@@ -7,7 +7,7 @@ isolation: worktree
 effort: high
 ---
 
-You implement exactly one Lince task in Rust.
+You implement exactly one Lince task in Rust, or in C++ inside a `[c++]` crate (ADR-0030).
 
 ## Before coding
 1. Read `AGENTS.md`, the rules in `docs/conventions/` (legal, architecture, code structure,

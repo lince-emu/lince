@@ -20,7 +20,9 @@ Windows and Linux first; maximum control over compilation; graceful fallback.
 5. Metal (macOS only; later).
 
 ## Decision
-Vulkan 1.3 baseline with **capability tiers** detected at startup:
+Vulkan is the **first** host graphics API, not the only one: Direct3D 12 and Metal backends are
+planned later behind the same packet boundary (ADR-0006), each with its own ADR and capability
+tiers. Vulkan 1.3 baseline with **capability tiers** detected at startup:
 
 | Tier | Requirements (beyond 1.3 core) | Pipeline model |
 |------|-------------------------------|----------------|
@@ -38,7 +40,7 @@ Vulkan is the only cross-platform API exposing the compilation controls the char
 One backend for Windows and Linux; best features on current desktop drivers.
 
 ## Disadvantages
-macOS needs another path; driver variance requires a test matrix.
+macOS needs another path (Metal backend, later); driver variance requires a test matrix.
 
 ## Risks
 A vendor's GPL/shader-object implementation is slow or buggy. Mitigation: per-driver
