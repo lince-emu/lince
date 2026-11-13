@@ -29,7 +29,7 @@ Rules:
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | In review | — | 0024, 0029 |
 | T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
-| T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | Ready | T-010 | 0015 |
+| T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | In review | T-010 | 0015 |
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
@@ -160,6 +160,7 @@ Decision [D-001](decisions/D-001-cache-hash-xxh3.md). Add `xxhash-rust` (`xxh3` 
 CRC-32C vs XXH3-64 on 1 KiB–2 MiB payloads in the harness.
 - **Acceptance:** harness writes a checksum-cost CSV; fault-injection tests still pass; report
   updated (simplification 1 removed or measured).
+- **PR:** https://github.com/lince-emu/lince/pull/17
 
 ### T-021 — PoC-7 memory-model checks
 Decision [D-004](decisions/D-004-ledger-memory-model-checks.md). Add `loom` as a

@@ -12,6 +12,7 @@
 //! This is throwaway prototype code. The property under test — corruption is always a miss,
 //! never wrong data — must hold.
 
+pub mod checksum;
 mod crc32c;
 pub mod custom;
 mod error;

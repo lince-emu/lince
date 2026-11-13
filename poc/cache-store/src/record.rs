@@ -7,10 +7,12 @@
 //! 0   4  magic "LNXR"        16 16 key (u128 LE)
 //! 4   2  kind                32  4 header CRC-32C over bytes 0..32
 //! 6   1  codec (0 = raw)     36  4 reserved (0)
-//! 7   1  flags               40  8 payload checksum (PoC: CRC-32C seeded with kind and key)
+//! 7   1  flags               40  8 payload checksum: XXH3-64 seeded with kind and key
 //! 8   4  stored_len          48    payload, then zero padding to 16-byte alignment
 //! 12  4  raw_len
 //! ```
+
+use xxhash_rust::xxh3::{xxh3_64, xxh3_64_with_seed};
 
 use crate::crc32c;
 
@@ -37,8 +39,10 @@ pub(crate) fn align_up(n: u64) -> u64 {
 /// Checksum of a payload, seeded with its kind and key so a payload moved to another record
 /// does not validate.
 pub(crate) fn payload_check(kind: u16, key: u128, payload: &[u8]) -> u64 {
-    let seed = crc32c::update(crc32c::update(0, &key.to_le_bytes()), &kind.to_le_bytes());
-    u64::from(crc32c::update(seed, payload))
+    let mut seed_input = [0u8; 18];
+    seed_input[..16].copy_from_slice(&key.to_le_bytes());
+    seed_input[16..].copy_from_slice(&kind.to_le_bytes());
+    xxh3_64_with_seed(payload, xxh3_64(&seed_input))
 }
 
 /// Encodes a header for `payload`. The caller checked that the length fits in `u32`.
@@ -109,6 +113,12 @@ mod tests {
         let p = b"same bytes";
         assert_ne!(payload_check(1, 1, p), payload_check(1, 2, p));
         assert_ne!(payload_check(1, 1, p), payload_check(2, 1, p));
+    }
+
+    #[test]
+    fn xxh3_64_matches_the_reference_value_for_empty_input() {
+        // XXH3-64 of empty input with the default seed, from the xxHash reference test vectors.
+        assert_eq!(xxhash_rust::xxh3::xxh3_64(&[]), 0x2D06_8005_38D3_94C2);
     }
 
     #[test]
