@@ -2,7 +2,8 @@
 
 - **Raised by:** Claude Code (T-011 review) · **Date:** 2026-11-13
 - **Blocks:** ADR-0027 acceptance
-- **Status:** Answered (option A, 2026-11-13, maintainer follows the recommendation)
+- **Status:** Answered (option A, 2026-11-13; maintainer delegated PoC-level decisions to the
+  recommendation in chat)
 
 ## Question
 The PoC-7 ring is a fence-based seqlock. Its memory ordering has been checked only by
