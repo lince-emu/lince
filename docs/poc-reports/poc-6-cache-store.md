@@ -34,11 +34,14 @@
   without fsync, and `flush` syncs the active segment, the index and the manifest.
 - **Concurrency:** for `--writer on`, the background writer is a thread of the harness
   process. The custom store's reader maps the same files independently. SQLite opens a
-  second connection. redb's reader shares the writer's `Database`, because redb does not
-  allow a second process to open the file. A reader in another process is required by doc 02
-  §5 step 1 (a second instance becomes read-only) and by the PoC-6 correctness list
-  ("concurrent reader process"), so this matters for the verdict. The custom store's separate-process reading is exercised by the
-  fault tests, but its latency is not timed.
+  second connection. redb's reader shares the writer's `Database`, because the harness opens
+  redb in its default `ExclusiveWriter` concurrency mode, which refuses a second process.
+  redb 4.5.0 also has a `SingleWriter` mode, in which other processes may open the database
+  read-only (decision D-002). A reader in another process is required by doc 02 §5 step 1 and
+  §10 (a second instance becomes read-only) and by the PoC-6 correctness list ("concurrent
+  reader process"), so redb must be measured in `SingleWriter` mode with its reader in another
+  process before the verdict (task T-024). The custom store's separate-process reading is
+  exercised by the fault tests, but its latency is not timed.
 - **Repeated writer-on runs:** each run appends keys no earlier run used, and the CSV
   records the items actually on disk.
 - **Cache state:** warm OS cache by default. Cold-cache runs need the OS file cache dropped
@@ -98,8 +101,9 @@ after churn, and runs on HDD.
 
 ## Verdict
 
-*(Success or failure per docs/06-poc-roadmap.md PoC-6. Under ADR-0015's revisit condition,
-`redb` or SQLite within 20% on every metric means adopting it.)*
+*(Success or failure per docs/06-poc-roadmap.md PoC-6. Under ADR-0015's "Conditions for
+revisiting", `redb` or SQLite is adopted only if it is within 20% on every PoC-6 metric **and**
+able to serve a read-only second process (doc 02 §5, §10).)*
 
 ## ADR changes proposed
 
