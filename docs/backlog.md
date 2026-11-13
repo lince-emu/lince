@@ -23,7 +23,7 @@ Rules:
 | T-011 | PoC-7: frame ledger prototype | PoC | Done | — | 0027 |
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | In review | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
-| T-014 | Ampere SASS test corpus: team-written assembler and programs (no NVIDIA SDK or GPU) | PoC | Ready | — | 0009, 0028 |
+| T-014 | Ampere SASS test corpus: team-written assembler and programs (no NVIDIA SDK or GPU) | PoC | In review | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | In review | — | 0007 |
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | In review | — | 0024, 0029 |
@@ -111,6 +111,7 @@ PR: https://github.com/lince-emu/lince/pull/1
 ### T-014 — SASS corpus
 Decisions [D-005](decisions/D-005-sass-corpus-without-nvidia-gpu.md) and
 [D-010](decisions/D-010-cuda-eula-sass-corpus.md). No NVIDIA SDK tool is used (LEGAL-15).
+Encoding source: Mesa NAK, per [D-011](decisions/D-011-sass-encoding-source.md).
 Standalone crate in `poc/sass-corpus/`:
 - a Rust assembler for an initial subset of Ampere (`sm_86`) SASS: integer and logic ops,
   FADD/FMUL/FFMA, moves, predicates, branches, LDG/STG and EXIT;
