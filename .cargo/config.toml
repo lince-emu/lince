@@ -1,0 +1,3 @@
+# Build automation lives in xtask (ADR-0002): `cargo xtask ci`.
+[alias]
+xtask = "run --package xtask --"

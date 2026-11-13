@@ -15,7 +15,7 @@ Rules:
 |----|-------|------|--------|------------|------|
 | T-001 | Choose the project license | Maintainer | Done | — | 0000 |
 | T-002 | Review ADRs ready for acceptance (0001 details, 0002, 0014) | Maintainer | Done | — | 0001, 0002, 0014 |
-| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | Ready | T-001, T-002 | 0001, 0002 |
+| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | In review | T-001, T-002 | 0001, 0002 |
 | T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Blocked | T-003 | 0002 |
 | T-005 | Reference crate: `lince-common` written to every convention | Impl | Blocked | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
@@ -55,6 +55,7 @@ Maintainer reviews ADR-0001 (details), ADR-0002 and ADR-0014 and changes their s
   `clippy.toml` and `deny.toml` already exist; `xtask ci` runs `cargo deny check` and verifies
   SPDX headers (LEGAL-30) and `license` fields (LEGAL-31).
 - **Acceptance:** clean checkout builds and `cargo xtask ci` passes on both OSes.
+- **PR:** https://github.com/lince-emu/lince/pull/11
 
 ### T-005 — Reference crate `lince-common`
 Write `lince-common` (newtypes such as `GuestVa`/`GpuVa`/`Nanos`, a small error enum, one

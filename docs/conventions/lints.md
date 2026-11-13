@@ -7,9 +7,9 @@ The rules in this folder are enforced by tools wherever possible. Root files:
 | `rustfmt.toml` | `cargo fmt` | Active |
 | `clippy.toml` | `cargo clippy` thresholds and disallowed APIs | Active |
 | `deny.toml` | `cargo deny` licenses, advisories, bans | Active |
-| `[workspace.lints]` in `Cargo.toml` | rustc + clippy lint levels | Applied in T-003 (snippet below) |
+| `[workspace.lints]` in `Cargo.toml` | rustc + clippy lint levels | Active (snippet below) |
 
-## Workspace lints (to be placed in the root `Cargo.toml` by T-003)
+## Workspace lints (applied in the root `Cargo.toml`)
 
 Every crate opts in with `[lints] workspace = true`.
 
