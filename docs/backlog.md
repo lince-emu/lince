@@ -92,6 +92,7 @@ monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, pipeline binary lo
 Write `docs/research/tier0-micro-op-format.md`: encoding, operand descriptors, register-file
 buckets, branch target resolution, how predicates/uniform registers are represented, and how
 the GPU interpreter loop consumes it (doc 03 §4). Propose as input for ADR-0010; no code.
+PR: https://github.com/lince-emu/lince/pull/1
 
 ### T-014 — SASS corpus
 Requires the CUDA toolkit and an NVIDIA GPU on the maintainer's machine: compile a set of
