@@ -21,7 +21,8 @@ Standalone prototype for [PoC-7](../../docs/06-poc-roadmap.md) (enables ADR-0027
 | `tests/` | Concurrent dumps without torn events, dump format, and analyzer acceptance with injected spikes |
 
 The crate is std-only, has no dependencies and uses no `unsafe`. A `Recorder` can move to
-another thread but cannot be shared, which keeps every ring single-producer.
+another thread but cannot be shared, which keeps every ring single-producer. Its only
+dev-dependency, `loom`, is resolved only when building with `--cfg loom`.
 
 ## Running
 
@@ -29,6 +30,19 @@ another thread but cannot be shared, which keeps every ring single-producer.
 cargo test
 cargo build --release
 ./target/release/bench --events 10000000 --runs 5
+```
+
+### Loom model of the ring
+
+`src/ring.rs` has a [loom](https://crates.io/crates/loom) model (`ring::loom_tests`) of one
+producer pushing while one thread takes a snapshot. Loom runs it under every thread
+interleaving and every weak-memory outcome that loom models (see its documentation for the
+limits), and the test asserts that a snapshot never returns a torn event or an event under the
+wrong number. Under `--cfg loom` the ring's atomics come from loom, so run only that test
+(the other ring unit tests are compiled out):
+
+```bash
+RUSTFLAGS="--cfg loom" cargo test --release --lib loom
 ```
 
 The benchmark has three scenarios:
