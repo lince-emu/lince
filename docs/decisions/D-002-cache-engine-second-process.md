@@ -1,27 +1,43 @@
-# D-002: Does an engine that cannot serve a second process qualify under ADR-0015?
+# D-002: Must a cache engine serve a read-only second process to qualify under ADR-0015?
 
 - **Raised by:** Claude Code (T-010 review) · **Date:** 2026-11-13
 - **Blocks:** the ADR-0015 verdict after PoC-6 measurements
-- **Status:** Answered (option A, 2026-11-13, maintainer follows the recommendation)
+- **Status:** Awaiting maintainer reconfirmation (option A recommended). The first version of
+  this record, answered on 2026-11-13, rested on a false premise about `redb`; the premise
+  was corrected after review on 2026-11-13.
 
 ## Question
-`redb` holds an exclusive lock on its file, so a second process cannot open it, even
-read-only. Doc 02 §5 step 1 requires a second emulator instance to fall back to read-only
-access. The PoC-6 correctness list also includes a "concurrent reader process". ADR-0015's
-revisit clause only compares performance ("within 20 % on every PoC-6 metric").
+Doc 02 §5 step 1 and §10 require a second emulator instance to open the store read-only. The
+PoC-6 correctness list also includes a "concurrent reader process". ADR-0015's original
+revisit clause compared only performance ("within 20% on every PoC-6 metric").
+
+PoC-6 pins `redb` 4.5.0 (`poc/cache-store/Cargo.lock`). That version has
+`Builder::set_concurrency_mode`. In the default mode, `ConcurrencyMode::ExclusiveWriter`, a
+writer excludes every other process. In `ConcurrencyMode::SingleWriter`, one process writes
+and other processes may open the database read-only and follow its commits; readers must be
+opened in the writer's mode (`redb-4.5.0/src/db.rs`: the `ConcurrencyMode` enum and the
+documentation of `Builder::open_read_only`). The PoC-6 harness opens `redb` in the default
+mode, so its `redb` reader shares the writer's `Database` in the same process.
+
+So `redb` can meet the doc 02 requirement, but PoC-6 has not measured it in the mode that
+does. Two things need deciding: whether serving a read-only second process belongs in the
+ADR-0015 adoption condition, and which `redb` mode PoC-6 measures.
 
 ## Options
 | Option | Trade-offs | Effort | Reversible? |
 |--------|-----------|--------|-------------|
-| A (recommended) Keep `redb` as a comparator, and add "serves a read-only second process" to the ADR-0015 adoption condition | The engine choice follows doc 02's requirements. `redb` still provides single-process performance data | Text change | Yes |
-| B Drop `redb` from PoC-6 | Less work. Loses a pure-Rust performance reference | Small | Yes |
-| C Ignore the requirement | Two instances would silently lose the cache, which contradicts doc 02 §5 | None | Yes |
+| A (recommended) Add "serves a read-only second process" to the ADR-0015 adoption condition, and measure `redb` in `SingleWriter` mode with a reader in another process | The comparison uses the configuration Lince would need. The cost of `SingleWriter` is measured, not assumed | Text change plus harness work | Yes |
+| B Keep the condition performance-only and measure `redb` in the default `ExclusiveWriter` mode | No harness work. The numbers describe a configuration doc 02 does not allow: a second instance could not open the store | None | Yes |
+| C Drop `redb` from PoC-6 | Less work. Loses a pure-Rust reference that can meet the requirement | Small | Yes |
 
 ## Recommendation
-Option A. The requirement exists in doc 02, so the adoption rule should include it.
-Keeping `redb` in the measurements is cheap and still tells us how far the custom store is
-from a mature engine.
+Option A. The requirement exists in doc 02, so the adoption rule should include it. `redb`
+can meet it in `SingleWriter` mode, so that is the mode worth measuring, and it still tells
+us how far the custom store is from a mature engine.
 
 ## Consequences
-ADR-0015 "Conditions for revisiting" is amended in the same pull request as this record.
-ADR-0015 stays Proposed.
+- ADR-0015 lists read-only access from a second process in its Requirements, and its
+  "Conditions for revisiting" requires it, citing doc 02 §5 and §10. ADR-0015 stays Proposed.
+- The PoC-6 harness must run the `redb` comparator in `SingleWriter` mode, with its reader in
+  another process, before the ADR-0015 verdict. This is task T-024.
+- The PoC-6 report no longer claims that `redb` cannot be opened by a second process.

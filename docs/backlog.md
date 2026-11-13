@@ -33,6 +33,7 @@ Rules:
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
+| T-024 | PoC-6: measure `redb` in `SingleWriter` mode with a reader in another process | PoC | Needs decision | T-010 | 0015 |
 
 ## Details
 
@@ -153,3 +154,12 @@ run the test suite on an ARM host (e.g. an ARM CI runner).
 ### T-022 — PoC-5 pipeline binaries
 Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add
 the mechanism to `poc/vk-pipelines` and the report.
+
+### T-024 — PoC-6 `redb` second-process reader
+Decision [D-002](decisions/D-002-cache-engine-second-process.md), awaiting maintainer
+reconfirmation; this task becomes Ready when the maintainer reconfirms option A. Open the
+`redb` comparator with `ConcurrencyMode::SingleWriter` (writer and readers in that mode), run
+the `resolve` reader in a separate process while the writer appends, and record whether
+`redb` serves that reader, which ADR-0015's "Conditions for revisiting" requires.
+- **Acceptance:** `harness resolve --writer on` times a `redb` reader in another process in
+  `SingleWriter` mode; the PoC-6 report states the mode and the result.
