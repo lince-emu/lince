@@ -2,7 +2,8 @@
 
 - **Raised by:** Claude Code (T-011 review) · **Date:** 2026-11-13
 - **Blocks:** nothing now; the ledger work after PoC-7
-- **Status:** Answered (option A, 2026-11-13, maintainer follows the recommendation)
+- **Status:** Answered (option A, 2026-11-13; maintainer delegated PoC-level decisions to the
+  recommendation in chat)
 
 ## Question
 Doc 05 §3 lists `CompileStart/End{tier}` and wait events without saying how their duration

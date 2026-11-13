@@ -33,6 +33,7 @@ Rules:
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
+| T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Ready | T-010 | 0015 |
 
 ## Details
 
@@ -92,8 +93,9 @@ PR: https://github.com/lince-emu/lince/pull/3
 
 ### T-012 — PoC-5 Vulkan pipeline mechanisms
 Standalone `ash` harness that creates pipelines from generated SPIR-V of several sizes using:
-monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, pipeline binary load, sharded
-`VkPipelineCache`, `DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths.
+monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, sharded `VkPipelineCache`,
+`DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths. Pipeline
+binary load is deferred to T-022, because `ash` 0.38 has no `VK_KHR_pipeline_binary` bindings.
 - **Acceptance:** runs on any Vulkan 1.3 device, writes per-mechanism latency CSV; report skeleton.
 
 ### T-013 — Tier-0 micro-op format specification
@@ -146,10 +148,29 @@ CRC-32C vs XXH3-64 on 1 KiB–2 MiB payloads in the harness.
 ### T-021 — PoC-7 memory-model checks
 Decision [D-004](decisions/D-004-ledger-memory-model-checks.md). Add `loom` as a
 dev-dependency of `poc/frame-ledger` and model one producer and one concurrent snapshot;
-run the test suite on an ARM host (e.g. an ARM CI runner).
-- **Acceptance:** loom test passes and fails when a fence in `ring.rs` is removed (shown in
-  the PR); ARM run result recorded in the PoC-7 report.
+run the test suite on an ARM host. Until an ARM CI runner exists (T-003 sets up x64 runners
+only), use any ARM host available to the maintainer or a contributor.
+- **Acceptance:** the loom test passes, and it fails when either of these fences in
+  `poc/frame-ledger/src/ring.rs` is removed (shown in the PR): the release fence in
+  `Ring::push` and the acquire fence in `Ring::snapshot`. If loom cannot detect the removal
+  of one of them, the PR and the PoC-7 report document that loom limitation instead. The ARM
+  run result, with the host it ran on, is recorded in the PoC-7 report.
 
 ### T-022 — PoC-5 pipeline binaries
 Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add
-the mechanism to `poc/vk-pipelines` and the report.
+pipeline binary load to the PoC-5 harness and the report. Rationale: ADR-0013 relies on
+pipeline binaries for L6 persistence, and PoC-5's hypothesis that their loads are
+sub-millisecond is untested until they are measured.
+- **Acceptance:** the PoC-5 harness times pipeline binary load next to the other mechanisms,
+  skips it where the extension is unsupported, and the PoC-5 report records the results.
+
+### T-024 — PoC-6 second-process readers
+Decision [D-002](decisions/D-002-cache-engine-second-process.md). Let
+`harness resolve --writer on` run the reader in a separate process while the writer appends,
+for every engine: the custom store, `redb` opened with `ConcurrencyMode::SingleWriter`
+(writer and reader in that mode) and SQLite in WAL mode. Record whether each engine serves
+that reader, which ADR-0015's "Conditions for revisiting" requires, so the "within 20%"
+comparison uses the same reader setup for all engines.
+- **Acceptance:** `harness resolve --writer on` times a reader in another process for each
+  engine; the PoC-6 report states, per result row, the reader setup and the `redb` mode, and
+  whether each engine served the second-process reader.

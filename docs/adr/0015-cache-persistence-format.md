@@ -2,7 +2,7 @@
 
 - **Status:** Proposed (needs PoC-6)
 - **Date:** 2026-11-13
-- **Related:** doc 02 §4, §7, §9; ADR-0014, ADR-0016, ADR-0026
+- **Related:** doc 02 §4, §5, §7, §9, §10; ADR-0014, ADR-0016, ADR-0026; decision D-002
 
 ## Context
 The workload is write-once immutable blobs (1 KiB–2 MiB), point lookups by 128-bit key, no
@@ -10,7 +10,8 @@ range queries, no updates, rare deletes (eviction), occasional compaction, one w
 
 ## Requirements
 Constant-time open; point lookup without parsing; crash safety without fsync on critical
-threads; corruption detection per record; pure Rust preferred.
+threads; corruption detection per record; read-only access from a second process (doc 02
+§10); pure Rust preferred.
 
 ## Alternatives
 1. **Custom append-only segment store + memory-mapped hash index** (doc 02 §4).
@@ -43,4 +44,4 @@ time after kill -9 at random points, space amplification after churn.
 
 ## Conditions for revisiting
 `redb` or SQLite within 20% on every PoC-6 metric **and** able to serve a read-only second
-process (doc 02 §5) → adopt it and delete custom code (decision D-002).
+process (doc 02 §5, §10) → adopt it and delete custom code (decision D-002).
