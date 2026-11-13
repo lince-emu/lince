@@ -1,6 +1,6 @@
 # Lince-NX
 
-**Lince-NX** (Recomp Foundry) is a Nintendo Switch 2 emulator written from scratch in Rust,
+**Lince-NX** is a Nintendo Switch 2 emulator written from scratch in Rust,
 with Nintendo Switch 1 support planned later in the same project.
 
 Its defining goal:
