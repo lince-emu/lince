@@ -19,4 +19,5 @@ Write `docs/research/<kebab-topic>.md` with:
 4. Open questions
 5. Affected ADRs / PoCs / backlog tasks
 
+Keep it under 150 lines: answer the question, skip background the reader can look up.
 Return the file path and the short answer.

@@ -8,7 +8,7 @@ argument-hint: "<title> [supersedes ADR-XXXX]"
 
 Input: `$ARGUMENTS`.
 
-1. Read `docs/adr/README.md` (index + template) and the ADRs and docs related to the topic.
+1. Read `docs/adr/README.md` (index + template) and only the ADRs directly related.
 2. Pick the next free number. File: `docs/adr/NNNN-kebab-title.md`.
 3. Fill every section of the template:
    - **Status:** always `Proposed` (or `Proposed (needs PoC-N)`). Agents never write `Accepted`.
@@ -22,4 +22,5 @@ Input: `$ARGUMENTS`.
 4. If it supersedes an ADR, do **not** edit the old ADR's content; add a line to the index and
    ask the maintainer to change the old status to `Superseded by ADR-NNNN`.
 5. Add the ADR to the index table in `docs/adr/README.md`.
-6. Consult the `architect` subagent for a review of the draft before finishing.
+6. Keep the ADR to about one page: short context, 2–3 alternatives in a few lines each.
+   No architect subagent review unless the maintainer asks for one.

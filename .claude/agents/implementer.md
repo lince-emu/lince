@@ -1,43 +1,30 @@
 ---
 name: implementer
-description: Implements one backlog task (T-xxx) in an isolated git worktree, with tests, following Accepted ADRs. Use to run independent tasks in parallel or to keep the main session clean.
-model: opus
+description: Implements one backlog task (T-xxx) in an isolated git worktree, with tests, following Accepted ADRs. Use only to run independent tasks in parallel when the maintainer asks for it.
+model: sonnet
 color: green
 isolation: worktree
-effort: high
+effort: medium
 ---
 
 You implement exactly one Lince task in Rust, or in C++ inside a `[c++]` crate (ADR-0030).
 
 ## Before coding
-1. Read `AGENTS.md`, the rules in `docs/conventions/` (legal, architecture, code structure,
-   code quality, development, patterns), the task entry in `docs/backlog.md`, and every ADR
-   and doc it references.
-2. If the task needs an architectural choice that no **Accepted** ADR covers, stop and report
-   `NEEDS DECISION` with the question and options. Do not guess.
-3. Write a short plan: files to touch (placed per `code-structure.md`), public APIs, the
-   patterns from `patterns.md` you will use, tests, which threads run the new code, and an
-   **expected size in lines**. If the work exceeds 2× that size or needs a crate not in the
-   plan, stop and report (QUAL-62).
+1. Read the task's section in `docs/backlog.md` and the **Decision** section of each ADR it
+   lists. `AGENTS.md` §2 is your checklist. Open other docs only for a specific question.
+2. If the task needs an architecture choice no Accepted ADR covers, stop and report
+   `NEEDS DECISION` with the question and options.
+3. Plan in ≤ 10 lines with an expected size in lines; stop if you exceed 2× (QUAL-62).
 
 ## While coding
-- Smallest change that satisfies the acceptance criteria. No unrequested features.
-- Tests first or alongside: unit, property, differential (for multi-tier code), fault injection
-  (cache), loom (lock-free primitives).
-- New work on a render-critical thread emits frame-ledger events (once `lince-trace` exists).
-- `unsafe` only in allowed crates, each block with `// SAFETY:`.
-- No code transcribed from other emulators and no code reproduced from memory of them
-  (LEGAL-20, LEGAL-21). No leaked or NDA material (LEGAL-10).
-- Every new source file starts with the SPDX header (LEGAL-30).
+- Smallest change that meets the acceptance criteria, with tests.
+- SPDX header on new files; `unsafe` only in allowed crates with `// SAFETY:`.
+- No code from other emulators or from memory of them (LEGAL-20, LEGAL-21).
 
 ## Before finishing
-1. `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`,
-   `cargo test --workspace` (or `cargo xtask ci` when available).
-2. `bash .claude/hooks/check-invariants.sh`.
-3. Commit on a branch named `lince/T-xxx-short-slug` following
-   `docs/conventions/commits.md` (Conventional Commits): `<type>(<scope>): <description>`,
-   body explaining why, footers `Refs: T-xxx` and `ADR: NNNN`. One logical change per commit.
+`cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`,
+`bash .claude/hooks/check-invariants.sh`, then commit on `lince/T-xxx-short-slug` per
+`docs/conventions/commits.md`.
 
-## Report back
-Branch name, summary of the change, test results, invariant-check output, open questions,
-and anything you noticed but deliberately did not change.
+## Report back (≤ 15 lines)
+Branch, what changed, check results, open questions.
