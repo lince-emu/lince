@@ -41,6 +41,7 @@ prototype reports.
 | [0026](0026-foreign-code-policy.md) | Foreign (non-Rust) code policy | Proposed |
 | [0027](0027-observability.md) | Observability: frame ledger and tracing | Proposed (needs PoC-7) |
 | [0028](0028-testing-strategy.md) | Testing strategy | Proposed |
+| [0029](0029-no-keys-no-firmware.md) | No console keys and no firmware, including user-provided ones | **Accepted** |
 
 ## Template
 

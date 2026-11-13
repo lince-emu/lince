@@ -40,7 +40,7 @@ riskiest assumptions are being prototyped first.
 | [07 — Development roadmap](docs/07-development-roadmap.md) | Milestones by dependency and risk |
 | [08 — Switch 2 hardware](docs/08-switch2-hardware.md) | Known / inferred / unknown |
 | [09 — Legal and content](docs/09-legal-and-content.md) | No keys, no firmware, clean-room rules |
-| [ADRs](docs/adr/README.md) | 29 architecture decision records |
+| [ADRs](docs/adr/README.md) | 30 architecture decision records |
 | [Conventions](docs/conventions/README.md) | Architecture rules, development rules, Conventional Commits, branches/PRs, versioning |
 | [Backlog](docs/backlog.md) | Task queue for humans and agents |
 | [Autonomous development](docs/autonomous-development.md) | How Claude Code agents work on the project (`.claude/`) |
