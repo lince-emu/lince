@@ -169,9 +169,8 @@ and Hokkaido share `async_draw_policy.h` (G-4) [SRC (listing)].
 6. **Q6:** Does the NVIDIA `max(x, -x)` device-lost bug (E-8) reproduce with Lince-generated
    SPIR-V, and on which driver versions?
 7. **Q7:** What do hardware uniform-datapath instructions do with lane-varying inputs (P2)?
-   This needs a CUDA kernel in the T-014 corpus and the T-023 hardware run; CUDA source may
-   never make the compiler emit `R2UR` with a non-uniform input, so the corpus may not be able
-   to answer it. Listed as UNKNOWN in doc 08 §4.
+   This needs a team-assembled `R2UR` program in the T-014 corpus (LEGAL-15) and the T-023
+   hardware run; until the hardware run exists, the corpus cannot answer it. Listed as UNKNOWN in doc 08 §4.
 8. **Q8:** Lichii (Hokkaido shares the policy file) waits for native draws by default but
    recommends a mode that drops them after a budget (G-4); Eglantine reads its whole cache at boot but bounds boot
    builds (G-1, G-2); Lichii's v2 log is read whole at boot (doc 01 E18, consistent at
