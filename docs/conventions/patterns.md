@@ -31,6 +31,9 @@ pub type Result<T, E = CacheError> = std::result::Result<T, E>;
 Rules: one enum per crate (or per major module), variants carry the values needed to debug,
 messages follow QUAL-42, no `String` catch-all variants.
 
+Reference implementation: [`lince-common/src/error.rs`](../../crates/lince-common/src/error.rs)
+(`CommonError`, used by `Nanos`'s fallible conversion).
+
 ## PAT-02 — Newtype for units and addresses
 
 ```rust
@@ -49,6 +52,10 @@ impl GuestVa {
 
 Rules: no `Deref` to the inner value; arithmetic only through named methods; `#[repr(transparent)]`
 when crossing FFI or GPU buffers.
+
+Reference implementations: [`lince-common/src/address.rs`](../../crates/lince-common/src/address.rs)
+(`GuestVa`, `GpuVa`) and [`lince-common/src/time.rs`](../../crates/lince-common/src/time.rs)
+(`Nanos`).
 
 ## PAT-03 — Decoding raw guest values at the boundary
 

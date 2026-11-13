@@ -83,7 +83,7 @@ Severity: **MUST** (blocks merge) · **SHOULD** (deviation needs a reason in the
 | DEV-71 | Debug switches are typed settings, not scattered environment variables. |
 | DEV-72 | Comments explain *why*, invariants and hardware facts; they do not restate the code. |
 | DEV-73 | `TODO(T-xxx): …` must reference a backlog task. Untracked `TODO`/`FIXME`/`HACK` are review findings. |
-| DEV-74 | Public items in library crates have doc comments; module-level docs explain the module's role and threads. |
+| DEV-74 | Public items in library crates have doc comments; module-level docs explain the module's role and threads. A doc comment states what the signature cannot: units, `None`/error cases, preconditions, panics, why it exists. When the name says it all, one short line; never a sentence that only restates the name (DEV-72). |
 
 ## I. Dependencies
 
