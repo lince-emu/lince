@@ -1,0 +1,92 @@
+# Backlog
+
+The task queue for humans and agents. The `next-task` skill reads this file.
+
+**Statuses:** `Ready` · `In progress` · `In review` · `Needs decision` · `Blocked` · `Done`
+**Types:** `Maintainer` (only the maintainer can do it) · `Research` · `Docs` · `PoC` · `Impl`
+
+Rules:
+- `Impl` tasks need all listed ADRs **Accepted**. `PoC`, `Research` and `Docs` tasks may run
+  against `Proposed` ADRs because they produce the evidence those ADRs need.
+- Keep one row per task in the table; details go in the section below. Agents update the
+  `Status` column and append the PR link in the details.
+
+| ID | Title | Type | Status | Depends on | ADRs |
+|----|-------|------|--------|------------|------|
+| T-001 | Choose the project license | Maintainer | Needs decision | — | 0000 |
+| T-002 | Review ADRs ready for acceptance (0001 details, 0002, 0014) | Maintainer | Needs decision | — | 0001, 0002, 0014 |
+| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | Blocked | T-001, T-002 | 0001, 0002 |
+| T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Blocked | T-003 | 0002 |
+| T-010 | PoC-6: cache store prototype and benchmark harness | PoC | Ready | — | 0015, 0016 |
+| T-011 | PoC-7: frame ledger prototype | PoC | Ready | — | 0027 |
+| T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
+| T-013 | Tier-0 micro-op format specification | Docs | Ready | — | 0010 |
+| T-014 | Ampere SASS test corpus from team-written CUDA kernels | Maintainer | Blocked | — | 0009, 0028 |
+| T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Ready | — | — |
+| T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Ready | — | 0007 |
+| T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
+| T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
+
+## Details
+
+### T-001 — Choose the project license
+Owner decision on ADR-0000. Agents must not pick a license.
+
+### T-002 — Review ADRs ready for acceptance
+Maintainer reviews ADR-0001 (details), ADR-0002 and ADR-0014 and changes their status.
+
+### T-003 — Bootstrap Cargo workspace, xtask and CI skeleton
+- Workspace `Cargo.toml` with shared lints and profiles (doc 04 §7); `rust-toolchain.toml`
+  pinned to current stable; `xtask` with `ci` (fmt, clippy `-D warnings`, test, invariant
+  check, license headers).
+- Only `lince-common` and `lince-trace` crates created (empty APIs with docs and one test each).
+- GitHub Actions: Windows x64 + Linux x64 running `cargo xtask ci`.
+- **Acceptance:** clean checkout builds and `cargo xtask ci` passes on both OSes.
+
+### T-004 — Commit linting in CI and changelog generation
+- `cargo xtask ci` validates every commit in the PR range with the same rules as
+  `.githooks/commit-msg` (`docs/conventions/commits.md` §9), and the PR title.
+- `cliff.toml` for `git-cliff` grouping by type as in `docs/conventions/versioning.md` §4.
+- **Acceptance:** CI fails on a non-conforming commit or PR title; `git cliff` produces a
+  grouped `CHANGELOG.md` from the existing history.
+
+### T-010 — PoC-6 cache store
+Follow `docs/06-poc-roadmap.md` PoC-6 and `docs/02-cache-architecture.md` §4–§9.
+- Custom store (segments + mmap index), `redb` comparator, SQLite comparator behind a feature.
+- Synthetic workload generator (blob sizes 1 KiB–2 MiB, configurable distribution).
+- Fault-injection tests (truncation, bit flips, kill during append).
+- **Acceptance:** harness produces open-time vs. size and resolve-latency CSVs; report skeleton
+  in `docs/poc-reports/poc-6-cache-store.md`; correctness tests pass. Measurements on the
+  maintainer's hardware are a follow-up.
+
+### T-011 — PoC-7 frame ledger
+Per-thread lock-free ring of fixed-size events, dump format, minimal analyzer computing
+percentiles and attributing synthetic injected spikes.
+- **Acceptance:** event cost microbenchmark; analyzer test with synthetic spikes identifies
+  the injected cause.
+
+### T-012 — PoC-5 Vulkan pipeline mechanisms
+Standalone `ash` harness that creates pipelines from generated SPIR-V of several sizes using:
+monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, pipeline binary load, sharded
+`VkPipelineCache`, `DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths.
+- **Acceptance:** runs on any Vulkan 1.3 device, writes per-mechanism latency CSV; report skeleton.
+
+### T-013 — Tier-0 micro-op format specification
+Write `docs/research/tier0-micro-op-format.md`: encoding, operand descriptors, register-file
+buckets, branch target resolution, how predicates/uniform registers are represented, and how
+the GPU interpreter loop consumes it (doc 03 §4). Propose as input for ADR-0010; no code.
+
+### T-014 — SASS corpus
+Requires the CUDA toolkit and an NVIDIA GPU on the maintainer's machine: compile a set of
+team-written kernels for `sm_86`, store SASS (`cuobjdump`/`nvdisasm`) and reference outputs.
+
+### T-015 — Research: other Switch 2 projects
+Use the `research-note` skill. Focus: language, CPU backend, shader approach, cache design,
+any Rust crates worth evaluating. Pin commits.
+
+### T-016 — Research: Vulkan feature coverage survey
+Use public sources (gpuinfo database, Mesa release notes, vendor driver notes). Output a table
+per vendor/driver for the features in ADR-0007's tiers; mark data dates.
+
+### T-017 / T-018
+Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
