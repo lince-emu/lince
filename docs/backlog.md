@@ -81,6 +81,7 @@ Per-thread lock-free ring of fixed-size events, dump format, minimal analyzer co
 percentiles and attributing synthetic injected spikes.
 - **Acceptance:** event cost microbenchmark; analyzer test with synthetic spikes identifies
   the injected cause.
+PR: https://github.com/lince-emu/lince/pull/3
 
 ### T-012 — PoC-5 Vulkan pipeline mechanisms
 Standalone `ash` harness that creates pipelines from generated SPIR-V of several sizes using:
