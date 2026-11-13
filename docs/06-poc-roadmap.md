@@ -18,6 +18,19 @@ with a short report in `docs/poc-reports/` that updates the ADRs it enables.
 | 9 | PoC-1 Empty-cache first run | Charter feasibility | M4–M8 |
 | 10 | PoC-10 Continuous stability | ADR-0023, targets of doc 05 | Everything above |
 
+**Matching rule for SASS corpora** ([D-005](decisions/D-005-sass-corpus-without-nvidia-gpu.md)).
+Expected outputs are computed on the CPU from the team-written kernels; no NVIDIA GPU is
+required. A result matches when it is:
+- bit-exact where IEEE 754 or the instruction itself defines the result exactly (FADD, FMUL,
+  FFMA with the encoded rounding and flush-to-zero modes, integer and logic operations);
+- within NVIDIA's published error bounds for approximate operations (MUFU and the CUDA
+  intrinsics built on it, texture filtering);
+- for behavior no public source defines, marked `// UNKNOWN:` and listed in doc 08 instead of
+  being counted as a match.
+
+Reference outputs from real hardware (T-023) are optional. When they exist, they replace the
+error bounds for the instructions they cover.
+
 ---
 
 ## PoC-1 — Empty-cache first-run gameplay
@@ -36,7 +49,7 @@ with a short report in `docs/poc-reports/` that updates the ADRs it enables.
 ## PoC-2 — Generic shader execution (GPU interpreter)
 
 - **Objective:** Prove a GPU interpreter of SASS micro-ops is correct and affordable.
-- **Hypothesis:** Compute and fragment programs run bit-exact vs. a compiled reference at a GPU
+- **Hypothesis:** Compute and fragment programs match the reference (matching rule above) at a GPU
   cost factor acceptable for short exposure (factor to be recorded, not assumed).
 - **Scope:** Micro-op format; interpreter for ALU, control flow, LDG/STG/ATOM, shared memory,
   barriers, SHFL/VOTE, TEX with explicit derivatives, IPA via barycentrics; standalone Vulkan
@@ -44,9 +57,9 @@ with a short report in `docs/poc-reports/` that updates the ADRs it enables.
 - **Alternatives:** Raw SASS interpreted directly vs. pre-decoded micro-ops; register-file
   buckets vs. single 256-register file; host subgroup 32 vs. shared-memory warp emulation.
 - **Correctness tests:** Corpus of SASS compiled from team-written CUDA kernels (sm_86) with
-  known outputs; hand-assembled fragment-like programs; comparison vs. Tier-1 output.
+  CPU-computed expected outputs; hand-assembled fragment-like programs; comparison vs. Tier-1 output.
 - **Benchmark:** GPU timestamps per dispatch/draw; interpreter pipeline compile time per vendor.
-- **Success:** Bit-exact on corpus; cost factor documented per instruction class; derivatives
+- **Success:** Every corpus result matches under the matching rule above; cost factor documented per instruction class; derivatives
   correct under divergence.
 - **Failure:** Fragment derivatives or helper lanes cannot be made correct on V2/V3 hosts.
 - **Enables:** ADR-0010.
@@ -69,9 +82,10 @@ with a short report in `docs/poc-reports/` that updates the ADRs it enables.
 - **Hypothesis:** The IR expresses all corpus instructions without lowering to Maxwell.
 - **Scope:** Decoder (instruction table), IR, structurizer, SPIR-V emitter, offline `lince-shader-lab`.
 - **Alternatives:** Structurization algorithms.
-- **Correctness:** `spirv-val`; bit-exact per opcode vs. CUDA reference outputs; fuzzing.
+- **Correctness:** `spirv-val`; per-opcode comparison with the corpus expected outputs under the
+  matching rule above; fuzzing.
 - **Benchmark:** Translation time per instruction (P50/P99).
-- **Success:** 100% of corpus translates; zero mismatches.
+- **Success:** 100% of corpus translates; zero mismatches under the matching rule.
 - **Failure:** Structurizer fails on real control flow without a workaround.
 - **Enables:** ADR-0009, ADR-0012.
 

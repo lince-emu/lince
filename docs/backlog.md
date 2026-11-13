@@ -32,7 +32,7 @@ Rules:
 | T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | Ready | T-010 | 0015 |
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
-| T-023 | SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
+| T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
 
 ## Details
 
@@ -112,11 +112,11 @@ that T-023 runs, and expected outputs computed on the CPU for each kernel.
   its SASS and its CPU-computed expected output stored; the T-023 script runs to the point
   where it needs a GPU.
 
-### T-023 — SASS corpus reference outputs
+### T-023 — SASS corpus reference outputs (optional)
 Run the T-014 script once on an NVIDIA GPU of compute capability 8.6–8.9 (GeForce RTX 30 or
-40 series; an `sm_86` cubin does not run on other major versions), and commit the outputs.
-Anyone with such a GPU can run it. The PoC-2 and PoC-4 reports claim bit-exact results only
-after this is done.
+40 series; an `sm_86` cubin runs only on compute capability 8.6 and later 8.x devices), and
+commit the outputs. Anyone with such a GPU can run it. Nothing depends on this task: PoC-2
+and PoC-4 use the doc 06 matching rule, and these outputs only tighten it.
 
 ### T-015 — Research: other Switch 2 projects
 Use the `research-note` skill. Focus: language, CPU backend, shader approach, cache design,
