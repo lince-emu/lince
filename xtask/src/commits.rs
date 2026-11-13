@@ -30,6 +30,8 @@ const TYPES: [&str; 10] = [
 /// Types whose scope may be omitted for repository-wide changes.
 const SCOPE_OPTIONAL: [&str; 3] = ["chore", "build", "revert"];
 const MAX_HEADER: usize = 72;
+/// GitHub appends ` (#NNNNN)` to the PR title in the squash commit; this leaves room for it.
+const MAX_PR_TITLE: usize = 66;
 /// Headers the hook lets through: GitHub merges and fixup commits on feature branches.
 const EXEMPT_PREFIXES: [&str; 4] = ["Merge ", "fixup! ", "squash! ", "amend! "];
 /// Description openings that are not in the imperative mood.
@@ -66,7 +68,7 @@ pub(crate) fn check(root: &Path, range: &Range) -> Result<(), XtaskError> {
         eprintln!("  skipped: {DEFAULT_BASE} does not exist in this clone");
     }
     if let Some(title) = &range.pr_title
-        && let Err(reason) = validate(title)
+        && let Err(reason) = validate_pr_title(title)
     {
         eprintln!("  pull-request title \"{title}\": {reason}");
         count += 1;
@@ -96,7 +98,20 @@ fn header(message: &str) -> &str {
         .unwrap_or("")
 }
 
-/// Validates one commit message (or a PR title, which is a header alone).
+/// Validates a pull-request title: a header of at most [`MAX_PR_TITLE`] characters, so the
+/// squash commit stays within [`MAX_HEADER`] once GitHub appends the PR number.
+pub(crate) fn validate_pr_title(title: &str) -> Result<(), String> {
+    validate(title)?;
+    let length = title.chars().count();
+    if length > MAX_PR_TITLE {
+        return Err(format!(
+            "title is {length} characters; the limit is {MAX_PR_TITLE}, leaving room for \" (#NN)\""
+        ));
+    }
+    Ok(())
+}
+
+/// Validates one commit message (or a header alone).
 pub(crate) fn validate(message: &str) -> Result<(), String> {
     let header = header(message);
     if EXEMPT_PREFIXES.iter().any(|p| header.starts_with(p)) {
@@ -164,7 +179,7 @@ fn split_header(header: &str) -> Option<(&str, Option<&str>, bool, &str)> {
 mod tests {
     use std::path::Path;
 
-    use super::validate;
+    use super::{validate, validate_pr_title};
     use crate::process;
 
     /// Messages and whether `.githooks/commit-msg` accepts them (docs/conventions/commits.md).
@@ -205,9 +220,13 @@ mod tests {
     }
 
     #[test]
-    fn a_pull_request_title_is_checked_as_a_header() {
-        assert!(validate("feat(poc-6): checksum payloads with xxh3-64").is_ok());
-        assert!(validate("Update stuff").is_err());
+    fn a_pull_request_title_is_checked_as_a_header_of_at_most_66_characters() {
+        assert!(validate_pr_title("feat(poc-6): checksum payloads with xxh3-64").is_ok());
+        assert!(validate_pr_title("Update stuff").is_err());
+        let title_66 = format!("docs(backlog): {}", "a".repeat(51));
+        assert_eq!(title_66.chars().count(), 66);
+        assert!(validate_pr_title(&title_66).is_ok());
+        assert!(validate_pr_title(&format!("{title_66}b")).is_err());
     }
 
     /// The hook and this module must agree on every case, so CI and local commits never

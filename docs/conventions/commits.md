@@ -191,4 +191,5 @@ never reach `main`.
 
 The same rules run in two places: the `.githooks/commit-msg` hook on every local commit, and
 `cargo xtask ci`, which checks every commit from `--base` (default `origin/main`) to `HEAD`
-and, in CI, the pull-request title (`--pr-title`). A test keeps the two in agreement.
+and, in CI, the pull-request title (`--pr-title`), which may be at most 66 characters so the
+squash commit stays within 72 after GitHub appends ` (#NN)`. A test keeps the two in agreement.
