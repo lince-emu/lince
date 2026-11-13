@@ -38,7 +38,7 @@ documented result.
 | Kernel and SVCs | Threads, memory, synchronization | O: original HLE kernel (ADR-0024) | EMU |
 | System services (IPC) | Filesystem, HID, audio, graphics system, time, accounts, settings | O: original HLE services, declarative command tables (ADR-0024) | EMU |
 | Graphics system services (`gsv`, `vi2`, syncpoints, GPU memory) | Boot NVN2, present frames | O: original HLE (doc 08 §3) | EMU |
-| Shared system fonts (`pl:u` Switch 2 commands 2000/2010; Switch 1 commands pending D-006) | UI text rendering | S: BIZ UDPGothic and Noto Sans SC/TC/KR (SIL OFL-1.1), subset to fit the 0x1100000-byte shared memory; metric differences measured and documented. Licensing and the Switch 1 font container are maintainer decision [D-006](decisions/D-006-shared-font-substitutes.md) | DOC (note F5, F6) |
+| Shared system fonts (`pl:u` Switch 2 commands 2000/2010; Switch 1 commands pending D-009) | UI text rendering | S: BIZ UDPGothic and Noto Sans SC/TC/KR (SIL OFL-1.1), subset to fit the 0x1100000-byte shared memory; metric differences measured and documented. Licensing and the Switch 1 font container are maintainer decision [D-009](decisions/D-009-shared-font-substitutes.md) | DOC (note F5, F6) |
 | Button and icon glyphs (Nintendo Extended font) | Controller prompts in text | O: glyphs drawn by Lince. Glyphs that would depict Nintendo logos, marks or hardware trade dress are neutral generic shapes or blank (LEGAL-40). The codepoint list needs a public source; until then **Unknown** (missing glyphs) | DOC (note F1, F6), Unknown |
 | Time-zone data (`time:*`) | Local time display, location names | S: compiled by Lince's own build step from IANA tzdata (public domain) | DOC (note F1), SRC (F7) |
 | System version information (`set:sys`, SystemVersion archive) | Feature checks | O: a fixed, documented version profile per supported SDK range | DOC (note F1), SRC (F3) |
@@ -64,7 +64,7 @@ documented result.
 
 ## 5. Open work
 
-- Font substitutes: decision D-006, then a PoC that fits the fonts into the shared memory and
+- Font substitutes: decision D-009, then a PoC that fits the fonts into the shared memory and
   measures metric differences.
 - `assets/system/` layout with a license file next to each asset (LEGAL-34).
 - A tzdata build step and the open questions in `research/system-data-and-applets.md` §5
