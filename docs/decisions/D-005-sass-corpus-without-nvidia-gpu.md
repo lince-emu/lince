@@ -20,12 +20,23 @@ kernels to record reference outputs needs one.
 
 ## Recommendation
 Option A. The SASS is all that the T-018 decoder needs, and the kernels are written by the
-team, so their expected results can be computed on the CPU. Only the final bit-exact check of
-PoC-2 and PoC-4 needs real hardware. That check runs once, from a script anyone can execute.
+team, so their expected results can be computed on the CPU. Only approximate operations
+(MUFU, texture filtering) and edge cases need real hardware to be exact.
+
+## Follow-up (2026-11-13)
+The maintainer develops on an AMD GPU only, so no PoC may depend on NVIDIA hardware.
+Doc 06 now defines a matching rule for SASS corpora:
+- bit-exact where IEEE 754 or the instruction defines the result exactly;
+- within NVIDIA's published error bounds for approximate operations;
+- behavior that no public source defines is marked `// UNKNOWN:` and listed in doc 08.
+
+Hardware reference outputs (T-023) are optional and tighten the rule when they exist.
+Accepted risk: a small error in an approximate operation can go unnoticed until it shows up
+in a title.
 
 ## Consequences
 T-014 becomes an agent task that compiles the corpus. The maintainer installs the CUDA
-toolkit, without the driver. The new task T-023 records the reference outputs on an
-NVIDIA GPU of compute capability 8.6 to 8.9 (GeForce RTX 30 or 40 series). An `sm_86` cubin
-runs only on devices with compute capability 8.x where x ≥ 6. T-017 and T-018 depend on
-T-014 only. The PoC-2 and PoC-4 reports cannot claim bit-exact results until T-023 is done.
+toolkit, without the driver. T-017 and T-018 depend on T-014 only. The optional task T-023
+records reference outputs on an NVIDIA GPU of compute capability 8.6 to 8.9 (GeForce RTX 30
+or 40 series). An `sm_86` cubin runs only on devices with compute capability 8.x where x ≥ 6.
+PoC-2 and PoC-4 succeed under the doc 06 matching rule without T-023.
