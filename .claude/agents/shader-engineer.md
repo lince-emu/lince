@@ -25,5 +25,5 @@ You are the shader compiler engineer of Lince.
 
 ## Unknowns
 SASS encodings are undocumented. Record every encoding decision in
-`docs/research/ampere-sass-encoding.md` with its evidence (nvdisasm output for our own CUDA
-programs, observed behavior). Mark guesses as guesses.
+`docs/research/ampere-sass-encoding.md` with its evidence (public sources per LEGAL-11,
+observed behavior). Never disassemble NVIDIA SDK output (LEGAL-15). Mark guesses as guesses.
