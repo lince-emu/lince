@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Lince-NX contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Lince-NX pre-commit hook — keeps keys, firmware and game content out of the repository
+# (ADR-0029, docs/conventions/legal-rules.md LEGAL-01, LEGAL-05).
+# Activate once per clone:  git config core.hooksPath .githooks
+
+fail=0
+report() { echo "pre-commit: $1" >&2; fail=1; }
+
+# 1. Forbidden file types: keys, console content containers, firmware packages.
+while IFS= read -r -d '' path; do
+  lower="$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    *.keys|*keys.txt|*.nca|*.ncz|*.nsp|*.nsz|*.xci|*.xcz|*.pfs0|*.tik|*.cert|*boot0*|*boot1*|*prodinfo*|*package1*|*package2*)
+      report "'$path' looks like key, firmware or game content. These never enter the repository (ADR-0029)." ;;
+  esac
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+
+# 2. Key or firmware handling in added lines of source code.
+pattern='prod\.keys|title\.keys|dev\.keys|header_key|key_area_key|titlekek|master_key_[0-9a-f]{2}|package2_key|firmware[_ ]?(install|import|dump)|install[_ ]?firmware|import[_ ]?keys|load[_ ]?keys'
+while IFS= read -r -d '' path; do
+  case "$path" in
+    docs/*|*.md|.githooks/*|.claude/*) continue ;;   # policy text may name what it forbids
+  esac
+  if git diff --cached -U0 -- "$path" | grep -E '^\+' | grep -Eiq "$pattern"; then
+    report "'$path' adds code that refers to keys or firmware handling. Lince-NX never uses keys or firmware (ADR-0029, LEGAL-05)."
+  fi
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+
+if [ "$fail" -ne 0 ]; then
+  echo "pre-commit: commit blocked. See docs/adr/0029-no-keys-no-firmware.md." >&2
+  exit 1
+fi
+exit 0

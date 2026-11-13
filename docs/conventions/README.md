@@ -35,8 +35,13 @@ only through an ADR; the others through a PR to this folder approved by the main
 git config core.hooksPath .githooks
 ```
 
-This activates the repository's `commit-msg` hook, which rejects messages that do not follow
-[commits.md](commits.md). On Windows the hook runs in the Git Bash shipped with Git for Windows.
+This activates the repository's git hooks (on Windows they run in the Git Bash shipped with
+Git for Windows):
+
+| Hook | Blocks |
+|------|--------|
+| `pre-commit` | Key, firmware and game-content files, and code that refers to key or firmware handling (ADR-0029) |
+| `commit-msg` | Messages that do not follow [commits.md](commits.md) |
 
 ## Language
 
