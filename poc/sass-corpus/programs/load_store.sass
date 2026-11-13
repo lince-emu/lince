@@ -1,0 +1,16 @@
+# Global loads with positive and negative offsets from a 64-bit address pair, then stores.
+# Loads set write scoreboard 0; their consumers wait on it (wait=0x1).
+.word 0x600 0x3fc00000 0x40000000 7     # 1.5f, 2.0f, 7
+MOV R2, 0x608
+MOV R3, 0
+MOV R4, 0x610
+MOV R5, 0
+LDG.E.32 R6, [R2-8] ; wr=0
+LDG.E.32 R7, [R2-4] ; wr=0
+LDG.E.32 R8, [R2] ; wr=0
+FMUL R9, R6, R7 ; wait=0x1     # 3.0
+IADD3 R10, R8, R8, R8           # 21
+STG.E.32 [R4], R9
+STG.E.32 [R4+4], R10
+STG.E.32 [R4-16], R10           # overwrites the 1.5f input at 0x600
+EXIT
