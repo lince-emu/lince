@@ -169,8 +169,8 @@ path for arbitrary unseen shader *code*. That gap is the reason Lince exists.
 
 ## 8. Not yet inspected (next pass)
 
-Eden (upstream), Orchid, oboromi, Pound, Hokkaido, Anka. Priority: anything written in Rust
-(oboromi is believed to be Rust — [RECALL], verify) for crate choices and A64 decoding coverage.
+Done in T-015: Eden (upstream), Orchid, oboromi, Pound, Hokkaido and Anka are covered in
+`docs/research/switch2-emulator-projects.md` (oboromi is confirmed Rust there).
 
 ## 9. Sources
 
