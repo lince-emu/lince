@@ -22,7 +22,8 @@ created per draw; driver binaries reusable lazily.
 ## Decision
 Capability-driven combination:
 - **V3 hosts:** shader objects *or* GPL, chosen per driver by PoC-5 data; LTO pipelines for
-  Tier 2; `VK_KHR_pipeline_binary` for L6 persistence.
+  Tier 2; `VK_KHR_pipeline_binary` for L6 persistence when the host has that flag, sharded
+  `VkPipelineCache` otherwise (ADR-0007, D-008).
 - **V2:** GPL stage libraries + fast link (Tier 1), LTO (Tier 2), sharded `VkPipelineCache`.
 - **V1:** monolithic pipelines on workers; Tier 0 covers the gap.
 - One global bindless pipeline layout family; created at device init.

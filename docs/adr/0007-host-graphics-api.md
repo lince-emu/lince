@@ -24,11 +24,12 @@ Vulkan 1.3 baseline with **capability tiers** detected at startup:
 
 | Tier | Requirements (beyond 1.3 core) | Pipeline model |
 |------|-------------------------------|----------------|
-| V3 | shader objects or GPL with fast link; EDS1/2/3 broad; descriptor indexing/buffer; BDA; subgroup size control; fragment barycentric; pipeline binary | Fewest pipelines; full Tier 0 |
+| V3 | shader objects or GPL with fast link; EDS1/2/3 broad; descriptor indexing/buffer; BDA; subgroup size control; fragment barycentric | Fewest pipelines; full Tier 0 |
 | V2 | GPL; EDS1/2; descriptor indexing; BDA | Stage libraries; Tier 0 variants for missing barycentrics |
 | V1 | 1.3 core + descriptor indexing + BDA | Monolithic pipelines, `FAIL_ON_PIPELINE_COMPILE_REQUIRED` probing; Tier 0 reduced |
 
-Mesh shaders and cooperative matrix are separate feature flags. Below V1: unsupported.
+Mesh shaders, cooperative matrix and pipeline binary (`VK_KHR_pipeline_binary`, used for L6
+persistence) are separate feature flags (D-008). Below V1: unsupported.
 
 ## Technical justification
 Vulkan is the only cross-platform API exposing the compilation controls the charter needs.
