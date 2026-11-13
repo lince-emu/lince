@@ -14,7 +14,7 @@ an unmeasured factor in the PoC-6 resolve latency.
 | Option | Trade-offs | Effort | Reversible? |
 |--------|-----------|--------|-------------|
 | A (recommended) `xxhash-rust` with the `xxh3` feature | Pure Rust. Provides both XXH3-64 and XXH3-128. Licence BSL-1.0, already on the `deny.toml` allow-list | Small | Yes |
-| B `twox-hash` 2.x | Pure Rust, MIT. Provides XXH3-64 and XXH3-128 (2.1 and later) | Small | Yes |
+| B `twox-hash` 2.x | Pure Rust, MIT. Provides XXH3-64 and XXH3-128 (XXH3-128 since 2.1.0, per its changelog) | Small | Yes |
 | C Keep CRC-32C | No dependency. Diverges from doc 02, and CRC-32C cannot provide the 128-bit keys | None | Yes |
 
 ## Recommendation
