@@ -31,6 +31,11 @@ and a frame sequence number:
 `CacheFsync`, `Alloc{size}`, `Upload{bytes}`, `Evict`, `FenceWait`, `QueueSubmit`,
 `MacroBurst`, `HleCall{service}`, `GovernorThrottle{level}`, `ThreadPreempted` (sampled).
 
+Events for blocking work — `PipelineWait`, `FenceWait`, `CacheResolve`, `CacheWrite`,
+`CacheFsync` and `CompileEnd` — carry their duration in nanoseconds as the argument, and their
+timestamp is the end of the interval (decision D-003). `CompileStart` stays a separate event so
+compiles in progress are visible in a dump.
+
 `lince-frame-analyzer` turns a ledger dump into the report below.
 
 ## 4. Spike classification (charter §13.2)
