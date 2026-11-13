@@ -109,7 +109,8 @@ decisions with the largest blast radius are:
   be read as original yuzu behavior without a note.
 - NVN2 graphics semantics are known only through reverse engineering in emulator notes; no
   primary documentation is available.
-- Oboromi, Pound, Hokkaido, Anka, Orchid were not inspected in this pass (scheduled in doc 01 §8).
+- Oboromi, Pound, Eglantine, Lichii, Hokkaido, Anka, Orchid and Eden were inspected later in
+  T-015; see `docs/research/switch2-emulator-projects.md`.
 
 ## 8. Subsystem review summary
 

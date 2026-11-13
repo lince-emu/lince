@@ -15,7 +15,7 @@ Rules:
 |----|-------|------|--------|------------|------|
 | T-001 | Choose the project license | Maintainer | Done | — | 0000 |
 | T-002 | Review ADRs ready for acceptance (0001 details, 0002, 0014) | Maintainer | Done | — | 0001, 0002, 0014 |
-| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | Ready | T-001, T-002 | 0001, 0002 |
+| T-003 | Bootstrap Cargo workspace, xtask and CI skeleton | Impl | In review | T-001, T-002 | 0001, 0002 |
 | T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Blocked | T-003 | 0002 |
 | T-005 | Reference crate: `lince-common` written to every convention | Impl | Blocked | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
@@ -24,15 +24,16 @@ Rules:
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
 | T-014 | Ampere SASS test corpus: compile team-written CUDA kernels (no NVIDIA GPU needed) | PoC | Ready | — | 0009, 0028 |
-| T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Ready | — | — |
+| T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | In review | — | 0007 |
-| T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | Ready | — | 0024, 0029 |
+| T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | In review | — | 0024, 0029 |
 | T-017 | PoC-2 step 1: compute-only GPU interpreter harness | PoC | Blocked | T-013, T-014 | 0010 |
 | T-018 | PoC-4 step 1: Ampere SASS decoder skeleton + encoding notes | PoC | Blocked | T-014 | 0009 |
 | T-020 | PoC-6: XXH3 payload checksum and CRC-32C vs XXH3 timing | PoC | Ready | T-010 | 0015 |
 | T-021 | PoC-7: loom model of the ledger ring and ARM test run | PoC | Ready | T-011 | 0027 |
 | T-022 | PoC-5: measure `VK_KHR_pipeline_binary` once `ash` supports it | PoC | Blocked | T-012 | 0013 |
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
+| T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Ready | T-010 | 0015 |
 
 ## Details
 
@@ -54,6 +55,7 @@ Maintainer reviews ADR-0001 (details), ADR-0002 and ADR-0014 and changes their s
   `clippy.toml` and `deny.toml` already exist; `xtask ci` runs `cargo deny check` and verifies
   SPDX headers (LEGAL-30) and `license` fields (LEGAL-31).
 - **Acceptance:** clean checkout builds and `cargo xtask ci` passes on both OSes.
+- **PR:** https://github.com/lince-emu/lince/pull/11
 
 ### T-005 — Reference crate `lince-common`
 Write `lince-common` (newtypes such as `GuestVa`/`GpuVa`/`Nanos`, a small error enum, one
@@ -92,8 +94,9 @@ PR: https://github.com/lince-emu/lince/pull/3
 
 ### T-012 — PoC-5 Vulkan pipeline mechanisms
 Standalone `ash` harness that creates pipelines from generated SPIR-V of several sizes using:
-monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, pipeline binary load, sharded
-`VkPipelineCache`, `DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths.
+monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, sharded `VkPipelineCache`,
+`DISABLE_OPTIMIZATION`. Detects support at runtime and skips unsupported paths. Pipeline
+binary load is deferred to T-022, because `ash` 0.38 has no `VK_KHR_pipeline_binary` bindings.
 - **Acceptance:** runs on any Vulkan 1.3 device, writes per-mechanism latency CSV; report skeleton.
 
 ### T-013 — Tier-0 micro-op format specification
@@ -133,9 +136,11 @@ other projects (never from firmware files or leaked material), list the system d
 and applets Switch 2 titles use, and for each propose an original implementation, a freely
 licensed substitute, or a documented "unavailable" behavior. Extend
 `docs/10-firmware-independence.md` §3.
+- **In review:** [lince-emu/lince#9](https://github.com/lince-emu/lince/pull/9); open decision [D-006](decisions/D-006-shared-font-substitutes.md).
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
+T-018: decision [D-006](decisions/D-006-oboromi-sass-tables-off-limits.md) must be answered first.
 
 ### T-020 — PoC-6 XXH3 checksum
 Decision [D-001](decisions/D-001-cache-hash-xxh3.md). Add `xxhash-rust` (`xxh3` feature) to
@@ -147,10 +152,29 @@ CRC-32C vs XXH3-64 on 1 KiB–2 MiB payloads in the harness.
 ### T-021 — PoC-7 memory-model checks
 Decision [D-004](decisions/D-004-ledger-memory-model-checks.md). Add `loom` as a
 dev-dependency of `poc/frame-ledger` and model one producer and one concurrent snapshot;
-run the test suite on an ARM host (e.g. an ARM CI runner).
-- **Acceptance:** loom test passes and fails when a fence in `ring.rs` is removed (shown in
-  the PR); ARM run result recorded in the PoC-7 report.
+run the test suite on an ARM host. Until an ARM CI runner exists (T-003 sets up x64 runners
+only), use any ARM host available to the maintainer or a contributor.
+- **Acceptance:** the loom test passes, and it fails when either of these fences in
+  `poc/frame-ledger/src/ring.rs` is removed (shown in the PR): the release fence in
+  `Ring::push` and the acquire fence in `Ring::snapshot`. If loom cannot detect the removal
+  of one of them, the PR and the PoC-7 report document that loom limitation instead. The ARM
+  run result, with the host it ran on, is recorded in the PoC-7 report.
 
 ### T-022 — PoC-5 pipeline binaries
 Blocked until an `ash` release includes `VK_KHR_pipeline_binary` (0.38 predates it). Then add
-the mechanism to `poc/vk-pipelines` and the report.
+pipeline binary load to the PoC-5 harness and the report. Rationale: ADR-0013 relies on
+pipeline binaries for L6 persistence, and PoC-5's hypothesis that their loads are
+sub-millisecond is untested until they are measured.
+- **Acceptance:** the PoC-5 harness times pipeline binary load next to the other mechanisms,
+  skips it where the extension is unsupported, and the PoC-5 report records the results.
+
+### T-024 — PoC-6 second-process readers
+Decision [D-002](decisions/D-002-cache-engine-second-process.md). Let
+`harness resolve --writer on` run the reader in a separate process while the writer appends,
+for every engine: the custom store, `redb` opened with `ConcurrencyMode::SingleWriter`
+(writer and reader in that mode) and SQLite in WAL mode. Record whether each engine serves
+that reader, which ADR-0015's "Conditions for revisiting" requires, so the "within 20%"
+comparison uses the same reader setup for all engines.
+- **Acceptance:** `harness resolve --writer on` times a reader in another process for each
+  engine; the PoC-6 report states, per result row, the reader setup and the `redb` mode, and
+  whether each engine served the second-process reader.
