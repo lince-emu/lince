@@ -125,6 +125,7 @@ any Rust crates worth evaluating. Pin commits.
 ### T-016 — Research: Vulkan feature coverage survey
 Use public sources (gpuinfo database, Mesa release notes, vendor driver notes). Output a table
 per vendor/driver for the features in ADR-0007's tiers; mark data dates.
+PR: https://github.com/lince-emu/lince/pull/10
 
 ### T-019 — Research: firmware-free system data and applets
 Use the `research-note` skill. From public documentation and the service calls observed by
