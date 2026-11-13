@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Lince-NX commit-msg hook — validates Conventional Commits (docs/conventions/commits.md).
+# Activate once per clone:  git config core.hooksPath .githooks
+# Also used by .claude/hooks/guard-bash.sh to check messages passed with `git commit -m`.
+
+msg_file="${1:?usage: commit-msg <message-file>}"
+header="$(grep -v '^#' "$msg_file" | sed -n '/[^[:space:]]/{p;q}' | tr -d '\r')"
+
+fail() {
+  {
+    echo "Commit message rejected: $1"
+    echo "  header: ${header}"
+    echo "  format: <type>(<scope>): <description>   e.g. feat(cache): add mmap index"
+    echo "  see docs/conventions/commits.md"
+  } >&2
+  exit 1
+}
+
+# Allowed exceptions: merges from GitHub, fixup/squash commits on feature branches.
+case "$header" in
+  "Merge "*|"fixup! "*|"squash! "*|"amend! "*) exit 0 ;;
+esac
+
+types='feat|fix|perf|refactor|test|docs|build|ci|chore|revert'
+re="^(${types})(\(([a-z0-9][a-z0-9-]*)\))?(!)?: (.+)$"
+
+[[ "$header" =~ $re ]] || fail "header does not match <type>(<scope>): <description>."
+type="${BASH_REMATCH[1]}"; scope="${BASH_REMATCH[3]}"; bang="${BASH_REMATCH[4]}"; desc="${BASH_REMATCH[5]}"
+
+[ "${#header}" -le 72 ] || fail "header is ${#header} characters; the limit is 72."
+case "$type" in chore|build|revert) ;; *) [ -n "$scope" ] || fail "scope is required for '$type'." ;; esac
+[[ "$desc" =~ ^[a-z0-9] ]] || fail "description must start with a lowercase letter or digit."
+[[ "$desc" != *. ]] || fail "description must not end with a period."
+case "$desc" in
+  added*|adds*|fixed*|fixes*|updated*|updates*|removed*|removes*|changed*|changes*)
+    fail "use the imperative mood (\"add\", not \"added\"/\"adds\")." ;;
+esac
+
+if [ -n "$bang" ] && ! grep -q '^BREAKING CHANGE: ' "$msg_file"; then
+  fail "'!' requires a 'BREAKING CHANGE: <impact and migration>' footer."
+fi
+
+# The second line, when present, must be blank.
+second="$(grep -v '^#' "$msg_file" | sed -n '2p' | tr -d '\r')"
+[ -z "$second" ] || fail "leave a blank line between the header and the body."
+
+exit 0
