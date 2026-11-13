@@ -75,6 +75,7 @@ Follow `docs/06-poc-roadmap.md` PoC-6 and `docs/02-cache-architecture.md` §4–
 - **Acceptance:** harness produces open-time vs. size and resolve-latency CSVs; report skeleton
   in `docs/poc-reports/poc-6-cache-store.md`; correctness tests pass. Measurements on the
   maintainer's hardware are a follow-up.
+PR: https://github.com/lince-emu/lince/pull/2
 
 ### T-011 — PoC-7 frame ledger
 Per-thread lock-free ring of fixed-size events, dump format, minimal analyzer computing
