@@ -50,6 +50,8 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
   presentation.
 - Video decoder interfaces beyond what is needed for VP9/H.264 movies.
 - Timing behavior relied on by games (CPU/GPU relative speed, vsync behavior).
+- Result of uniform-datapath instructions (for example `R2UR`) when the input varies across lanes
+  (`docs/research/switch2-emulator-projects.md` P2, Q7).
 
 ## 5. Implications for Lince
 
