@@ -47,8 +47,8 @@ A vendor's GPL/shader-object implementation is slow or buggy. Mitigation: per-dr
 override table populated by PoC-5 measurements, never by folklore.
 
 ## Validation plan
-PoC-5: per vendor (NVIDIA, AMD proprietary, RADV, Intel/ANV, NVK), measure stage-library
-compile, fast link, LTO link, shader-object creation, pipeline-binary load latency.
+PoC-5: per vendor (NVIDIA, AMD proprietary, RADV, Intel/ANV, Intel Windows, NVK), measure
+stage-library compile, fast link, LTO link, shader-object creation, pipeline-binary load latency.
 
 ## Conditions for revisiting
 A tier-V1 majority among users, or a new API capability that removes pipeline creation entirely.
