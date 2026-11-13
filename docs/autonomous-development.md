@@ -19,8 +19,11 @@ docs/backlog.md ──▶ /next-task ──▶ branch lince/T-xxx ──▶ impl
 - Agents **never** merge, push to `main`, force-push, change licenses, accept ADRs, or edit
   the rule files (`AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/`) without
   approval.
-- Every change arrives as a pull request with tests, an invariant-check result and an
-  independent review verdict.
+- Every change arrives as a pull request with tests and an invariant-check result. Code that
+  touches render-critical paths, `unsafe`, FFI or cache formats also gets an
+  `invariant-reviewer` verdict.
+- Token budget: agents read only the task, its ADR decisions and the rule they need; work is
+  done in the main session; subagents run on `sonnet` except `architect` and `shader-engineer`.
 
 ## 2. What is in `.claude/`
 
@@ -33,8 +36,8 @@ docs/backlog.md ──▶ /next-task ──▶ branch lince/T-xxx ──▶ impl
 | `hooks/post-edit-rust.sh` | Formats edited `.rs` files and runs the single-file invariant check. |
 | `hooks/check-invariants.sh` | Text-level checks for AGENTS.md invariants; runs as the Stop hook. |
 | `agents/architect.md` | Plan and ADR review; read-only on code. |
-| `agents/implementer.md` | One task in an isolated git worktree. |
-| `agents/invariant-reviewer.md` | Independent diff review before every PR. |
+| `agents/implementer.md` | One task in an isolated git worktree (parallel runs only). |
+| `agents/invariant-reviewer.md` | Diff review for critical-path, `unsafe`, FFI and cache-format code. |
 | `agents/test-engineer.md` | Differential, property, fuzz, fault-injection and loom tests. |
 | `agents/perf-analyst.md` | Frame-time and benchmark analysis. |
 | `agents/researcher.md` | Clean-room research notes with citations. |

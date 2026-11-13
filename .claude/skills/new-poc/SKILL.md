@@ -20,4 +20,5 @@ Input: `$ARGUMENTS` (e.g. `PoC-6 cache-store`).
 6. Create `docs/poc-reports/poc-<n>-<slug>.md` with sections: hardware & drivers, method,
    results, comparison with hypothesis, verdict (success/failure per the roadmap criteria),
    ADR changes proposed. Leave results empty until measured; never fill in expected numbers.
+   Keep the report to about one page: a results table and a verdict, not an essay.
 7. PoC code may be throwaway quality, but the invariants that the PoC is testing must hold.
