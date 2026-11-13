@@ -35,7 +35,7 @@ Rules:
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Done | T-010 | 0015 |
 | T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | Done | — | 0006, 0007, 0009, 0030 |
-| T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | In review | T-025 | 0030 |
+| T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Done | T-025 | 0030 |
 
 ## Details
 
@@ -223,3 +223,4 @@ Follow `docs/06-poc-roadmap.md` PoC-11 and ADR-0030. Standalone crate in `poc/cp
 - **Acceptance:** `cargo xtask ci` passes from a clean checkout on Windows x64 and Linux x64;
   report in `docs/poc-reports/poc-11-cpp-boundary.md` with the measured call costs, build
   times, chosen binding generator and minimum clang version.
+- **PR:** https://github.com/lince-emu/lince/pull/27
