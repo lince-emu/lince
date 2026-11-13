@@ -42,4 +42,5 @@ PoC-6: open time vs. size (1 MiB → 4 GiB), lookup P99.9 under concurrent appen
 time after kill -9 at random points, space amplification after churn.
 
 ## Conditions for revisiting
-`redb` or SQLite within 20% on every PoC-6 metric → adopt it and delete custom code.
+`redb` or SQLite within 20% on every PoC-6 metric **and** able to serve a read-only second
+process (doc 02 §5) → adopt it and delete custom code (decision D-002).
