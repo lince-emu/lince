@@ -29,6 +29,7 @@ maintainer — do not decide alone.
 | LEGAL-12 | Names of services, commands and structures come from public documentation when one exists; otherwise the project chooses descriptive names. Never names copied from leaked SDK material. |
 | LEGAL-13 | Reverse-engineering notes describe behavior (formats, protocols, semantics); they never reproduce disassembly listings or substantial portions of proprietary code. |
 | LEGAL-14 | Vendor tools (e.g. the NVIDIA CUDA toolkit, `nvdisasm`) are used only as their licenses permit, and only on programs the team wrote and compiled itself. |
+| LEGAL-15 | Output of NVIDIA's SDK (`nvcc`, `ptxas` and the code they generate) is never disassembled or reverse-engineered for Lince work: the CUDA EULA forbids doing so to translate it to a non-NVIDIA platform. SASS used in tests is written with the team's own assembler, from encodings in public sources (LEGAL-11). See [D-010](../decisions/D-010-cuda-eula-sass-corpus.md). |
 
 ## C. Code from other projects
 
