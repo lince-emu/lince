@@ -36,7 +36,13 @@ Repeat with `--engine redb` and `--engine sqlite`. The first run for a size popu
 Output:
 
 - `results/open_time.csv`: `engine,target_bytes,stored_bytes,items,run,open_ns`
-- `results/resolve.csv`: `engine,target_bytes,items_on_disk,writer,background_puts,lookups,p50_ns,p99_ns,p999_ns,max_ns,misses`
+- `results/resolve.csv`: `engine,target_bytes,items_on_disk,writer,reader,sharing,served,background_puts,lookups,p50_ns,p99_ns,p999_ns,max_ns,misses`.
+  The timed reader runs in a child process by default (`--reader process`; `--reader thread`
+  keeps it in the harness process). An engine that cannot open the store from a second
+  process gets `served=no` and empty latencies. `results/resolve.csv` files written before
+  these columns existed must be moved away first.
+- redb runs in `SingleWriter` mode, which refuses non-durable commits: its writer buffers
+  `put`s and commits each batch durably on `flush`.
 - `results/checksum_cost.csv`: `algorithm,bytes,reps,sample,ns`. CRC-32C and XXH3-64 on
   payloads of 1 KiB to 2 MiB held in CPU cache; `ns` is the mean of `reps` back-to-back checksums.
 

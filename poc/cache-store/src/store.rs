@@ -46,6 +46,15 @@ impl Engine {
         }
     }
 
+    /// How a reader in another process shares the store with the writer (CSV `sharing`).
+    pub fn sharing(self) -> &'static str {
+        match self {
+            Self::Custom => "mapped_read_only",
+            Self::Redb => "redb_single_writer",
+            Self::Sqlite => "wal_query_only",
+        }
+    }
+
     /// The command-line name of the engine.
     pub fn name(self) -> &'static str {
         match self {
@@ -63,6 +72,27 @@ pub fn open_store(engine: Engine, dir: &Path) -> Result<Box<dyn BlobStore>, Stor
         Engine::Redb => Ok(Box::new(redb_store::RedbStore::open(dir)?)),
         Engine::Sqlite => open_sqlite(dir),
     }
+}
+
+/// Opens a read-only handle on an existing store in `dir`, for a reader in another process.
+pub fn open_reader(engine: Engine, dir: &Path) -> Result<Box<dyn BlobStore>, StoreError> {
+    match engine {
+        Engine::Custom => Ok(Box::new(custom::CustomStore::open_read_only(dir)?)),
+        Engine::Redb => Ok(Box::new(redb_store::RedbStore::open_read_only(dir)?)),
+        Engine::Sqlite => open_sqlite_reader(dir),
+    }
+}
+
+#[cfg(feature = "sqlite")]
+fn open_sqlite_reader(dir: &Path) -> Result<Box<dyn BlobStore>, StoreError> {
+    Ok(Box::new(crate::sqlite_store::SqliteStore::open_read_only(
+        dir,
+    )?))
+}
+
+#[cfg(not(feature = "sqlite"))]
+fn open_sqlite_reader(dir: &Path) -> Result<Box<dyn BlobStore>, StoreError> {
+    open_sqlite(dir)
 }
 
 #[cfg(feature = "sqlite")]
