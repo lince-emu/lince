@@ -2,7 +2,7 @@
 
 - **Raised by:** Claude Code (`/next-task`, T-014) · **Date:** 2026-11-13
 - **Blocks:** T-014; through it T-017, T-018 and T-023
-- **Status:** Open
+- **Status:** Answered (option A, 2026-11-13)
 
 ## Question
 T-014 compiles team-written CUDA kernels with `nvcc` for `sm_86` and stores their SASS from

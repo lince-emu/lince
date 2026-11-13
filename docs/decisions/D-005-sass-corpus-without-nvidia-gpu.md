@@ -40,3 +40,10 @@ toolkit, without the driver. T-017 and T-018 depend on T-014 only. The optional 
 records reference outputs on an NVIDIA GPU of compute capability 8.6 to 8.9 (GeForce RTX 30
 or 40 series). An `sm_86` cubin runs only on devices with compute capability 8.x where x ≥ 6.
 PoC-2 and PoC-4 succeed under the doc 06 matching rule without T-023.
+
+## Superseded in part by D-010 (2026-11-13)
+The CUDA toolkit EULA forbids disassembling SDK output to translate it to a non-NVIDIA
+platform ([D-010](D-010-cuda-eula-sass-corpus.md)). The corpus is therefore no longer
+compiled with `nvcc`: the team assembles SASS programs with its own assembler from public
+encoding sources (LEGAL-15), and the CUDA toolkit is not needed. The split between T-014 and
+T-023 and the doc 06 matching rule stand.
