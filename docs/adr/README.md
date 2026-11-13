@@ -12,9 +12,9 @@ prototype reports.
 
 | ID | Title | Status |
 |----|-------|--------|
-| [0000](0000-project-license.md) | Project license | Proposed — owner decision |
-| [0001](0001-rust-toolchain-and-structure.md) | Rust toolchain and project structure | Accepted (Rust) / Proposed (details) |
-| [0002](0002-build-system.md) | Build system: Cargo workspace + xtask | Proposed |
+| [0000](0000-project-license.md) | Project license | **Accepted** |
+| [0001](0001-rust-toolchain-and-structure.md) | Rust toolchain and project structure | **Accepted** |
+| [0002](0002-build-system.md) | Build system: Cargo workspace + xtask | **Accepted** |
 | [0003](0003-host-platform-support.md) | Host platform support | Proposed |
 | [0004](0004-guest-cpu-model.md) | Guest CPU architecture model | Proposed |
 | [0005](0005-interpreter-and-jit.md) | Interpreter and JIT strategy | Proposed |
@@ -26,7 +26,7 @@ prototype reports.
 | [0011](0011-ubershader-strategy.md) | Ubershader strategy: program-generic shaders | Proposed (needs PoC-3) |
 | [0012](0012-specialized-shader-compilation.md) | Specialized shader compilation tiers | Proposed |
 | [0013](0013-pipeline-creation.md) | Non-blocking pipeline creation | Proposed (needs PoC-5) |
-| [0014](0014-cache-architecture.md) | Layered content-addressed cache | Accepted (principles) |
+| [0014](0014-cache-architecture.md) | Layered content-addressed cache | **Accepted** (engine in ADR-0015) |
 | [0015](0015-cache-persistence-format.md) | Cache persistence format | Proposed (needs PoC-6) |
 | [0016](0016-cache-indexing-and-lazy-loading.md) | Cache indexing and lazy loading | Proposed (needs PoC-6) |
 | [0017](0017-threading-and-scheduling.md) | Threading and scheduling model | Proposed |

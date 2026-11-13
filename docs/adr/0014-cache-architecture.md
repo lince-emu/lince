@@ -1,6 +1,6 @@
 # ADR-0014: Layered content-addressed cache
 
-- **Status:** Accepted (principles) — storage engine decided separately in ADR-0015
+- **Status:** Accepted (principles and layers, maintainer, 2026-11-13) — storage engine decided separately in ADR-0015
 - **Date:** 2026-11-13
 - **Related:** doc 02; doc 01 E17–E19; ADR-0015, ADR-0016
 
