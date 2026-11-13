@@ -1,10 +1,13 @@
-# Survey of other Switch 2 projects: oboromi, Pound, Hokkaido, Anka, Orchid, Eden
+# Survey of other Switch 2 projects: oboromi, Pound, Eglantine, Lichii, Hokkaido, Anka, Orchid, Eden
 
-- **Task:** T-015 (follows doc 01 §8 "Not yet inspected").
+- **Task:** T-015 (follows doc 01 §8 "Not yet inspected"). Eglantine and Lichii, which the
+  maintainer names as the main Switch 2 emulators, were added on 2026-11-13: Eglantine at the
+  same commit as doc 01, Lichii re-pinned from `0da698b` to `87d84d5`.
 - **Research date:** 2026-11-13.
 - **Method:** shallow, sparse clones in a scratch directory outside the Lince tree, plus the
-  GitHub and Forgejo APIs for metadata. For the four large C++ forks only top-level Markdown,
-  `docs/`, file listings and the header comments of a few cache files were read. No code was
+  GitHub and Forgejo APIs for metadata. For the six large C++ projects only top-level Markdown,
+  `docs/`, file listings, the header comments of a few cache files and the specific source
+  lines cited at level SRC were read. No code was
   copied. Nothing in this note is transcribed from source; it describes behavior and design.
 - **Evidence levels:** as in doc 01 §0 — SRC, DOC, DOC-MEASURED, MIRROR, RECALL, VERIFIED.
   "SRC (listing)" means the claim rests only on the presence or absence of file paths at the
@@ -20,12 +23,12 @@ ADRs or PoCs, and which sources must Lince avoid?
 
 ## 2. Short answer
 
-Only **oboromi** (Rust; Unicorn CPU; direct SASS→SPIR-V; no cache) and **Pound** (C; waiting on
-its own Ballistic JIT) are independent, and neither runs commercial games. **Orchid, Anka and
-Hokkaido** are C++ forks of **Eden-NX2** (dynarmic/NCE, Ampere→Maxwell lowering); Eden `master`
-has no Switch 2 code. Useful lessons: a "light draw" fast path, cache records that store guest
-environments instead of SPIR-V, and gated tensor-core paths. The only Rust code worth studying
-is `rapid-arm-emu`. **Legal:** oboromi's SASS decoder tables are off-limits pending D-006 (§5).
+Only **oboromi** (Rust; Unicorn CPU; direct SASS→SPIR-V; no cache) and **Pound** (C; own JIT
+pending) are independent; neither runs commercial games. The main emulators **Eglantine** and
+**Lichii** and the forks **Orchid, Anka, Hokkaido** are one C++ family from Eden (dynarmic/NCE,
+Ampere→Maxwell lowering). Lessons: bounded boot builds, environment records instead of SPIR-V,
+light draws, gated tensor paths. Rust worth studying: `rapid-arm-emu`. **Legal:** oboromi's SASS
+tables are off-limits pending D-006 (§5).
 
 ## 3. Projects and lineage
 
@@ -36,17 +39,22 @@ is `rapid-arm-emu`. **Legal:** oboromi's SASS decoder tables are off-limits pend
 | Pound | github.com/pound-emu/pound · `main` · `0bbb58e85a32` (2026-11-12) | C / GPL-3.0 | Independent; README says parts reuse yuzu components | Development "fully shifted" to Ballistic |
 | Ballistic (Pound's CPU) | github.com/pound-emu/ballistic · `main` · `de07fcaa7708` (2026-10-27) | C / LICENSE file is GPL-2.0 text ("or later" not confirmed) | Described as a rewrite of dynarmic | Tier 1 x86-64 backend only |
 | Eden (upstream) | git.eden-emu.dev/eden-emu/eden · `master` · `63e957b1cad6` (2026-11-13) | C++ / GPL-3.0-or-later | yuzu → Sudachi → Eden | Switch 1 only |
-| Eden-NX2 | git.eden-emu.dev/Takoroka/eden-nx2 · `eden-nx2` · `50fa86bbbc40` (2026-10-29) | C++ / GPL-3.0-or-later | Forgejo fork of Eden | Origin of `NX2_NOTES.md` / `NX2_GPU_THREAD_SPLIT.md` |
+| Eden-NX2 | git.eden-emu.dev/Takoroka/eden-nx2 · `eden-nx2` · `50fa86bbbc40` (2026-10-29) | C++ / GPL-3.0-or-later | Forgejo fork of Eden | Shares the NX2 documents with Eglantine (smaller `NX2_NOTES.md`) |
+| Eglantine | github.com/Eglantine-Community/Eglantine · `nx2` · `66ce46feb67a` (2026-11-12); latest release `daily-20261112` | C++ / GPL-3.0 | README: "derived from Eden, Yuzu and Sudachi" | Main Switch 2 emulator; parent of Orchid, Anka and Lichii |
+| Lichii | github.com/zortos293/Lichii · `nx2` · `87d84d513c67` (2026-11-13); latest release `build-160` | C++ / GPL-3.0 | README: "builds on Eglantine, Eden, yuzu and Sudachi" | Main Switch 2 emulator; parent of Hokkaido |
 | Orchid | github.com/MythosOfs/Orchid · `main` · `e9d4b5b795e5` (2026-11-12) | C++ / GPL-3.0 | README: "started from Eglantine" | Per-title fixes for a list of target games |
 | Anka | github.com/EddizEge/Anka · `anka` · `140d784a7e4d` (2026-11-11) | C++ / GPL-3.0 | From "PokeDinner-Eglantine 2.0.0"; ships Lichii as a second core for one title | Windows, performance-focused |
 | Anka Native | github.com/EddizEge/AnkaNative · `main` · `09bf66ea6200` (2026-11-09) | C / Python / MIT (app as a whole GPL-3.0-or-later) | nxnative → Banana Native; not an emulator | Per-title native execution on Android |
 | Hokkaido | github.com/pavelgajdo/Hokkaido · `nx2` · `32c4089558e2` (2026-11-11) | C++ / GPL-3.0 | GitHub fork of zortos293/Lichii (formerly "Lichii for Android") | Android, Exynos/Xclipse (RADV) |
 
 Lineage evidence: `NX2_GPU_THREAD_SPLIT.md` has the same git blob hash (`75fd0e41…`) in Eden-NX2,
-Orchid and Hokkaido. Anka's copy has grown to 451 lines. Each fork's `NX2_NOTES.md` is a superset
-of Eden-NX2's, with Orchid adding 44 unique lines, Anka 204 and Hokkaido 17 [SRC]. Hokkaido's
-parent comes from the GitHub API `parent` field [SRC]. "Anka" names two things: the emulator and
-the separate Anka Native.
+Eglantine, Lichii, Orchid and Hokkaido. Anka's copy has grown to 451 lines. Each fork's
+`NX2_NOTES.md` is a superset of Eden-NX2's, with Orchid adding 44 unique lines, Anka 204 and
+Hokkaido 17; Hokkaido's copy has the same blob hash as Eglantine's (`eeebb905…`), while Lichii's
+differs (`8548e459…`) [SRC]. Whether Eden-NX2 or Eglantine came first is not established from the
+pinned data (both repositories appear on 2026-10-29); §4.2 therefore calls the group the "Eglantine
+family". Hokkaido's parent comes from the GitHub API `parent` field [SRC]. "Anka" names two things:
+the emulator and the separate Anka Native.
 
 ### 3.1 Per-project summary
 
@@ -60,12 +68,14 @@ and sources are in §4.
 | Pound | C | Unicorn plus Ballistic engine interfaces; Ballistic is a C JIT with a structured-SSA IR and an x86-64 Tier 1 (P1, P3) [SRC + DOC] | Planned SM86→SPIR-V with a structure-of-arrays IR; not implemented (P2) [DOC] | JIT code-cache allocator planned, not done; no shader cache (P1) [DOC] | none (C project) |
 | Eden (`master`) | C++ | `dynarmic` (in-tree `src/dynarmic/`) plus NCE on ARM64 hosts [SRC (listing)] | Switch 1 Maxwell recompiler; no Switch 2 paths (E-1) [SRC (listing)] | Switch 1 pipeline cache; not inspected further | none |
 | Eden-NX2 | C++ | Same as Eden: `dynarmic` + NCE [SRC (listing)] | Ampere→Maxwell lowering into the inherited Maxwell IR (E-2) [SRC (listing)] | Inherited Eden pipeline cache; no `pipeline_cache_files` [SRC (listing)]; contents not inspected | none |
-| Orchid | C++ | Same: `dynarmic` + NCE [SRC (listing)] | Ampere→Maxwell lowering; opt-in cooperative-matrix path for HMMA with a fallback substitute (E-2, E-9) [SRC (listing) + DOC] | Inherited from Eden-NX2; disk-loaded shaders re-run the tensor admission check (E-9) [DOC]; format not inspected | none |
-| Anka | C++ | Same: `dynarmic` + NCE; Lichii bundled as a second core for one title [SRC (listing) + DOC] | Ampere→Maxwell lowering; SPIR-V pattern folding for a driver bug (E-2, E-8) [SRC (listing) + DOC] | Inherited from Eden-NX2; format not inspected | none |
-| Hokkaido | C++ | Same: `dynarmic` + NCE [SRC (listing)] | Ampere→Maxwell lowering; whole-program rejection on failed global-memory tracking (E-2, E-3) [SRC (listing) + DOC-MEASURED] | Guest-environment records (not SPIR-V), per-record misses, version-suffixed files, cross-process lock, driver cache replaced by rename (E-5) [SRC (comments) + DOC-MEASURED]; startup loading strategy (full vs. bounded) not inspected | none |
+| Eglantine | C++ | Same: `dynarmic` + NCE [SRC (listing)] | Ampere→Maxwell lowering (E-2) [SRC (listing)]; draws whose pipeline cannot run are skipped (comment) [SRC (comments)] | Guest environments, re-translated at boot after a version bump; no Vulkan `VkPipelineCache` copy on NVIDIA/AMD; the whole environment file is read at every boot, but boot builds are bounded by a "used recently" list and the rest are built by background threads after boot (G-1, G-2) [SRC (comments) + SRC] | none |
+| Lichii | C++ | Same: `dynarmic` + NCE [SRC (listing)] | Ampere→Maxwell lowering plus program capture/override and trap guards (E-2) [SRC (listing)]; unbuilt pipeline for a native draw: Wait (default), Bounded (wait, then skip), Skip; the recommended preset selects Bounded (G-4) [SRC] | Two layers: the environment cache with versioned names and a file lock (E-5), and shader cache v2, a framed append-only per-title log read whole at boot, with a driver-blob layer on `VK_KHR_pipeline_binary` (G-3; doc 01 E17–E19) [SRC (comments)] | none |
+| Orchid | C++ | Same: `dynarmic` + NCE [SRC (listing)] | Ampere→Maxwell lowering; opt-in cooperative-matrix path for HMMA with a fallback substitute (E-2, E-9) [SRC (listing) + DOC] | Inherited from Eglantine; disk-loaded shaders re-run the tensor admission check (E-9) [DOC]; format not inspected | none |
+| Anka | C++ | Same: `dynarmic` + NCE; Lichii bundled as a second core for one title [SRC (listing) + DOC] | Ampere→Maxwell lowering; SPIR-V pattern folding for a driver bug (E-2, E-8) [SRC (listing) + DOC] | Inherited from Eglantine; format not inspected | none |
+| Hokkaido | C++ | Same: `dynarmic` + NCE [SRC (listing)] | Ampere→Maxwell lowering; whole-program rejection on failed global-memory tracking (E-2, E-3) [SRC (listing) + DOC-MEASURED] | Lichii's environment cache (E-5) [SRC (comments)]; no `shader_cache_v2/` at the pinned commit [SRC (listing)]; startup loading strategy not inspected | none |
 
-How the C++ forks handle a shader not seen before (synchronous build vs. asynchronous build
-with skipped draws) was not inspected; Q8 records it.
+How Orchid and Anka handle a shader not seen before was not inspected; Q8 records it. Lichii
+and Hokkaido share `async_draw_policy.h` (G-4) [SRC (listing)].
 
 ## 4. Findings
 
@@ -86,15 +96,15 @@ with skipped draws) was not inspected; Q8 records it.
 | P3 | ballistic@de07fca:`docs/IR_DESIGN_DOC.md` | The IR is **structured SSA**: `IF`/`LOOP` scopes with block arguments, `YIELD`/`MERGE` instead of phi nodes, and a fixed 64-bit instruction word (13-bit opcode, three 17-bit operand indices, one bit marking a constant-pool index). Allocation comes from one arena with no `malloc` during construction. Dead code becomes `NOP`, with compaction past a NOP ratio (example: 25%). Blocks are capped at 65,536 instructions. Loops are built by peeling one probe iteration. Tier 1 is a "dumb" translation, and Tier 2 starts when a block turns hot. | DOC | **Partially.** It is a well-specified design point for the CPU IR (ADR-0005) and also for shader structurization (ADR-0009 risk). The arena and no-allocation rule match Tier-0 pre-decode goals. Do not adopt the encoding without our own measurements. |
 | P4 | ballistic@de07fca:`README.md`, `tools/scripts/generate_decoder_tables.lua`, `spec/arm64_xml/` | Decoder tables are generated (in Lua) from Arm's A64 XML, which is committed to the repository along with an Arm ARM PDF. The target is a very small cache footprint (L1d 4 KB, L2 30 KB). The roadmap lists treating the X30 pointer-authentication sign/authenticate instructions as NOP and then stripping the upper bits of X30. | SRC + DOC | **Partially.** It is a second project generating its decoder from Arm XML (see O5). The PAC-as-identity approach agrees with doc 01 E1 but is still unvalidated. Do **not** follow the practice of committing Arm XML or PDFs (L3). |
 
-### 4.2 Eden and its Switch 2 forks
+### 4.2 Eden and the Eglantine family
 
 | # | Source | Observation | Level | Applies to Lince? |
 |---|---|---|---|---|
 | E-1 | eden@63e957b (path listing) | Eden `master` has **no Switch 2 code**: zero paths match `nx2`, `ampere`, `shader_cache_v2` or `pipeline_binar*`. Switch 2 work lives in forks. | SRC (listing) | Yes. Eden `master` is Switch 1 only. Switch 2 behavior knowledge comes from the forks, which doc 00 R3 ("no forks of yuzu/Ryujinx/Eden/Eglantine/Lichii") and LEGAL-20 (no code) cover equally. |
-| E-2 | eden-nx2@50fa86b, Orchid@e9d4b5b, Anka@140d784, Hokkaido@32c4089 (path listings) | All four contain `src/shader_recompiler/frontend/ampere/lower_to_maxwell.h`, so the **Ampere→Maxwell lowering** is present from Eden-NX2 on. Orchid also has a `lower_to_maxwell_upstream.h`. None has a separate Ampere IR. | SRC (listing) | **Yes.** This confirms doc 01 E5 across the whole family. Adding instruction coverage there is ongoing work (Orchid README lists IMAD.WIDE, IADD3 carries, LEA.HI, F2I.U64 and others added for one title). ADR-0009 option 4 stands. |
+| E-2 | eden-nx2@50fa86b, Eglantine@66ce46f, Lichii@87d84d5, Orchid@e9d4b5b, Anka@140d784, Hokkaido@32c4089 (path listings) | All six contain `src/shader_recompiler/frontend/ampere/lower_to_maxwell.h`, so the **Ampere→Maxwell lowering** is shared by the whole family. Orchid also has a `lower_to_maxwell_upstream.h`. None has a separate Ampere IR. | SRC (listing) | **Yes.** This confirms doc 01 E5 across the whole family. Adding instruction coverage there is ongoing work (Orchid README lists IMAD.WIDE, IADD3 carries, LEA.HI, F2I.U64 and others added for one title). ADR-0009 option 4 stands. |
 | E-3 | Hokkaido@32c4089:`docs/bananza-global-atomics.md` | In one title, 24 of 32 "native QMD failed" compute rejections came from **global atomics with no storage buffer to route to**. The yuzu-lineage translator turns global memory accesses into storage-buffer bindings by tracking 64-bit pointers in constant buffers at compile time. When the tracked slot is unmapped at that moment, the access stays global, and a global atomic has no fallback, so the **whole program** is rejected. The fix is a narrower heuristic (pair the atomic with a pointer it was used with). A broader heuristic was tried and changed five unrelated modules. | DOC-MEASURED | **Key lesson for ADR-0009 / doc 03.** Turning global memory into storage buffers at compile time makes correctness depend on guest state. Lince should treat raw global addressing (buffer device address, physical storage buffer) as the general path and treat pointer tracking only as an optimization. A failed guess must never reject a program. |
 | E-4 | Hokkaido@32c4089:`docs/bananza-global-atomics.md` "Verification" | Regressions are checked with a **shader sweep**: saved guest environments from real caches (2,239 dumps, 10,906 emitted modules for one title) are recompiled, every module goes through `spirv-val`, and the output must be byte-identical before and after unrelated changes. | DOC-MEASURED | **Yes** for ADR-0028 / PoC-4. Keep a corpus of recorded dependency snapshots (from private dumps, never committed per doc 09 §5) and require byte-identical IR/SPIR-V for no-op changes. The counts also size the problem: about 10⁴ modules per title. |
-| E-5 | Hokkaido@32c4089:`src/video_core/pipeline_cache_files.h`, `renderer_vulkan/vk_pipeline_cache_records.h` (header comments) | The disk cache stores **guest environments (guest code plus the values translation read), not SPIR-V**, so emitter changes need no version bump. When translation starts asking for a value older records lack, those records fail **one by one** and their pipelines are rebuilt on use, rather than discarding the file. A list of older compatible versions lets a new build start from the newest compatible cache, copying it and never modifying it. File names carry the version because two builds sharing one name deleted each other's cache on every boot (logged as "Total Pipeline Count: 0", then hundreds of pipelines built on the GPU thread). The append-only environment file is guarded by a **file lock** against concurrent emulator instances, while the driver pipeline cache is replaced by rename. Duplicate records per key are pruned while the file stays append-only. | SRC (comments) + DOC-MEASURED | **Yes** for ADR-0015 / ADR-0016 / PoC-6. This supports Lince's L1 "dependency snapshot" layer as the durable artifact, with code generation re-derivable. Add: per-record "missing dependency → miss" (never invalidate the whole cache); version-suffixed file names; cross-process locking for writers. |
+| E-5 | Lichii@87d84d5:`src/video_core/pipeline_cache_files.h` (same comments in Hokkaido@32c4089); Hokkaido@32c4089:`renderer_vulkan/vk_pipeline_cache_records.h` (header comments) | The disk cache stores **guest environments (guest code plus the values translation read), not SPIR-V**, so emitter changes need no version bump. When translation starts asking for a value older records lack, those records fail **one by one** and their pipelines are rebuilt on use, rather than discarding the file. A list of older compatible versions lets a new build start from the newest compatible cache, copying it and never modifying it. File names carry the version because two builds sharing one name deleted each other's cache on every boot (logged as "Total Pipeline Count: 0", then hundreds of pipelines built on the GPU thread). The append-only environment file is guarded by a **file lock** against concurrent emulator instances, while the driver pipeline cache is replaced by rename. Duplicate records per key are pruned while the file stays append-only. | SRC (comments) + DOC-MEASURED | **Yes** for ADR-0015 / ADR-0016 / PoC-6. This supports Lince's L1 "dependency snapshot" layer as the durable artifact, with code generation re-derivable. Add: per-record "missing dependency → miss" (never invalidate the whole cache); version-suffixed file names; cross-process locking for writers. |
 | E-6 | Anka@140d784:`NX2_GPU_THREAD_SPLIT.md` §"Light draws" | After the front/back split, the back thread was about 98% busy, and about 80% of it was draw setup spread over a dozen small steps. Most indirect draws changed only vertex-stream addresses and sizes, index ranges and draw parameters. A **light draw** path re-binds only vertex, index and indirect buffers when nothing else changed since the last fully set-up draw and nothing was recorded, invalidated or flushed in between. Measured on one scene: 100,563 of 187,178 draws per second went light, and 23.0 → 29.7 FPS with no visible difference. A first attempt had 0% hits because size registers written together with addresses counted as "state". | DOC-MEASURED (one machine, one title) | **Yes** for ADR-0008 / PoC-9. Track a per-draw "changed since last recorded draw" set on the front end and use a minimal-rebind path when it is limited to stream and draw parameters. Classify registers carefully. Lince's frame ledger should count why draws missed the fast path, as Anka's profile does. |
 | E-7 | Anka@140d784:`README_ANKA.md` "Measured results" | Running terrain indirect draws on the host GPU gave about 20.8 → 30.8 FPS (camera not identical). Splitting the back thread again (register work ahead of the cache/recording stage) gave +7–9%. PGO gave +15–22%. Reactive flushing helped in one scene (+13–23%) and hurt in another (−23–30%). The author marks these as single-machine, partly uncontrolled A/B runs. | DOC-MEASURED | **Partially.** Native indirect draws and further pipelining are directional for ADR-0008. PGO is a release-build question for ADR-0002. The reactive-flushing swing shows that guest-visible readback policy is scene-dependent (ADR-0022). |
 | E-8 | Anka@140d784:`README_ANKA.md` "Known issues" | On NVIDIA drivers 617 and newer, a `max(x, -x)` pattern in a title's vertex shaders triggers `VK_ERROR_DEVICE_LOST`. Anka folds it before handing SPIR-V to the driver. | DOC | **Yes** for ADR-0007: a candidate entry for Lince's driver-workaround list. It must be reproduced with Lince's own SPIR-V before adoption (UNVERIFIED). |
@@ -104,6 +114,15 @@ with skipped draws) was not inspected; Q8 records it.
 | E-12 | Orchid@e9d4b5b:`docs/performance/TargetGames.md` §"Acceptance and evidence" | Measurement protocol: record build hash, binary SHA-256, game and update, host hardware and driver, and immutable save/config/cache seed; at least three baseline and three candidate runs in alternating order; report median/min/max, p50/p95/p99 and counts above 16.67/33.33/50/100 ms; frame generation does not count toward the target; keep diagnostic traces out of timed runs. | DOC | **Yes** for PoC-10 and the "performance claims need data" rule. Lince can adopt the same reporting fields. |
 | E-13 | Orchid@e9d4b5b:`NX2_NOTES.md` rows 123–127; Hokkaido@32c4089:`NX2_NOTES.md` rows 123–127 (same content in both) | Newer updates of one title block at boot unless a GameChat service and a camera-context service answer. Stub sessions and events are enough to proceed. | DOC | **Partially** for T-019 / ADR-0024. Some system services must exist as stubs even for titles that never use them. Their names in these notes come from symbols in game binaries; Lince must not adopt them (L2). |
 | E-14 | Orchid@e9d4b5b, Anka@140d784, Hokkaido@32c4089 `NX2_NOTES.md` / `README*` | All three are keyed to specific titles: per-game defaults, per-game presets, and per-title behavior toggles (dozens of environment switches). | DOC | **No** as a design. Lince's rule is correct-by-default behavior, with per-title data only as cache content. |
+
+### 4.2.1 Eglantine and Lichii (the main emulators)
+
+| # | Source | Observation | Level | Applies to Lince? |
+|---|---|---|---|---|
+| G-1 | Eglantine@66ce46f:`src/video_core/renderer_vulkan/vk_pipeline_cache.cpp` (comments) | The disk cache keeps guest environments. **Every boot reads and parses the whole environment file** (`LoadDiskResources` calls the shared pipeline loader on it). A translation change bumps the cache version and the old cache is also **re-translated at boot** and written back; only a record-layout change deletes older caches. The Vulkan `VkPipelineCache` copy was dropped on NVIDIA and AMD, whose drivers keep their own disk cache: for one title it was a 245 MB file, about 0.35 GB of RAM per session, copied whole at each save, which stalled frames, and pipelines built no slower without it. | SRC (comments) + SRC + DOC-MEASURED | **Yes** for ADR-0015 / ADR-0013. Reading the whole file at boot, and re-translating it after a version bump, are full-cache loads that invariant 4 forbids; Lince should re-derive lazily or on background workers. Do not keep a whole-file `VkPipelineCache` in memory where the driver already caches; measure per vendor (PoC-5). |
+| G-2 | Eglantine@66ce46f:`vk_pipeline_cache.cpp` (comments) | **Bounded warm-up:** a per-title "used recently" list (key hash plus sessions since last use) decides which cached pipelines are **built** at boot (the file is still read whole, G-1). By default the rest are built after boot by background threads (a quarter of host threads, 1–6); only when background builds are turned off are they built when first needed, on the GPU thread. Measured: about 0.45 MB of driver memory per pipeline; building 4,800 pipelines from eight sessions cost 1.5 GB more than building on first use, but on-first-use stalled frames four times as often; one title-screen session uses about 1,500. An unbounded cache that grew to 48k pipelines needed about 21 GB of driver memory before the game started, and because the list is saved only at exit or after two minutes, an out-of-memory boot repeated itself. The window was widened from two to sixteen sessions after one title kept building pipelines in play; MoltenVK keeps eight because each build there is much slower. | SRC (comments) + DOC-MEASURED | **Yes, key data for ADR-0016 / PoC-6 / invariant 4.** It sizes the problem (≈0.45 MB × 10³–10⁴ pipelines) and shows that "prebuild everything" fails by memory, while "build on use" fails by stutter. Lince's working-set index should be bounded by recency and a memory budget, persisted incrementally (never only at exit), and drained by `lince-sched` workers. |
+| G-3 | Lichii@87d84d5:`src/video_core/shader_cache_v2/{cache_format.h,cache.h,driver_blobs.h}`, `renderer_vulkan/vk_pipeline_binaries.h` (comments); updates doc 01 E17–E19 (at `0da698b`) | **Shader cache v2:** one append-only log per title of framed records (8-byte aligned; per-record header CRC-32 and payload XXH3-64 seeded by kind and key); the latest record per (kind, key) wins; tombstones remove records; unknown kinds are kept. **New since doc 01:** reading never throws: a damaged header is skipped by scanning to the next valid one, a payload with a bad hash is dropped alone, a truncated tail is ignored; hashes are checked in parallel. Program records are tagged with the build's lowering and looked up lock-free and allocation-free after the log is **read whole at boot** (doc 01 E18; `cache.h` still describes "the log read at boot"). A separate **driver-blob log** per device and driver identity stores `VK_KHR_pipeline_binary` payloads keyed by the pipeline key and checked against the driver's create-info key; a file of another identity is discarded whole; only an index stays in memory and blobs are read on lookup; the file is compacted on close with size caps. | SRC (comments) | **Yes** for ADR-0015 / ADR-0016 / ADR-0013 / T-022. It is very close to Lince's planned design (framed records, XXH3 per payload, per-record failure, append-only log, separate driver layer), and independent confirmation that `VK_KHR_pipeline_binary` is used in practice. But the whole-log boot read is a **counter-example to invariant 4** (doc 01 E18): Lince keeps a separate bounded index instead. |
+| G-4 | Lichii@87d84d5:`src/video_core/renderer_vulkan/async_draw_policy.h`, `src/common/settings.h`, `src/common/recommended_settings.h`; same policy file in Hokkaido@32c4089 [SRC (listing)]; updates doc 01 E14/E15 | For a draw whose pipeline is still building, non-native (Switch 1) draws keep the legacy skip heuristic. Native Switch 2 draws are **waited for by default** (setting default Wait), because they can produce persistent resources even with depth on. The other modes are Bounded, which **waits up to the remaining per-frame budget and then skips the draw**, and Skip. The project's **recommended preset selects Bounded**, so recommended configurations still drop draws. | SRC | **Yes** for invariant 1 and ADR-0010. Lichii's default agrees that skipping Switch 2 draws is unsafe, but its recommended preset trades that for frame time. Lince never skips; the Tier-0 interpreter covers the build gap, removing the need for either. The per-frame wait budget is a useful ledger metric. |
 
 ### 4.3 Anka Native (separate category)
 
@@ -144,17 +163,19 @@ with skipped draws) was not inspected; Q8 records it.
    (doc 01 E1)? If not, it cannot serve as an oracle for them.
 4. **Q4:** Is an Eden pull request merging Switch 2 support pending? The Forgejo pulls API did
    not return JSON from the research environment, so this is unchecked.
-5. **Q5:** Does Lichii still use its `shader_cache_v2` log (doc 01 E17), given that its fork
-   Hokkaido has a different, environment-record cache? This needs a re-pin of Lichii.
+5. **Q5 (answered at Lichii@87d84d5):** Lichii has both `shader_cache_v2` (G-3) and the
+   environment cache with versioned names (E-5). Hokkaido has only the latter; whether it forked
+   before v2 or removed it was not checked.
 6. **Q6:** Does the NVIDIA `max(x, -x)` device-lost bug (E-8) reproduce with Lince-generated
    SPIR-V, and on which driver versions?
 7. **Q7:** What do hardware uniform-datapath instructions do with lane-varying inputs (P2)?
    This needs a CUDA kernel in the T-014 corpus and the T-023 hardware run; CUDA source may
    never make the compiler emit `R2UR` with a non-uniform input, so the corpus may not be able
    to answer it. Listed as UNKNOWN in doc 08 §4.
-8. **Q8:** How do the Eden-lineage forks handle an unseen shader at draw time (block, or build
-   asynchronously and skip the draw), and does Hokkaido's cache load all records at startup or
-   on demand? Not inspected; relevant to invariants 1 and 4 in AGENTS.md.
+8. **Q8:** Lichii (Hokkaido shares the policy file) waits for native draws by default but
+   recommends a mode that drops them after a budget (G-4); Eglantine reads its whole cache at boot but bounds boot
+   builds (G-1, G-2); Lichii's v2 log is read whole at boot (doc 01 E18, consistent at
+   `87d84d5`). Still not inspected: Orchid and Anka's unseen-shader handling.
 
 ## 8. Affected ADRs, PoCs and backlog tasks
 
@@ -164,12 +185,18 @@ with skipped draws) was not inspected; Q8 records it.
   Ballistic's structured-SSA IR is a reference design (P3).
 - **ADR-0007** (host graphics tiers): cooperative-matrix admission checklist (E-9). Driver
   workaround candidate (E-8).
+- **ADR-0010** (Tier-0 interpreter): Lichii's default is to wait; its recommended preset still
+  drops draws after a frame budget (G-4). Lince's Tier 0 removes the need for either.
+- **ADR-0013** / **T-022**: Lichii uses `VK_KHR_pipeline_binary` per device identity (G-3);
+  Eglantine dropped `VkPipelineCache` on NVIDIA/AMD (G-1).
 - **ADR-0008** (GPU command architecture) / **PoC-9**: light-draw fast path and draw-delta
   tracking (E-6). Native indirect draws and further back-end staging (E-7).
 - **ADR-0009** (shader IR) / **PoC-4**: global memory through raw addressing, not compile-time
   pointer tracking (E-3). Uniform-register semantics tests (P2). Lowering remains rejected (E-2).
-- **ADR-0015 / ADR-0016** (cache format and indexing) / **PoC-6**: store dependency snapshots as
-  the durable record; per-record misses; version-suffixed files; cross-process writer lock (E-5).
+- **ADR-0015 / ADR-0016** (cache format and indexing) / **PoC-6**: compare with Lichii's v2 log
+  and driver-blob layer (G-3); bound boot builds by recency and a memory budget (G-2); never read
+  or re-translate the whole cache at boot (G-1, G-3). Store dependency snapshots as the durable
+  record; per-record misses; version-suffixed files; cross-process writer lock (E-5).
 - **ADR-0022** (synchronization): readback policy is scene-dependent (E-7).
 - **ADR-0024** / **T-019**: stub-only services needed at boot by newer title updates (E-13).
 - **ADR-0026**: Unicorn as a dev/CI-only oracle, if Q3 is positive.
@@ -196,4 +223,6 @@ with skipped draws) was not inspected; Q8 records it.
 - Orchid — https://github.com/MythosOfs/Orchid/tree/e9d4b5b795e585924b4dca164fe8122d45b81929
 - Anka — https://github.com/EddizEge/Anka/tree/140d784a7e4d12a8361233105a0fd08fa0ab2bfa
 - Anka Native — https://github.com/EddizEge/AnkaNative/tree/09bf66ea6200f92e03f89ce0297ba78857b29a00
+- Eglantine — https://github.com/Eglantine-Community/Eglantine/tree/66ce46feb67a184ee4adae59ed07cf89c72aac9c
+- Lichii — https://github.com/zortos293/Lichii/tree/87d84d513c67275ad0d6ae50ba51cce76e7e3ded
 - Hokkaido — https://github.com/pavelgajdo/Hokkaido/tree/32c4089558e25395aa026c594f2b70e5773360b1
