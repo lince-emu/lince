@@ -1,0 +1,16 @@
+# FADD and FMUL with register and immediate operands, round-to-nearest-even, including a
+# subnormal result (no flush-to-zero). Results go to 0x200..0x20c.
+MOV R4, 0x200
+MOV R5, 0
+MOV R0, 1.5f
+MOV R1, -0.25f
+FADD R6, R0, R1                 # 1.25
+FADD R7, R0, 1e-8f              # rounds back to 1.5
+FMUL R8, R0, R1                 # -0.375
+MOV R2, 0x00800000              # smallest normal, 2^-126
+FMUL R9, R2, 0.5f               # 2^-127, subnormal, kept without FTZ
+STG.E.32 [R4], R6
+STG.E.32 [R4+4], R7
+STG.E.32 [R4+8], R8
+STG.E.32 [R4+12], R9
+EXIT

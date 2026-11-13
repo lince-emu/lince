@@ -1,0 +1,16 @@
+# Integer addition and bitwise logic: IADD3 (register and immediate forms, wrapping) and
+# LOP3.LUT (xor, and, or of three inputs). Results go to 0x100..0x10c.
+MOV R4, 0x100
+MOV R5, 0
+MOV R0, 0xfffffff0
+MOV R1, 0x20
+MOV R2, 7
+IADD3 R6, R0, R1, R2            # wraps: 0xfffffff0 + 0x20 + 7 = 0x17
+IADD3 R7, R0, -1, RZ            # immediate operand
+LOP3.LUT R8, R0, R1, R2, 0x96   # a ^ b ^ c
+LOP3.LUT R9, R0, 0xff00ff00, R2, 0xea   # (a & b) | c
+STG.E.32 [R4], R6
+STG.E.32 [R4+4], R7
+STG.E.32 [R4+8], R8
+STG.E.32 [R4+12], R9
+EXIT

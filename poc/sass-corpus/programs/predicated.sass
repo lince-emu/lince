@@ -1,0 +1,20 @@
+# Signed and unsigned comparison of the same bits, and guarded instructions: -1 is less than
+# 1 as I32 but greater as U32. Results go to 0x500..0x508.
+MOV R4, 0x500
+MOV R5, 0
+MOV R0, -1
+MOV R1, 1
+MOV R6, 0
+MOV R7, 0
+ISETP.LT.I32 P0, R0, R1
+ISETP.LT.U32 P1, R0, R1
+@P0 MOV R6, 0x51
+@!P1 MOV R7, 0x52
+@P1 MOV R7, 0xbad
+ISETP.EQ.U32 P2, R0, 0xffffffff
+MOV R8, 0
+@P2 IADD3 R8, R8, 3, RZ
+STG.E.32 [R4], R6
+STG.E.32 [R4+4], R7
+STG.E.32 [R4+8], R8
+EXIT

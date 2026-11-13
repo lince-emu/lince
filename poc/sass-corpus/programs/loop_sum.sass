@@ -1,0 +1,14 @@
+# A counted loop: ISETP sets P0 and a guarded BRA jumps backwards. Sums 0..9 into R1 and
+# stores the sum and the final counter at 0x400.
+MOV R4, 0x400
+MOV R5, 0
+MOV R0, 0
+MOV R1, 0
+loop:
+IADD3 R1, R1, R0, RZ
+IADD3 R0, R0, 1, RZ
+ISETP.LT.U32 P0, R0, 10
+@P0 BRA loop
+STG.E.32 [R4], R1
+STG.E.32 [R4+4], R0
+EXIT

@@ -1,0 +1,14 @@
+# FFMA rounds once: (1 + 2^-12)^2 - 1 keeps the 2^-24 term that a separate FMUL then FADD
+# loses (the product rounds to 1 + 2^-11, a tie to even). Both results are stored so a translator that splits FFMA is caught.
+MOV R4, 0x300
+MOV R5, 0
+MOV R0, 0x3f800800              # 1 + 2^-12
+MOV R1, -1.0f
+FFMA R6, R0, R0, R1             # fused: 2^-11 + 2^-24
+FMUL R7, R0, R0
+FADD R7, R7, R1                 # unfused: 2^-11
+FFMA R8, R0, 2.0f, R1           # immediate multiplier: 1 + 2^-11
+STG.E.32 [R4], R6
+STG.E.32 [R4+4], R7
+STG.E.32 [R4+8], R8
+EXIT
