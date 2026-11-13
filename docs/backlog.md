@@ -151,6 +151,7 @@ Decision [D-001](decisions/D-001-cache-hash-xxh3.md). Add `xxhash-rust` (`xxh3` 
 CRC-32C vs XXH3-64 on 1 KiB–2 MiB payloads in the harness.
 - **Acceptance:** harness writes a checksum-cost CSV; fault-injection tests still pass; report
   updated (simplification 1 removed or measured).
+- **PR:** https://github.com/lince-emu/lince/pull/17
 
 ### T-021 — PoC-7 memory-model checks
 Decision [D-004](decisions/D-004-ledger-memory-model-checks.md). Add `loom` as a
