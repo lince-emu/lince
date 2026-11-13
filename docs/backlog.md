@@ -19,7 +19,7 @@ Rules:
 | T-004 | Commit linting in CI and changelog generation (git-cliff) | Impl | Blocked | T-003 | 0002 |
 | T-005 | Reference crate: `lince-common` written to every convention | Impl | Blocked | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
-| T-010 | PoC-6: cache store prototype and benchmark harness | PoC | Ready | — | 0015, 0016 |
+| T-010 | PoC-6: cache store prototype and benchmark harness | PoC | In review | — | 0015, 0016 |
 | T-011 | PoC-7: frame ledger prototype | PoC | Ready | — | 0027 |
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Ready | — | 0010 |
