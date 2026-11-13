@@ -14,10 +14,12 @@ that becomes available when they are present. The firmware-free path is the only
 |---------|-------|-----|
 | Unencrypted executables and data (loose ExeFS + RomFS, the layout used for development) | Yes | Nothing to decrypt |
 | Homebrew built for the console | Yes, once its formats are supported | Homebrew is not encrypted |
+| NSP whose NCAs are already decrypted (header and content in plaintext) | Yes | Lince only reads the PFS0 container and the plaintext NCAs; nothing to decrypt |
 | Retail packages as distributed (NSP, XCI, NCA, …) | **No** | They are encrypted; Lince never decrypts (ADR-0029, LEGAL-02) |
 
 Lince does not tell users how to convert encrypted content and does not link to tools that
-do (LEGAL-03, LEGAL-04). The loader reports encrypted input with a neutral message.
+do (LEGAL-03, LEGAL-04). The loader reports encrypted input, including any encrypted NCA
+inside an NSP, with a neutral message and loads nothing from that package.
 
 ## 3. What games expect from the system, and how each need is met without firmware
 
