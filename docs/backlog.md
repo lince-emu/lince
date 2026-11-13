@@ -23,7 +23,7 @@ Rules:
 | T-011 | PoC-7: frame ledger prototype | PoC | Done | — | 0027 |
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | In review | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | Done | — | 0010 |
-| T-014 | Ampere SASS test corpus: compile team-written CUDA kernels (no NVIDIA GPU needed) | PoC | Ready | — | 0009, 0028 |
+| T-014 | Ampere SASS test corpus: compile team-written CUDA kernels (no NVIDIA GPU needed) | PoC | Needs decision | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | In review | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | In review | — | 0007 |
 | T-019 | Research: system data and applets Switch 2 titles depend on (firmware-free replacements) | Research | In review | — | 0024, 0029 |
@@ -117,6 +117,8 @@ that T-023 runs, and expected outputs computed on the CPU for each kernel.
 - **Acceptance:** the corpus builds from a clean checkout with one command; every kernel has
   its SASS and its CPU-computed expected output stored; the T-023 script runs to the point
   where it needs a GPU.
+- **Needs decision:** [D-010](decisions/D-010-cuda-eula-sass-corpus.md) — the CUDA EULA
+  (§1.2 item 8) may forbid disassembling `nvcc` output for translation to non-NVIDIA GPUs.
 
 ### T-023 — SASS corpus reference outputs (optional)
 Run the T-014 script once on an NVIDIA GPU of compute capability 8.6–8.9 (GeForce RTX 30 or
