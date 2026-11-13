@@ -8,19 +8,19 @@ use std::process::{Command, Stdio};
 
 use crate::error::XtaskError;
 
+/// A command for `program` with `args`, run from the workspace root.
+pub(crate) fn command(root: &Path, program: impl AsRef<Path>, args: &[&str]) -> Command {
+    let mut command = Command::new(program.as_ref());
+    command.args(args).current_dir(root);
+    command
+}
+
 /// Runs one check step with inherited output and fails if the program fails.
-pub(crate) fn run_step(
-    root: &Path,
-    step: &'static str,
-    program: &Path,
-    args: &[&str],
-) -> Result<(), XtaskError> {
+pub(crate) fn run_step(step: &'static str, command: &mut Command) -> Result<(), XtaskError> {
     eprintln!("xtask ci: {step}");
-    let status = Command::new(program)
-        .args(args)
-        .current_dir(root)
+    let status = command
         .status()
-        .map_err(|source| spawn_error(program, source))?;
+        .map_err(|source| spawn_error(command, source))?;
     if status.success() {
         Ok(())
     } else {
@@ -29,14 +29,12 @@ pub(crate) fn run_step(
 }
 
 /// Runs a program silently and reports whether it exited successfully.
-pub(crate) fn succeeds(root: &Path, program: &Path, args: &[&str]) -> Result<bool, XtaskError> {
-    let status = Command::new(program)
-        .args(args)
-        .current_dir(root)
+pub(crate) fn succeeds(command: &mut Command) -> Result<bool, XtaskError> {
+    let status = command
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .map_err(|source| spawn_error(program, source))?;
+        .map_err(|source| spawn_error(command, source))?;
     Ok(status.success())
 }
 
@@ -46,12 +44,11 @@ pub(crate) fn capture(
     program: &'static str,
     args: &[&str],
 ) -> Result<String, XtaskError> {
-    let output = Command::new(program)
-        .args(args)
-        .current_dir(root)
+    let mut command = command(root, program, args);
+    let output = command
         .stderr(Stdio::inherit())
         .output()
-        .map_err(|source| spawn_error(Path::new(program), source))?;
+        .map_err(|source| spawn_error(&command, source))?;
     if !output.status.success() {
         return Err(XtaskError::StepFailed {
             step: program,
@@ -69,20 +66,49 @@ pub(crate) fn bash(root: &Path) -> Result<PathBuf, XtaskError> {
     if !cfg!(windows) {
         return Ok(PathBuf::from("bash"));
     }
-    // `git --exec-path` is `<git>/<mingw64|ucrt64>/libexec/git-core`; bash is `<git>/bin`.
     let exec_path = PathBuf::from(capture(root, "git", &["--exec-path"])?.trim());
-    let git_root = exec_path
-        .ancestors()
-        .nth(3)
-        .ok_or_else(|| XtaskError::GitBashNotFound {
-            exec_path: exec_path.clone(),
-        })?;
-    Ok(git_root.join("bin").join("bash.exe"))
+    git_install_root(&exec_path)
+        .map(|git_root| git_root.join("bin").join("bash.exe"))
+        .ok_or(XtaskError::GitBashNotFound { exec_path })
 }
 
-fn spawn_error(program: &Path, source: std::io::Error) -> XtaskError {
+/// `git --exec-path` on Git for Windows is `<git>/<mingw64|ucrt64>/libexec/git-core`.
+fn git_install_root(exec_path: &Path) -> Option<&Path> {
+    let root = exec_path.ancestors().nth(3)?;
+    (root.parent().is_some() || root.has_root()).then_some(root)
+}
+
+fn spawn_error(command: &Command, source: std::io::Error) -> XtaskError {
     XtaskError::Spawn {
-        program: program.to_path_buf(),
+        program: PathBuf::from(command.get_program()),
         source,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn git_install_root_is_found_for_a_mingw64_layout() {
+        let exec_path = Path::new("C:/Program Files/Git/mingw64/libexec/git-core");
+        assert_eq!(
+            git_install_root(exec_path),
+            Some(Path::new("C:/Program Files/Git"))
+        );
+    }
+
+    #[test]
+    fn git_install_root_is_found_for_a_ucrt64_layout() {
+        let exec_path = Path::new("C:/Program Files/Git/ucrt64/libexec/git-core");
+        assert_eq!(
+            git_install_root(exec_path),
+            Some(Path::new("C:/Program Files/Git"))
+        );
+    }
+
+    #[test]
+    fn git_install_root_is_none_when_the_path_is_too_short() {
+        assert_eq!(git_install_root(Path::new("libexec/git-core")), None);
     }
 }

@@ -56,7 +56,7 @@ fn inspect(manifest: &str) -> ManifestLicense {
     let mut has_package = false;
     for line in manifest.lines().map(str::trim) {
         if line.starts_with('[') {
-            in_package = line == "[package]";
+            in_package = is_package_header(line);
             has_package |= in_package;
         } else if in_package && is_license_line(line) {
             return ManifestLicense::Declared;
@@ -67,6 +67,18 @@ fn inspect(manifest: &str) -> ManifestLicense {
     } else {
         ManifestLicense::NotAPackage
     }
+}
+
+/// Whether a table header line is `[package]`, allowing inner spaces and a trailing comment.
+fn is_package_header(line: &str) -> bool {
+    let header = line
+        .split_once('#')
+        .map_or(line, |(header, _)| header)
+        .trim();
+    header
+        .strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .is_some_and(|name| !name.starts_with('[') && name.trim() == "package")
 }
 
 fn is_license_line(line: &str) -> bool {
@@ -109,6 +121,34 @@ mod tests {
         let manifest =
             "[package]\nname = \"a\"\n\n[package.metadata.x]\nlicense = \"GPL-3.0-or-later\"\n";
         assert_eq!(inspect(manifest), ManifestLicense::Missing);
+    }
+
+    #[test]
+    fn rejects_a_package_header_with_trailing_comment() {
+        let manifest = "[package] # crate metadata\nname = \"a\"\n";
+        assert_eq!(inspect(manifest), ManifestLicense::Missing);
+    }
+
+    #[test]
+    fn rejects_a_spaced_package_header() {
+        assert_eq!(
+            inspect("[ package ]\nname = \"a\"\n"),
+            ManifestLicense::Missing
+        );
+    }
+
+    #[test]
+    fn accepts_a_license_under_a_commented_package_header() {
+        let manifest = "[package] # crate metadata\nlicense = \"GPL-3.0-or-later\"\n";
+        assert_eq!(inspect(manifest), ManifestLicense::Declared);
+    }
+
+    #[test]
+    fn skips_an_array_of_tables_named_package() {
+        assert_eq!(
+            inspect("[[package]]\nname = \"a\"\n"),
+            ManifestLicense::NotAPackage
+        );
     }
 
     #[test]
