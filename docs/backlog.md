@@ -22,7 +22,7 @@ Rules:
 | T-010 | PoC-6: cache store prototype and benchmark harness | PoC | Ready | — | 0015, 0016 |
 | T-011 | PoC-7: frame ledger prototype | PoC | Ready | — | 0027 |
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
-| T-013 | Tier-0 micro-op format specification | Docs | Ready | — | 0010 |
+| T-013 | Tier-0 micro-op format specification | Docs | In review | — | 0010 |
 | T-014 | Ampere SASS test corpus from team-written CUDA kernels | Maintainer | Blocked | — | 0009, 0028 |
 | T-015 | Research: inspect oboromi, Pound, Hokkaido, Anka, Orchid, Eden | Research | Ready | — | — |
 | T-016 | Research: Vulkan feature coverage survey per vendor/driver (GPL, shader objects, pipeline binary, barycentrics, subgroup size control, mesh) | Research | Ready | — | 0007 |
@@ -92,6 +92,7 @@ monolithic, GPL non-LTO + fast link, GPL LTO, shader objects, pipeline binary lo
 Write `docs/research/tier0-micro-op-format.md`: encoding, operand descriptors, register-file
 buckets, branch target resolution, how predicates/uniform registers are represented, and how
 the GPU interpreter loop consumes it (doc 03 §4). Propose as input for ADR-0010; no code.
+PR: https://github.com/lince-emu/lince/pull/1
 
 ### T-014 — SASS corpus
 Requires the CUDA toolkit and an NVIDIA GPU on the maintainer's machine: compile a set of
