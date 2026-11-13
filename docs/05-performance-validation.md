@@ -27,14 +27,16 @@ frame, verified in PoC-7). Every event carries a monotonic timestamp, thread rol
 and a frame sequence number:
 
 `FrameBegin/End`, `PresentQueued/Presented`, `GuestFrameFence`, `ShaderDiscovered`,
-`Tier0Used`, `CompileStart/End{tier}`, `PipelineWait`, `CacheResolve`, `CacheWrite`,
-`CacheFsync`, `Alloc{size}`, `Upload{bytes}`, `Evict`, `FenceWait`, `QueueSubmit`,
-`MacroBurst`, `HleCall{service}`, `GovernorThrottle{level}`, `ThreadPreempted` (sampled).
+`Tier0Used`, `CompileStart{tier}`, `CompileEnd{ns}`, `PipelineWait{ns}`, `CacheResolve{ns}`,
+`CacheWrite{ns}`, `CacheFsync{ns}`, `Alloc{size}`, `Upload{bytes}`, `Evict`, `FenceWait{ns}`,
+`QueueSubmit`, `MacroBurst`, `HleCall{service}`, `GovernorThrottle{level}`,
+`ThreadPreempted{ns}` (sampled).
 
 Events for blocking work — `PipelineWait`, `FenceWait`, `CacheResolve`, `CacheWrite`,
 `CacheFsync` and `CompileEnd` — carry their duration in nanoseconds as the argument, and their
 timestamp is the end of the interval (decision D-003). `CompileStart` stays a separate event so
-compiles in progress are visible in a dump.
+compiles in progress are visible in a dump. The argument of `ThreadPreempted` is the
+nanoseconds lost to preemption; it is not counted as blocking time.
 
 `lince-frame-analyzer` turns a ledger dump into the report below.
 
