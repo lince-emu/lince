@@ -17,6 +17,8 @@ maintainer — do not decide alone.
 | LEGAL-02 | No code, scripts or documentation that extract keys, decrypt protected formats, or circumvent any technical protection measure — including "helper" scripts and instructions for users. |
 | LEGAL-03 | The loader accepts only content that is already decrypted and fails with a neutral message on encrypted input. It never points users to where or how to obtain keys or decryption tools. |
 | LEGAL-04 | No links to piracy sites, ROM/ISO downloads, key dumps or firmware mirrors anywhere in the project. |
+| LEGAL-05 | **Lince-NX never uses keys or firmware — not even ones the user supplies** (ADR-0029). No code path, setting, import dialog, file picker, CLI flag, environment variable or documentation exists to read, accept, request or process key files or firmware dumps, and the emulator never searches the disk for them. |
+| LEGAL-06 | All system services and system data are original HLE implementations or freely licensed substitutes. A feature that would need firmware data is redesigned or left unimplemented, never satisfied with firmware. |
 
 ## B. Sources of knowledge
 

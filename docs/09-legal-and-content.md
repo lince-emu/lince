@@ -11,6 +11,8 @@ The operational, numbered rules derived from this policy are in
 ## 1. What Lince-NX will not do
 
 - Ship, download, extract or derive console keys or firmware.
+- **Use keys or firmware at all — including files the user supplies.** There is no option,
+  import path or documentation for them (ADR-0029).
 - Implement decryption of protected console content formats, or any circumvention of
   technical protection measures.
 - Ship copyrighted system files (fonts, system applets, shader binaries, game data).

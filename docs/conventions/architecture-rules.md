@@ -52,7 +52,7 @@ the PR).
 | ARCH-31 | Unknown HLE commands **MUST** return a distinct error and a ledger event; blanket auto-stubbing is debug-only. | ADR-0024 |
 | ARCH-32 | Guest core count and layout **MUST** match the hardware (6 application cores for Switch 2). | ADR-0004 |
 | ARCH-33 | Code **MUST NOT** be copied or translated from other emulators; behavior knowledge cites repository, commit and file. | doc 09 §4 |
-| ARCH-34 | Keys, firmware and decryption of protected content are out of scope permanently. | doc 09 §1 |
+| ARCH-34 | Keys, firmware and decryption of protected content are out of scope permanently — including keys or firmware supplied by the user. No module may read them. | doc 09 §1, ADR-0029 |
 
 ## E. Decisions
 
