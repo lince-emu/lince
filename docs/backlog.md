@@ -126,6 +126,7 @@ Standalone crate in `poc/sass-corpus/`:
 - **Acceptance:** the corpus builds from a clean checkout with one command; every program has
   its binary and its CPU-computed expected output stored; each encoding cites its source; the
   T-023 runner runs to the point where it needs a GPU.
+- **PR:** https://github.com/lince-emu/lince/pull/23
 
 ### T-023 — SASS corpus reference outputs (optional)
 Run the T-014 runner once on an NVIDIA GPU of compute capability 8.6–8.9 (GeForce RTX 30 or
