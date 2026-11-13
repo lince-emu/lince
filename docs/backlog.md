@@ -20,7 +20,7 @@ Rules:
 | T-005 | Reference crate: `lince-common` written to every convention | Impl | Blocked | T-003 | 0001 |
 | T-006 | Decide whether to require DCO `Signed-off-by` on commits | Maintainer | Needs decision | — | 0000 |
 | T-010 | PoC-6: cache store prototype and benchmark harness | PoC | In review | — | 0015, 0016 |
-| T-011 | PoC-7: frame ledger prototype | PoC | Ready | — | 0027 |
+| T-011 | PoC-7: frame ledger prototype | PoC | In review | — | 0027 |
 | T-012 | PoC-5: Vulkan pipeline mechanisms harness | PoC | Ready | — | 0007, 0013 |
 | T-013 | Tier-0 micro-op format specification | Docs | In review | — | 0010 |
 | T-014 | Ampere SASS test corpus from team-written CUDA kernels | Maintainer | Blocked | — | 0009, 0028 |
@@ -82,6 +82,7 @@ Per-thread lock-free ring of fixed-size events, dump format, minimal analyzer co
 percentiles and attributing synthetic injected spikes.
 - **Acceptance:** event cost microbenchmark; analyzer test with synthetic spikes identifies
   the injected cause.
+PR: https://github.com/lince-emu/lince/pull/3
 
 ### T-012 — PoC-5 Vulkan pipeline mechanisms
 Standalone `ash` harness that creates pipelines from generated SPIR-V of several sizes using:
