@@ -33,6 +33,13 @@ service calls run on service host threads and resume the guest thread through ke
 
 **B1 scope:** the SVC boundary above, for the memory, exit and `OutputDebugString` SVCs.
 
+**B2 scope:** kernel threads, the per-process handle table, events and mutex/condvar by
+address arbitration in `lince-kernel`; IPC sessions with exact CMIF and TIPC layouts; the
+explicit service registry in `lince-hle` with the `sm:`, `set:`, `fs`, `time` and `hid` stubs
+the B2 test program calls. Unknown SVCs and commands are logged by name through `lince-trace`;
+the ledger event and the debug auto-stub mode stay out. Where a blocking service call runs
+(service host threads) is not settled for B2 yet (see T-047).
+
 ## Technical justification
 Declarative descriptions make protocol differences between Switch 1 and 2 explicit and testable;
 avoiding default auto-stubs prevents silent wrong behavior (Lichii needed auto-stubbing for
