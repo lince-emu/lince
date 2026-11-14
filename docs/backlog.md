@@ -483,6 +483,10 @@ and the thread SVCs from T-048 (create, start, exit, sleep, priority, core mask)
 No threads beyond the six core threads (invariant 7).
 - **Acceptance:** kernel tests run threads on several cores; a thread pinned to a core never
   runs elsewhere; teardown joins every core thread.
+- **Also (from #56):** once the address space is shared across core threads (ADR-0019 B2
+  scope), a stress test runs two core threads contending on one exclusive pair through
+  `lince_cpu_a64::run` and checks that no update is lost; #56 only interleaves them on one
+  thread.
 
 ### T-052 — Handles, sync objects and events
 A per-process handle table, mutexes and condition variables (address arbitration), events,
