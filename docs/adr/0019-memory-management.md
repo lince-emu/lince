@@ -32,6 +32,12 @@ GPU-cache invalidation and read-back never serialize on one mutex (doc 01 E13).
 permissions, accessed through typed `GuestVa` reads and writes (QUAL-20) by software lookup.
 Fastmem, write tracking and the GPU page table come with the JIT and GPU phases.
 
+**Keep native execution possible.** The guest address-space layout must not rule out native
+execution on ARM64 hosts later (ADR-0005 option 4): the guest space is reserved as one
+contiguous host range whose base address and guest-page-to-host-page mapping are explicit
+parameters, and nothing assumes host pages are 4 KiB (some ARM64 hosts use 16 KiB, against
+the guest's 4 KiB; the mismatch is handled by the software fallback of option 3).
+
 ## Technical justification
 Fastmem is the established high-performance approach; large blocks avoid allocation churn seen
 in Lichii (row 114). Lichii also measured lock contention on cache mutexes, 5,500–7,000 fences

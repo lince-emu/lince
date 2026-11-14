@@ -42,6 +42,10 @@ Option 2.
   presentation, the swapchain or host GPU completion; every such wait is bounded and
   recorded in the ledger (ADR-0023). A slow frame on the host can therefore delay what the
   guest sees, but never stops a core that has other work.
+- **Deterministic clock mode (tests and debugging only):** the guest clock can instead
+  advance by executed guest instructions, so a run reproduces exactly for replay, differential
+  tests and timing-dependent bug hunts. It is never the default, because it couples guest time
+  to emulation speed.
 
 **B1 scope:** the decoder table, the six-core model and the ordering rule above; the B1
 interpreter implements the instructions the B1 test programs use (backlog T-033).
