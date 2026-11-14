@@ -1,6 +1,7 @@
 # ADR-0027: Observability — frame ledger and tracing
 
-- **Status:** Proposed (needs PoC-7)
+- **Status:** Proposed (the ledger needs PoC-7's ARM run). B1 (doc 07) needs only the part marked
+  **B1 scope** below accepted.
 - **Date:** 2026-11-13
 - **Related:** doc 05 §3–§4
 
@@ -20,7 +21,13 @@ presentation events with frame deadlines; offline analysis.
 ## Decision
 Option 3. Ledger events per doc 05 §3 in per-thread lock-free rings, dumped on demand or on
 spike; Tracy zones for deep dives; `lince-frame-analyzer` produces percentile and attribution
-reports.
+reports. Diagnostics are one system, not a set of per-problem traces switched by environment
+variables: every subsystem emits typed events into the same rings.
+
+**B1 scope:** the logging part. `lince-trace` records named events (an unknown SVC, a stub)
+once per name into a per-thread buffer drained off the critical threads, with no I/O on
+render-critical threads (ARCH-03); the records use the ledger's event shape so the ledger
+added later reads the same data.
 
 ## Technical justification
 Tracy is excellent for investigation but not for always-on field data; the ledger is.

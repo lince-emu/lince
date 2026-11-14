@@ -24,6 +24,12 @@ Guest vsync events are generated from the emulated clock, independent of host re
 presents are scheduled to the nearest refresh with VRR when available. Fence waits for guest
 frame completion are bounded and recorded.
 
+**No lockstep between guest and host presentation.** Presentation runs on its own thread and
+never gates guest cores. The frames-in-flight limit is applied only where the guest itself
+waits (acquiring the next buffer, waiting on a fence it submitted), so the guest stops only
+at a point it already expects to wait at; a host compile or a slow present can lengthen such
+a wait, which the ledger records, but never pauses a core elsewhere (ADR-0004).
+
 ## Technical justification
 Present-wait gives accurate feedback to align presentation and limit queue depth.
 
