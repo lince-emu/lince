@@ -21,6 +21,23 @@ pub struct State {
     pub pc: u64,
     /// The N, Z, C and V flags in bits 31 to 28.
     pub nzcv: u32,
+    /// The thread pointer the guest reads with `MRS TPIDRRO_EL0` but cannot write; the kernel
+    /// sets it.
+    pub tpidrro_el0: u64,
+    /// The core's exclusive monitor: the reservation of the last load-exclusive, if any
+    /// (ADR-0004). The kernel may clear it, for example when it switches guest threads.
+    pub exclusive: Option<Exclusive>,
+}
+
+/// A reservation of the exclusive monitor: `size` bytes at `address` held `value`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Exclusive {
+    /// The reserved address, a multiple of `size`.
+    pub address: GuestVa,
+    /// The value loaded, zero-extended.
+    pub value: u64,
+    /// The access size in bytes: 4 or 8.
+    pub size: u8,
 }
 
 /// Why [`run`] returned. Except for `Svc` and `Limit`, the instruction at `pc` did not run.
@@ -55,8 +72,8 @@ pub enum Exit {
         /// The misaligned address.
         pc: GuestVa,
     },
-    /// A load or store at `pc` accessed a byte that is not mapped with the needed permission;
-    /// the instruction changed nothing.
+    /// A load or store at `pc` accessed a byte that is not mapped with the needed permission,
+    /// or an exclusive access was not aligned to its size; the instruction changed nothing.
     DataAbort {
         /// The address of the instruction.
         pc: GuestVa,

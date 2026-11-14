@@ -12,18 +12,19 @@ mod bindings;
 
 use std::ffi::c_void;
 use std::num::NonZeroU16;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use bindings::{
     LCA_EXIT_DATA_ABORT, LCA_EXIT_FETCH_ABORT, LCA_EXIT_LIMIT, LCA_EXIT_PC_MISALIGNED,
     LCA_EXIT_SVC, LCA_EXIT_UNDEFINED, LCA_EXIT_UNIMPLEMENTED, LCA_INSN_NAME_MAX, LCA_INSN_UNKNOWN,
     LCA_NULL_ARGUMENT, LCA_OK, LCA_PERM_EXECUTE, LCA_PERM_READ, LCA_PERM_WRITE, lca_callbacks,
-    lca_exit, lca_insn, lca_memory, lca_region, lca_state,
+    lca_exclusive, lca_exit, lca_insn, lca_memory, lca_region, lca_state,
 };
 use lince_common::GuestVa;
 use lince_mem::{AddressSpace, Permission};
 
 use crate::error::CpuError;
-use crate::interp::State;
+use crate::interp::{Exclusive, State};
 
 pub(crate) use bindings::lca_exit as RawExit;
 /// Registers in `lca_state::x`; the header's constant always fits in `usize`.
@@ -108,6 +109,92 @@ unsafe extern "C" fn slow_write(context: *mut c_void, va: u64, data: *const u8, 
     i32::from(memory.write_bytes(GuestVa::new(va), data).is_err())
 }
 
+/// The store-exclusive (`lca_callbacks::compare_exchange`): one host compare-and-swap on the
+/// guest bytes (ADR-0004), after `lince-mem` confirms they are mapped writable.
+unsafe extern "C" fn compare_exchange(
+    context: *mut c_void,
+    va: u64,
+    size: u64,
+    expected: u64,
+    desired: u64,
+    stored: *mut u32,
+) -> i32 {
+    // SAFETY: as in `slow_write`: `context` is the space `run` borrows mutably for the whole
+    // call, and C++ does not touch guest memory while this runs. `stored` points to a u32 that
+    // C++ owns for the call.
+    let (memory, stored) = unsafe { (&mut *context.cast::<AddressSpace>(), &mut *stored) };
+    let writable = memory.query(GuestVa::new(va)).is_some_and(|span| {
+        span.permission
+            .is_some_and(|p| p.contains(Permission::WRITE))
+            && va.checked_add(size).is_some_and(|end| {
+                span.base
+                    .get()
+                    .checked_add(span.size)
+                    .is_some_and(|limit| end <= limit)
+            })
+    });
+    let Ok(offset) = usize::try_from(va) else {
+        return 1;
+    };
+    if !writable || !va.is_multiple_of(size.max(1)) {
+        return 1;
+    }
+    // SAFETY: the bytes [va, va + size) lie in one region mapped writable, committed at
+    // `host_base + va` (the `AddressSpace::host_base` contract), and `va` is a multiple of
+    // `size`; the reservation is page-aligned (`AddressSpace` reserves it with the host's
+    // page allocator), so the pointer is aligned for the atomic type. One core runs per
+    // `AddressSpace` borrow until ADR-0019's shared address space lands, so no plain access
+    // races with this atomic one.
+    let exchanged = unsafe {
+        let host = memory.host_base().as_ptr().add(offset);
+        match size {
+            4 => {
+                let (Ok(expected), Ok(desired)) = (u32::try_from(expected), u32::try_from(desired))
+                else {
+                    return 1;
+                };
+                AtomicU32::from_ptr(host.cast())
+                    .compare_exchange(expected, desired, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+            }
+            8 => AtomicU64::from_ptr(host.cast())
+                .compare_exchange(expected, desired, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok(),
+            _ => return 1,
+        }
+    };
+    *stored = u32::from(exchanged);
+    0
+}
+
+/// The C monitor of `exclusive`; size 0 means no reservation.
+fn raw_exclusive(exclusive: Option<Exclusive>) -> lca_exclusive {
+    exclusive.map_or(
+        lca_exclusive {
+            address: 0,
+            value: 0,
+            size: 0,
+            reserved: 0,
+        },
+        |e| lca_exclusive {
+            address: e.address.get(),
+            value: e.value,
+            size: u32::from(e.size),
+            reserved: 0,
+        },
+    )
+}
+
+/// The reservation `raw` describes, if any.
+fn exclusive_from(raw: lca_exclusive) -> Option<Exclusive> {
+    let size = u8::try_from(raw.size).ok().filter(|size| *size != 0)?;
+    Some(Exclusive {
+        address: GuestVa::new(raw.address),
+        value: raw.value,
+        size,
+    })
+}
+
 /// Runs `state` over `memory` through `lca_run`; `state` is updated in place.
 pub(crate) fn run(
     state: &mut State,
@@ -152,6 +239,7 @@ pub(crate) fn run(
             context: context.cast(),
             read: Some(slow_read),
             write: Some(slow_write),
+            compare_exchange: Some(compare_exchange),
         },
     };
     let mut raw = lca_state {
@@ -160,6 +248,8 @@ pub(crate) fn run(
         pc: state.pc,
         nzcv: state.nzcv,
         reserved: 0,
+        tpidrro_el0: state.tpidrro_el0,
+        exclusive: raw_exclusive(state.exclusive),
     };
     let mut exit = lca_exit {
         reason: 0,
@@ -185,6 +275,8 @@ pub(crate) fn run(
     state.sp = raw.sp;
     state.pc = raw.pc;
     state.nzcv = raw.nzcv;
+    state.tpidrro_el0 = raw.tpidrro_el0;
+    state.exclusive = exclusive_from(raw.exclusive);
     Ok(exit)
 }
 

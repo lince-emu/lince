@@ -53,7 +53,13 @@ void check_run() {
       .regions = &code,
       .region_count = 1,
       .reserved = 0,
-      .callbacks = {.context = nullptr, .read = nullptr, .write = nullptr},
+      .callbacks =
+          {
+              .context = nullptr,
+              .read = nullptr,
+              .write = nullptr,
+              .compare_exchange = nullptr,
+          },
   };
   lca_state state{};
   lca_exit out{};

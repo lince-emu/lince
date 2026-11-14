@@ -58,16 +58,16 @@ Rules:
 | T-046 | Mark the **B2 scope** in ADR-0004, 0017, 0019 and 0024 | Docs | Done | T-045 | 0004, 0017, 0019, 0024 |
 | T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Done | T-046 | 0004, 0017, 0019, 0024 |
 | T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Done | — | 0024 |
-| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | In progress | T-048 | 0001, 0002 |
-| T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Blocked | T-047, T-049 | 0004, 0005, 0031 |
-| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-047, T-048 | 0004, 0017, 0024 |
+| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Done | T-048 | 0001, 0002 |
+| T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | In progress | T-047, T-049 | 0004, 0005, 0031 |
+| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Ready | T-047, T-048 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Blocked | T-052 | 0024 |
 | T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Ready | T-047 | 0017, 0024 |
-| T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | In progress | T-049 | 0002 |
+| T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 
 ## Details
 
@@ -475,6 +475,7 @@ loads/stores with a per-core exclusive monitor, barriers, and the system registe
 and the counter. Differential tests per instruction, as in T-042.
 - **Acceptance:** each new instruction tested; two cores contending on an exclusive pair
   never both succeed.
+- **PR:** https://github.com/lince-emu/lince/pull/56
 
 ### T-051 — Guest threads
 One host thread per guest core (ADR-0017), a simple per-core scheduler with guest priorities,
@@ -482,6 +483,10 @@ and the thread SVCs from T-048 (create, start, exit, sleep, priority, core mask)
 No threads beyond the six core threads (invariant 7).
 - **Acceptance:** kernel tests run threads on several cores; a thread pinned to a core never
   runs elsewhere; teardown joins every core thread.
+- **Also (from #56):** once the address space is shared across core threads (ADR-0019 B2
+  scope), a stress test runs two core threads contending on one exclusive pair through
+  `lince_cpu_a64::run` and checks that no update is lost; #56 only interleaves them on one
+  thread.
 
 ### T-052 — Handles, sync objects and events
 A per-process handle table, mutexes and condition variables (address arbitration), events,

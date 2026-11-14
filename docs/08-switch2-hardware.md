@@ -57,6 +57,9 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
 - Which of the options the Arm ARM permits the Switch 2 cores take for CONSTRAINED
   UNPREDICTABLE A64 encodings (writeback with Rn == Rt, load pair with Rt == Rt2); the Tier A
   interpreter treats them as UNDEFINED.
+- Whether a store-exclusive without a matching reservation still takes a data abort on an
+  unmapped or read-only address (IMPLEMENTATION DEFINED); the Tier A interpreter only fails it
+  (GUESS, `crates/lince-cpu-a64/cpp/src/load_store.cpp`).
 - Whether `QueryMemory` type values, memory attribute bits and kernel result codes are unchanged
   from Switch 1 (`docs/research/nro-and-b1-svcs.md` S2–S7, §4).
 - Whether the thread, synchronization, event, handle and IPC SVCs keep their Switch 1 numbers,

@@ -13,8 +13,8 @@
 //
 // Encodings come from the Arm Architecture Reference Manual for A-profile (public, LEGAL-11),
 // chapter C4 "A64 Instruction Set Encoding"; names follow the manual's instruction titles.
-// B1 scope: the forms the linked B1 test programs use (tests/homebrew/*.nro; the linker relaxes
-// some ADRP + ADD pairs into NOP + ADR); T-040 completes the table.
+// B1 and B2 scope: the forms the linked test programs use (tests/homebrew/*.nro; the linker
+// relaxes some ADRP + ADD pairs into NOP + ADR); T-040 completes the table.
 
 // Branches, exception generation and system
 LCA_INSN(B, "000101 xxxxxxxxxxxxxxxxxxxxxxxxxx")
@@ -28,6 +28,9 @@ LCA_INSN(RET, "1101011 0010 11111 000000 xxxxx 00000")
 LCA_INSN(SVC, "11010100 000 xxxxxxxxxxxxxxxx 000 01")
 // NOP is the hint with CRm = 0, op2 = 0; the other hints stay unknown until implemented.
 LCA_INSN(NOP, "1101010100 0 00 011 0010 0000 000 11111")
+LCA_INSN(CLREX, "1101010100 0 00 011 0011 xxxx 010 11111")
+// MRS of any system register; the interpreter implements only the registers B2 programs read.
+LCA_INSN(MRS, "1101010100 1 1 x xxx xxxx xxxx xxx xxxxx")
 
 // Data processing, immediate. 32-bit forms (sf = 0) require N = 0 and, for the
 // bitfield forms, immr and imms below 32; move-wide 32-bit forms require hw < 2.
@@ -44,6 +47,7 @@ LCA_INSN(AND_IMM, "1 00 100100 x xxxxxx xxxxxx xxxxx xxxxx",
 LCA_INSN(ORR_IMM, "1 01 100100 x xxxxxx xxxxxx xxxxx xxxxx",
          "0 01 100100 0 xxxxxx xxxxxx xxxxx xxxxx")
 LCA_INSN(MOVZ, "1 10 100101 xx xxxxxxxxxxxxxxxx xxxxx", "0 10 100101 0x xxxxxxxxxxxxxxxx xxxxx")
+LCA_INSN(MOVN, "1 00 100101 xx xxxxxxxxxxxxxxxx xxxxx", "0 00 100101 0x xxxxxxxxxxxxxxxx xxxxx")
 LCA_INSN(MOVK, "1 11 100101 xx xxxxxxxxxxxxxxxx xxxxx", "0 11 100101 0x xxxxxxxxxxxxxxxx xxxxx")
 LCA_INSN(UBFM, "1 10 100110 1 xxxxxx xxxxxx xxxxx xxxxx",
          "0 10 100110 0 0xxxxx 0xxxxx xxxxx xxxxx")
@@ -69,6 +73,11 @@ LCA_INSN(ORN_REG, "1 01 01010 xx 1 xxxxx xxxxxx xxxxx xxxxx",
 LCA_INSN(EOR_REG, "1 10 01010 xx 0 xxxxx xxxxxx xxxxx xxxxx",
          "0 10 01010 xx 0 xxxxx 0xxxxx xxxxx xxxxx")
 
+// Data processing, register: conditional select and variable shift.
+LCA_INSN(CSEL, "x 0 0 11010100 xxxxx xxxx 0 0 xxxxx xxxxx")
+LCA_INSN(CSINC, "x 0 0 11010100 xxxxx xxxx 0 1 xxxxx xxxxx")
+LCA_INSN(LSRV, "x 0 0 11010110 xxxxx 0010 01 xxxxx xxxxx")
+
 // Loads and stores. opc = 0b01 of the pair forms is STGP/LDPSW, not STP/LDP.
 LCA_INSN(LDR_LIT, "0x 011 0 00 xxxxxxxxxxxxxxxxxxx xxxxx")
 LCA_INSN(LDR_UIMM, "1x 111 0 01 01 xxxxxxxxxxxx xxxxx xxxxx")
@@ -79,3 +88,14 @@ LCA_INSN(STRB_PRE, "00 111 0 00 00 0 xxxxxxxxx 11 xxxxx xxxxx")
 LCA_INSN(LDRB_POST, "00 111 0 00 01 0 xxxxxxxxx 01 xxxxx xxxxx")
 LCA_INSN(STP_OFF, "x0 101 0 010 0 xxxxxxx xxxxx xxxxx xxxxx")
 LCA_INSN(LDP_OFF, "x0 101 0 010 1 xxxxxxx xxxxx xxxxx xxxxx")
+// Register offset: option must be UXTW, LSL (UXTX), SXTW or SXTX, that is 0bx1x.
+LCA_INSN(LDR_REG, "1x 111 0 00 01 1 xxxxx x1x x 10 xxxxx xxxxx")
+LCA_INSN(LDRB_REG, "00 111 0 00 01 1 xxxxx x1x x 10 xxxxx xxxxx")
+LCA_INSN(STRB_REG, "00 111 0 00 00 1 xxxxx x1x x 10 xxxxx xxxxx")
+
+// Exclusives, word and doubleword (B2 scope of ADR-0004). Fields the Arm ARM marks as
+// should-be-one are fixed to ones, so other values stay unknown.
+LCA_INSN(STXR, "1x 001000 0 0 0 xxxxx 0 11111 xxxxx xxxxx")
+LCA_INSN(STLXR, "1x 001000 0 0 0 xxxxx 1 11111 xxxxx xxxxx")
+LCA_INSN(LDXR, "1x 001000 0 1 0 11111 0 11111 xxxxx xxxxx")
+LCA_INSN(LDAXR, "1x 001000 0 1 0 11111 1 11111 xxxxx xxxxx")

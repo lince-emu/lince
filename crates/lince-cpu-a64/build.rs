@@ -22,6 +22,7 @@ fn main() {
         .include("cpp/include")
         .file("cpp/src/decode.cpp")
         .file("cpp/src/interpreter.cpp")
+        .file("cpp/src/load_store.cpp")
         .warnings(true)
         .warnings_into_errors(true);
     if std::env::var_os("CXX").is_none() {
