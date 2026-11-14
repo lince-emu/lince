@@ -63,9 +63,10 @@ Rules:
 | T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-047, T-048 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Blocked | T-052 | 0024 |
-| T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053 | 0024 |
+| T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
+| T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Blocked | T-047 | 0017, 0024 |
 
 ## Details
 
@@ -494,6 +495,7 @@ logged by name, never silently succeed (ADR-0024).
 ### T-054 — First service stubs
 `set:`, `fs` (a host directory the user chooses), `time` and `hid` with the commands B2's
 program calls; every stub logs by name. No game content enters the repository (LEGAL-50).
+`fs` reads the host directory on the T-057 service-I/O thread, never on a guest core thread.
 - **Acceptance:** each command tested through the IPC framework; `fs` cannot reach outside
   its host directory.
 
@@ -507,3 +509,12 @@ list at exit (doc 07 B2 exit criterion), through `lince-trace`.
 `lince run` runs T-049's program on several core threads to completion.
 - **Acceptance:** the B2 exit criterion of doc 07, demonstrated: the program's output matches
   its expected output; an integration test runs it in CI on Windows and Linux.
+
+### T-057 — Minimal `lince-sched`
+The maintainer chose, for B2, a minimal `lince-sched` that owns one service-I/O role thread
+(ADR-0017 and ADR-0024 B2 scope, PR #50). Blocking service calls are queued to it through a
+bounded queue; a full queue makes the caller wait on a kernel event, never drops the request
+(invariant 1). The thread is created by `lince-sched` and joined at teardown; pools, priority
+classes and the governor come later.
+- **Acceptance:** tests for submission, completion through an event, a full queue, and
+  teardown that completes or reports every request still pending.
