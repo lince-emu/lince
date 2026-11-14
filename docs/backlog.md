@@ -46,6 +46,7 @@ Rules:
 | T-033 | `lince-cpu-a64` `[c++]`: crate, A64 description table and decoder for the B1 instructions | Impl | In progress | T-027, T-029 | 0004, 0030, 0031 |
 | T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | Blocked | T-033 | 0004, 0005, 0019, 0031 |
 | T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Blocked | T-042 | 0005 |
+| T-044 | Tooling: lint C headers on Windows and check the PR-title limit before opening a PR | Impl | In progress | — | 0002, 0030 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | In progress | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034, T-042 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
@@ -336,6 +337,14 @@ on the B1 programs, the baseline for how long code may stay in Tier A before Tie
 (ADR-0005). No new dependency without approval.
 - **Acceptance:** `cargo xtask bench` (or the crate's bench target) prints the per-group
   numbers; the measured baseline is recorded with the machine it ran on.
+
+### T-044 — Close two local CI blind spots
+Found on #42: `.clang-tidy`'s `HeaderFilterRegex` matches only `/` separators, so on Windows
+the `[c++]` headers were never linted and a magic number reached CI on Linux; and the `open-pr`
+skill validates the title with the commit hook (72 characters) while CI limits PR titles to 66
+(`cargo xtask ci --pr-title`).
+- **Acceptance:** clang-tidy on Windows reports a header finding the Linux run reports; `open-pr`
+  checks the title with the same rule CI applies before pushing.
 
 ### T-034 — `lince-kernel` SVC dispatch
 Dispatch the SVCs from T-028 (memory, exit, `OutputDebugString`) through a table indexed by

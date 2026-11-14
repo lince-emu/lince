@@ -23,4 +23,5 @@ Checks: >
   -cppcoreguidelines-macro-usage,
   -modernize-macro-to-enum
 WarningsAsErrors: '*'
-HeaderFilterRegex: '.*/cpp/include/.*'
+# Either path separator: on Windows clang-tidy reports header paths with backslashes.
+HeaderFilterRegex: '.*[/\\]cpp[/\\]include[/\\].*'
