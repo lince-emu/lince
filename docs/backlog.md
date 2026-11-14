@@ -342,6 +342,7 @@ on the B1 programs, the baseline for how long code may stay in Tier A before Tie
   32 GB, Windows 11, rustc 1.100.0; median ns per guest instruction, SVC exits included):
   exit (hello, 6 insns) 37 · integer (alu, 34) 17 · branch (branch, 74) 13 · load/store
   (memory, 41) 22. Runs are short, so the min–max spread is wide (10–205 ns).
+- **PR:** https://github.com/lince-emu/lince/pull/46
 
 ### T-044 — Close two local CI blind spots
 Found on #42: `.clang-tidy`'s `HeaderFilterRegex` matches only `/` separators, so on Windows
