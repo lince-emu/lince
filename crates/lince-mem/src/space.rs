@@ -7,12 +7,20 @@
 //! the configured host page size, which may be larger than the 4 KiB guest page: a host page
 //! stays committed while any guest page inside it is mapped. Permissions are checked in
 //! software on every access (ADR-0019 B1 scope); host protection is only "committed or not".
+//!
+//! The core threads of a process share one space (ADR-0019 B2 scope). The region map sits
+//! behind a reader–writer lock: accesses and queries take the read side, `map`, `unmap` and
+//! `protect` the write side, so no thread sees a half-updated map. Page contents are not
+//! locked: Rust copies them with relaxed atomic byte accesses, and guest-ordered accesses use
+//! host atomics on the bytes (ADR-0004).
 
 use std::collections::BTreeMap;
 use std::ops::BitOr;
 use std::ptr::{self, NonNull};
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use lince_common::GuestVa;
+use parking_lot::{RwLock, RwLockReadGuard};
 
 use crate::error::{Access, MemError, Result};
 use crate::platform::{self, Reservation};
@@ -122,6 +130,10 @@ struct Region {
     perm: Permission,
 }
 
+/// Mapped regions by start address; they never overlap.
+#[derive(Default)]
+struct Regions(BTreeMap<u64, Region>);
+
 /// A maximal span of the address space with one state: a mapped region or a free gap.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Span {
@@ -133,13 +145,24 @@ pub struct Span {
     pub permission: Option<Permission>,
 }
 
-/// A guest address space.
+/// A guest address space, shared by the core threads of one process (`Send + Sync`).
 pub struct AddressSpace {
     host: Reservation,
     size: u64,
     host_page: u64,
-    /// Mapped regions by start address; they never overlap.
-    regions: BTreeMap<u64, Region>,
+    regions: RwLock<Regions>,
+}
+
+/// The region map of an [`AddressSpace`], locked for reading.
+///
+/// While a view lives no region is mapped, unmapped or reprotected, so code that accesses guest
+/// memory inline through [`host_base`](Self::host_base) can trust [`regions`](Self::regions)
+/// (ADR-0031). `map`, `unmap` and `protect` on any thread wait until every view is dropped, so
+/// hold one for a bounded time. A thread that holds a view must reach the space only through
+/// it: taking a second view, or calling an [`AddressSpace`] method, may deadlock.
+pub struct SpaceView<'a> {
+    space: &'a AddressSpace,
+    regions: RwLockReadGuard<'a, Regions>,
 }
 
 impl AddressSpace {
@@ -165,22 +188,34 @@ impl AddressSpace {
             host: Reservation::new(len)?,
             size,
             host_page,
-            regions: BTreeMap::new(),
+            regions: RwLock::new(Regions::default()),
         })
+    }
+
+    /// Locks the region map for reading until the view is dropped.
+    pub fn view(&self) -> SpaceView<'_> {
+        SpaceView {
+            space: self,
+            regions: self.regions.read(),
+        }
     }
 
     /// Maps `[va, va + size)` with `perm`, zero-filled. The range must be page-aligned,
     /// inside the space and free.
-    pub fn map(&mut self, va: GuestVa, size: u64, perm: Permission) -> Result<()> {
+    pub fn map(&self, va: GuestVa, size: u64, perm: Permission) -> Result<()> {
         let end = self.checked_range(va, size)?;
-        if self.overlaps(va.get(), end) {
+        let mut regions = self.regions.write();
+        if regions.overlaps(va.get(), end) {
             return Err(MemError::Overlap { va, size });
         }
         let lo = round_down(va.get(), self.host_page);
         let hi = round_up(end, self.host_page);
         self.host.commit(to_usize(lo), to_usize(hi - lo))?;
+        // The zero-fill runs under the write lock, so the range is never reachable unzeroed;
+        // cores wait for it in `view`. Accepted cost; shrink the section if the ledger shows it.
         // SAFETY: `[va, end)` lies inside the reservation (`checked_range`) and was committed
-        // read-write above; no Rust reference into guest memory exists.
+        // read-write above. It was free until now, and the write lock excludes every view, so
+        // no other thread accesses these bytes.
         unsafe {
             ptr::write_bytes(
                 self.host.base().as_ptr().add(to_usize(va.get())),
@@ -188,34 +223,35 @@ impl AddressSpace {
                 to_usize(size),
             );
         }
-        self.regions.insert(va.get(), Region { end, perm });
+        regions.0.insert(va.get(), Region { end, perm });
         Ok(())
     }
 
     /// Unmaps `[va, va + size)`, which must be page-aligned and fully mapped; it may cover
     /// several regions or part of one. A region that extends past either end keeps its outer
     /// part.
-    pub fn unmap(&mut self, va: GuestVa, size: u64) -> Result<()> {
-        let end = self.mapped_range(va, size)?;
-        self.split_at(va.get());
-        self.split_at(end);
-        let mut removed = self.regions.split_off(&va.get());
+    pub fn unmap(&self, va: GuestVa, size: u64) -> Result<()> {
+        let mut regions = self.regions.write();
+        let end = self.mapped_range(&regions, va, size)?;
+        regions.split_at(va.get());
+        regions.split_at(end);
+        let mut removed = regions.0.split_off(&va.get());
         let mut after = removed.split_off(&end);
-        self.regions.append(&mut after);
+        regions.0.append(&mut after);
         // Host pages at either edge may still hold other mapped guest pages.
         let mut lo = round_down(va.get(), self.host_page);
         let mut hi = round_up(end, self.host_page);
-        if self.overlaps(lo, lo + self.host_page) {
+        if regions.overlaps(lo, lo + self.host_page) {
             lo += self.host_page;
         }
-        if hi > lo && self.overlaps(hi - self.host_page, hi) {
+        if hi > lo && regions.overlaps(hi - self.host_page, hi) {
             hi -= self.host_page;
         }
         if hi > lo
             && let Err(error) = self.host.decommit(to_usize(lo), to_usize(hi - lo))
         {
-            self.regions.append(&mut removed);
-            self.merge(va.get(), end);
+            regions.0.append(&mut removed);
+            regions.merge(va.get(), end);
             return Err(error.into());
         }
         Ok(())
@@ -225,51 +261,27 @@ impl AddressSpace {
     /// it may cover several regions or part of one. Regions are split at the range's ends, and
     /// neighbours that end up with the same permission are merged, so the region map stays the
     /// smallest one that describes the space.
-    pub fn protect(&mut self, va: GuestVa, size: u64, perm: Permission) -> Result<()> {
-        let end = self.mapped_range(va, size)?;
-        self.split_at(va.get());
-        self.split_at(end);
-        for (_, region) in self.regions.range_mut(va.get()..end) {
+    pub fn protect(&self, va: GuestVa, size: u64, perm: Permission) -> Result<()> {
+        let mut regions = self.regions.write();
+        let end = self.mapped_range(&regions, va, size)?;
+        regions.split_at(va.get());
+        regions.split_at(end);
+        for (_, region) in regions.0.range_mut(va.get()..end) {
             region.perm = perm;
         }
-        self.merge(va.get(), end);
+        regions.merge(va.get(), end);
         Ok(())
     }
 
     /// The permission of the region containing `va`, or `None` if it is unmapped.
     pub fn permission(&self, va: GuestVa) -> Option<Permission> {
-        self.region_at(va.get()).map(|(_, region)| region.perm)
+        self.view().permission(va)
     }
 
     /// The span containing `va`: its mapped region, or the free gap around it. `None` if `va`
     /// is outside the address space.
     pub fn query(&self, va: GuestVa) -> Option<Span> {
-        let addr = va.get();
-        if addr >= self.size {
-            return None;
-        }
-        if let Some((start, region)) = self.region_at(addr) {
-            return Some(Span {
-                base: GuestVa::new(start),
-                size: region.end - start,
-                permission: Some(region.perm),
-            });
-        }
-        let base = self
-            .regions
-            .range(..addr)
-            .next_back()
-            .map_or(0, |(_, region)| region.end);
-        let end = self
-            .regions
-            .range(addr..)
-            .next()
-            .map_or(self.size, |(&start, _)| start);
-        Some(Span {
-            base: GuestVa::new(base),
-            size: end - base,
-            permission: None,
-        })
+        self.view().query(va)
     }
 
     /// Size of the address space in bytes; every valid address is below it.
@@ -277,92 +289,24 @@ impl AddressSpace {
         self.size
     }
 
-    /// Every mapped region, in address order.
-    pub fn regions(&self) -> impl Iterator<Item = Span> + '_ {
-        self.regions.iter().map(|(&start, region)| Span {
-            base: GuestVa::new(start),
-            size: region.end - start,
-            permission: Some(region.perm),
-        })
-    }
-
-    /// The host address of guest address 0, for code that accesses guest memory inline (the
-    /// interpreter and JITs, ADR-0031).
-    ///
-    /// Guest byte `va` of a region listed by [`regions`](Self::regions) is at `host_base() + va`,
-    /// committed and host-writable until that region is unmapped. Every other address may be
-    /// uncommitted. Permissions are not enforced by the host: whoever uses the pointer checks
-    /// them against `regions`. Taking `&mut self` ties writes through the pointer to exclusive
-    /// access to the space.
-    pub fn host_base(&mut self) -> NonNull<u8> {
-        self.host.base()
-    }
-
     /// Reads a little-endian value at `va`.
     pub fn read<T: Scalar>(&self, va: GuestVa) -> Result<T> {
-        let mut bytes = T::Bytes::default();
-        self.read_bytes(va, bytes.as_mut())?;
-        Ok(T::from_le(bytes))
+        self.view().read(va)
     }
 
     /// Writes a little-endian value at `va`.
-    pub fn write<T: Scalar>(&mut self, va: GuestVa, value: T) -> Result<()> {
-        self.write_bytes(va, value.to_le().as_ref())
+    pub fn write<T: Scalar>(&self, va: GuestVa, value: T) -> Result<()> {
+        self.view().write(va, value)
     }
 
     /// Fills `buf` from guest memory at `va`; every byte must be mapped and readable.
     pub fn read_bytes(&self, va: GuestVa, buf: &mut [u8]) -> Result<()> {
-        let offset = self.check_access(va, buf.len(), Access::Read)?;
-        // SAFETY: `check_access` proved the range is mapped, hence committed read-write and
-        // inside the reservation; `buf` is a separate Rust allocation, so they cannot overlap.
-        unsafe {
-            ptr::copy_nonoverlapping(
-                self.host.base().as_ptr().add(offset),
-                buf.as_mut_ptr(),
-                buf.len(),
-            );
-        }
-        Ok(())
+        self.view().read_bytes(va, buf)
     }
 
     /// Copies `data` to guest memory at `va`; every byte must be mapped and writable.
-    pub fn write_bytes(&mut self, va: GuestVa, data: &[u8]) -> Result<()> {
-        let offset = self.check_access(va, data.len(), Access::Write)?;
-        // SAFETY: as in `read_bytes`, with the destination in guest memory.
-        unsafe {
-            ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                self.host.base().as_ptr().add(offset),
-                data.len(),
-            );
-        }
-        Ok(())
-    }
-
-    /// Checks that `[va, va + len)` is mapped with `access` allowed; returns the host offset.
-    fn check_access(&self, va: GuestVa, len: usize, access: Access) -> Result<usize> {
-        let end = va
-            .get()
-            .checked_add(len as u64)
-            .filter(|end| *end <= self.size)
-            .ok_or(MemError::Unmapped { va, access })?;
-        let mut addr = va.get();
-        while addr < end {
-            let Some((_, region)) = self.region_at(addr) else {
-                return Err(MemError::Unmapped {
-                    va: GuestVa::new(addr),
-                    access,
-                });
-            };
-            if !region.perm.allows(access) {
-                return Err(MemError::PermissionDenied {
-                    va: GuestVa::new(addr),
-                    access,
-                });
-            }
-            addr = region.end;
-        }
-        Ok(to_usize(va.get()))
+    pub fn write_bytes(&self, va: GuestVa, data: &[u8]) -> Result<()> {
+        self.view().write_bytes(va, data)
     }
 
     fn checked_range(&self, va: GuestVa, size: u64) -> Result<u64> {
@@ -378,31 +322,163 @@ impl AddressSpace {
 
     /// Checks that `[va, va + size)` is page-aligned, inside the space and mapped with no gap;
     /// returns its end.
-    fn mapped_range(&self, va: GuestVa, size: u64) -> Result<u64> {
+    fn mapped_range(&self, regions: &Regions, va: GuestVa, size: u64) -> Result<u64> {
         let end = self.checked_range(va, size)?;
         let mut addr = va.get();
         while addr < end {
-            let (_, region) = self
+            let (_, region) = regions
                 .region_at(addr)
                 .ok_or(MemError::NotARegion { va, size })?;
             addr = region.end;
         }
         Ok(end)
     }
+}
 
+impl SpaceView<'_> {
+    /// The permission of the region containing `va`, or `None` if it is unmapped.
+    pub fn permission(&self, va: GuestVa) -> Option<Permission> {
+        self.regions
+            .region_at(va.get())
+            .map(|(_, region)| region.perm)
+    }
+
+    /// The span containing `va`: its mapped region, or the free gap around it. `None` if `va`
+    /// is outside the address space.
+    pub fn query(&self, va: GuestVa) -> Option<Span> {
+        let addr = va.get();
+        if addr >= self.space.size {
+            return None;
+        }
+        if let Some((start, region)) = self.regions.region_at(addr) {
+            return Some(Span {
+                base: GuestVa::new(start),
+                size: region.end - start,
+                permission: Some(region.perm),
+            });
+        }
+        let base = self
+            .regions
+            .0
+            .range(..addr)
+            .next_back()
+            .map_or(0, |(_, region)| region.end);
+        let end = self
+            .regions
+            .0
+            .range(addr..)
+            .next()
+            .map_or(self.space.size, |(&start, _)| start);
+        Some(Span {
+            base: GuestVa::new(base),
+            size: end - base,
+            permission: None,
+        })
+    }
+
+    /// Size of the address space in bytes; every valid address is below it.
+    pub fn size(&self) -> u64 {
+        self.space.size
+    }
+
+    /// Every mapped region, in address order.
+    pub fn regions(&self) -> impl Iterator<Item = Span> + '_ {
+        self.regions.0.iter().map(|(&start, region)| Span {
+            base: GuestVa::new(start),
+            size: region.end - start,
+            permission: Some(region.perm),
+        })
+    }
+
+    /// The host address of guest address 0, for code that accesses guest memory inline (the
+    /// interpreter and JITs, ADR-0031).
+    ///
+    /// Guest byte `va` of a region listed by [`regions`](Self::regions) is at `host_base() + va`,
+    /// committed and host-writable for as long as this view lives. Every other address may be
+    /// uncommitted. Permissions are not enforced by the host: whoever uses the pointer checks
+    /// them against `regions`. Other threads may access the same bytes at the same time.
+    pub fn host_base(&self) -> NonNull<u8> {
+        self.space.host.base()
+    }
+
+    /// Reads a little-endian value at `va`.
+    pub fn read<T: Scalar>(&self, va: GuestVa) -> Result<T> {
+        let mut bytes = T::Bytes::default();
+        self.read_bytes(va, bytes.as_mut())?;
+        Ok(T::from_le(bytes))
+    }
+
+    /// Writes a little-endian value at `va`.
+    pub fn write<T: Scalar>(&self, va: GuestVa, value: T) -> Result<()> {
+        self.write_bytes(va, value.to_le().as_ref())
+    }
+
+    /// Fills `buf` from guest memory at `va`; every byte must be mapped and readable.
+    pub fn read_bytes(&self, va: GuestVa, buf: &mut [u8]) -> Result<()> {
+        let guest = self.checked_bytes(va, buf.len(), Access::Read)?;
+        for (offset, out) in buf.iter_mut().enumerate() {
+            // SAFETY: `checked_bytes` proved the range is mapped, hence committed and inside
+            // the reservation, and this view keeps it mapped. Another thread may access the
+            // same guest byte, so the access is atomic.
+            *out = unsafe { AtomicU8::from_ptr(guest.add(offset)) }.load(Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    /// Copies `data` to guest memory at `va`; every byte must be mapped and writable, and none
+    /// is written otherwise.
+    pub fn write_bytes(&self, va: GuestVa, data: &[u8]) -> Result<()> {
+        let guest = self.checked_bytes(va, data.len(), Access::Write)?;
+        for (offset, byte) in data.iter().enumerate() {
+            // SAFETY: as in `read_bytes`; mapped guest bytes are committed read-write.
+            unsafe { AtomicU8::from_ptr(guest.add(offset)) }.store(*byte, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    /// Checks that `[va, va + len)` is mapped with `access` allowed; returns its host address.
+    fn checked_bytes(&self, va: GuestVa, len: usize, access: Access) -> Result<*mut u8> {
+        let end = va
+            .get()
+            .checked_add(len as u64)
+            .filter(|end| *end <= self.space.size)
+            .ok_or(MemError::Unmapped { va, access })?;
+        let mut addr = va.get();
+        while addr < end {
+            let Some((_, region)) = self.regions.region_at(addr) else {
+                return Err(MemError::Unmapped {
+                    va: GuestVa::new(addr),
+                    access,
+                });
+            };
+            if !region.perm.allows(access) {
+                return Err(MemError::PermissionDenied {
+                    va: GuestVa::new(addr),
+                    access,
+                });
+            }
+            addr = region.end;
+        }
+        // SAFETY: `va + len` is at most the space size, the length of the reservation, so the
+        // result stays inside it.
+        Ok(unsafe { self.host_base().as_ptr().add(to_usize(va.get())) })
+    }
+}
+
+impl Regions {
     /// Makes `addr` a region boundary: a region that contains it is split in two.
     fn split_at(&mut self, addr: u64) {
         if let Some((start, region)) = self.region_at(addr)
             && start < addr
         {
-            self.regions.insert(
+            self.0.insert(
                 start,
                 Region {
                     end: addr,
                     ..region
                 },
             );
-            self.regions.insert(addr, region);
+            self.0.insert(addr, region);
         }
     }
 
@@ -410,19 +486,19 @@ impl AddressSpace {
     /// to the region that starts at `hi`.
     fn merge(&mut self, lo: u64, hi: u64) {
         let mut cursor = self
-            .regions
+            .0
             .range(..lo)
             .next_back()
             .filter(|(_, region)| region.end == lo)
             .map_or(lo, |(&start, _)| start);
-        while let Some(&region) = self.regions.get(&cursor) {
+        while let Some(&region) = self.0.get(&cursor) {
             if region.end > hi {
                 break;
             }
-            match self.regions.get(&region.end).copied() {
+            match self.0.get(&region.end).copied() {
                 Some(next) if next.perm == region.perm => {
-                    self.regions.remove(&region.end);
-                    self.regions.insert(
+                    self.0.remove(&region.end);
+                    self.0.insert(
                         cursor,
                         Region {
                             end: next.end,
@@ -436,12 +512,12 @@ impl AddressSpace {
     }
 
     fn region_at(&self, addr: u64) -> Option<(u64, Region)> {
-        let (&start, &region) = self.regions.range(..=addr).next_back()?;
+        let (&start, &region) = self.0.range(..=addr).next_back()?;
         (addr < region.end).then_some((start, region))
     }
 
     fn overlaps(&self, start: u64, end: u64) -> bool {
-        self.regions
+        self.0
             .range(..end)
             .next_back()
             .is_some_and(|(_, region)| region.end > start)

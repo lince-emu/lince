@@ -77,7 +77,7 @@ pub fn run_nro(file: &[u8], out: &mut impl Write) -> Result<(), AppError> {
         ..State::default()
     };
     loop {
-        let result = run(&mut state, &mut mem, SLICE)?;
+        let result = run(&mut state, &mem, SLICE)?;
         let number = match result.exit {
             Exit::Svc { number } => number,
             Exit::Limit => continue,
@@ -93,7 +93,7 @@ pub fn run_nro(file: &[u8], out: &mut impl Write) -> Result<(), AppError> {
         let mut regs = Regs::default();
         let args = regs.len();
         regs.copy_from_slice(&state.x[..args]);
-        let flow = kernel.dispatch(&mut mem, number, &mut regs);
+        let flow = kernel.dispatch(&mem, number, &mut regs);
         state.x[..args].copy_from_slice(&regs);
         out.write_all(&kernel.take_debug_output())?;
         match flow? {

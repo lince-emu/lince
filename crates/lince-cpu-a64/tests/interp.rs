@@ -22,7 +22,7 @@ const V: u32 = 1 << 28;
 
 /// An address space with `words` at `CODE`, read-execute.
 fn space_with(words: &[u32]) -> AddressSpace {
-    let mut mem = AddressSpace::new(SpaceConfig::for_host()).expect("space");
+    let mem = AddressSpace::new(SpaceConfig::for_host()).expect("space");
     mem.map(GuestVa::new(CODE), GUEST_PAGE_SIZE, RW)
         .expect("map code");
     for (i, word) in (0u64..).zip(words) {
@@ -36,12 +36,12 @@ fn space_with(words: &[u32]) -> AddressSpace {
 
 /// Runs the single instruction `word` at `CODE` from `state`; returns the run and the state.
 fn step(word: u32, state: &State) -> (Run, State) {
-    let mut mem = space_with(&[word]);
+    let mem = space_with(&[word]);
     let mut state = State {
         pc: CODE,
         ..state.clone()
     };
-    let result = run(&mut state, &mut mem, 1).expect("run");
+    let result = run(&mut state, &mem, 1).expect("run");
     (result, state)
 }
 
@@ -175,13 +175,13 @@ fn svc_completes_and_exits_with_its_number() {
 
 #[test]
 fn adrp_adds_a_page_offset_to_the_page_of_pc() {
-    let mut mem = space_with(&[0xd503_201f, 0xf000_0000]); // (any word), adrp x0, +3 pages
+    let mem = space_with(&[0xd503_201f, 0xf000_0000]); // (any word), adrp x0, +3 pages
     let mut state = State {
         pc: CODE + 4,
         ..State::default()
     };
 
-    run(&mut state, &mut mem, 1).unwrap();
+    run(&mut state, &mem, 1).unwrap();
 
     assert_eq!(state.x[0], CODE + 0x3000);
 }
@@ -293,7 +293,7 @@ fn run_stops_before_an_undefined_word() {
 
 #[test]
 fn fetching_outside_executable_memory_aborts() {
-    let mut mem = space_with(&[0x1400_0000]);
+    let mem = space_with(&[0x1400_0000]);
     mem.map(GuestVa::new(0x2_0000), GUEST_PAGE_SIZE, RW)
         .unwrap();
     for pc in [0x2_0000, 0x3_0000] {
@@ -301,7 +301,7 @@ fn fetching_outside_executable_memory_aborts() {
             pc,
             ..State::default()
         };
-        let result = run(&mut state, &mut mem, 1).unwrap();
+        let result = run(&mut state, &mem, 1).unwrap();
         assert_eq!(
             result,
             Run {
@@ -317,13 +317,13 @@ fn fetching_outside_executable_memory_aborts() {
 
 #[test]
 fn a_branch_to_a_misaligned_address_stops_before_fetching() {
-    let mut mem = space_with(&[0xd65f_03c0]); // ret
+    let mem = space_with(&[0xd65f_03c0]); // ret
     let mut state = State {
         pc: CODE,
         ..with_x(&[(30, CODE + 2)])
     };
 
-    let result = run(&mut state, &mut mem, 2).unwrap();
+    let result = run(&mut state, &mem, 2).unwrap();
 
     assert_eq!(
         result,
@@ -338,13 +338,13 @@ fn a_branch_to_a_misaligned_address_stops_before_fetching() {
 
 #[test]
 fn run_counts_instructions_up_to_the_limit() {
-    let mut mem = space_with(&[0x1400_0000]); // b . (an endless loop)
+    let mem = space_with(&[0x1400_0000]); // b . (an endless loop)
     let mut state = State {
         pc: CODE,
         ..State::default()
     };
 
-    let result = run(&mut state, &mut mem, 5).unwrap();
+    let result = run(&mut state, &mem, 5).unwrap();
 
     assert_eq!(
         result,

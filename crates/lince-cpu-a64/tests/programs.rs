@@ -34,7 +34,7 @@ fn run_program(name: &str) -> Vec<String> {
     let mut printed = Vec::new();
 
     loop {
-        let result = run(&mut state, &mut mem, LIMIT).expect("run");
+        let result = run(&mut state, &mem, LIMIT).expect("run");
         match result.exit {
             Exit::Svc {
                 number: OUTPUT_DEBUG_STRING,

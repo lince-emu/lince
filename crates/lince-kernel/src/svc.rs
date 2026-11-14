@@ -92,7 +92,7 @@ fn done(regs: &mut Regs, code: ResultCode) -> Outcome {
 /// `X1` = size; out `W0`, `X1` = heap base. The heap is kept as the chunks that grew it, so it
 /// can shrink only to a size where a chunk ends.
 // GUESS: B1 programs shrink the heap to 0 or not at all; other sizes return `INVALID_STATE`.
-fn set_heap_size(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
+fn set_heap_size(kernel: &mut Kernel, mem: &AddressSpace, regs: &mut Regs) -> Outcome {
     let size = regs[1];
     if !size.is_multiple_of(HEAP_ALIGN) || size > HEAP_MAX {
         return done(regs, INVALID_SIZE);
@@ -143,7 +143,7 @@ fn aligned_range(regs: &Regs) -> std::result::Result<(GuestVa, u64), ResultCode>
 
 /// `X0` address, `X1` size, `W2` permission: none, read or read-write only (S6). The range may
 /// be part of a region or span several; every page in it must be mapped.
-fn set_memory_permission(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
+fn set_memory_permission(_: &mut Kernel, mem: &AddressSpace, regs: &mut Regs) -> Outcome {
     let (va, size) = match aligned_range(regs) {
         Ok(range) => range,
         Err(code) => return done(regs, code),
@@ -167,7 +167,7 @@ fn set_memory_permission(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs
 /// not allow) return the distinct `Unimplemented` error, logged once by name: their result code
 /// is undocumented (research O3), so none is invented.
 // GUESS: accepting Uncached as a no-op is enough for B1, which has no device memory.
-fn set_memory_attribute(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
+fn set_memory_attribute(kernel: &mut Kernel, mem: &AddressSpace, regs: &mut Regs) -> Outcome {
     let (va, size) = match aligned_range(regs) {
         Ok(range) => range,
         Err(code) => return done(regs, code),
@@ -187,7 +187,7 @@ fn set_memory_attribute(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut 
 /// `X0` = pointer to a 0x28-byte `MemoryInfo`, `X2` = address; out `W0`, `W1` page info.
 // GUESS: page info is 0 and a bad output pointer returns `INVALID_ADDRESS`; neither is
 // documented (research O3).
-fn query_memory(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
+fn query_memory(_: &mut Kernel, mem: &AddressSpace, regs: &mut Regs) -> Outcome {
     let out = GuestVa::new(regs[0]);
     // GUESS: an address past the space is one Inaccessible region from the end of the space to
     // the top of the 64-bit range; S3 names the type, the extent is not documented.
@@ -237,7 +237,7 @@ fn span_type(permission: Option<Permission>) -> (u32, u32) {
     }
 }
 
-fn exit_process(_: &mut Kernel, _: &mut AddressSpace, _: &mut Regs) -> Outcome {
+fn exit_process(_: &mut Kernel, _: &AddressSpace, _: &mut Regs) -> Outcome {
     Outcome::Exit
 }
 
@@ -245,7 +245,7 @@ fn exit_process(_: &mut Kernel, _: &mut AddressSpace, _: &mut Regs) -> Outcome {
 /// call returns; otherwise the guest aborted and stops.
 // GUESS: without bit 31 Horizon ends the process or enters a debugger (S10 says only that bit 31
 // makes the call return); stopping the guest keeps an abort visible.
-fn break_(kernel: &mut Kernel, _: &mut AddressSpace, regs: &mut Regs) -> Outcome {
+fn break_(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Regs) -> Outcome {
     kernel.log_stub(kernel.break_stub);
     let reason = regs[0];
     if reason & BREAK_RETURN_BIT == 0 {
@@ -256,7 +256,7 @@ fn break_(kernel: &mut Kernel, _: &mut AddressSpace, regs: &mut Regs) -> Outcome
 
 /// `X0` = pointer, `X1` = byte length; out `W0`. The bytes are kept for the host to print; the
 /// host drains them with [`Kernel::take_debug_output`].
-fn output_debug_string(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
+fn output_debug_string(kernel: &mut Kernel, mem: &AddressSpace, regs: &mut Regs) -> Outcome {
     let (ptr, len) = (GuestVa::new(regs[0]), regs[1]);
     if len > DEBUG_STRING_MAX {
         return done(regs, INVALID_SIZE);
@@ -278,7 +278,7 @@ fn output_debug_string(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut R
 }
 
 /// Reserved for Switch 2 (research S11): named, but its behavior is UNKNOWN.
-fn set_gpu_memory_attribute(kernel: &mut Kernel, _: &mut AddressSpace, _: &mut Regs) -> Outcome {
+fn set_gpu_memory_attribute(kernel: &mut Kernel, _: &AddressSpace, _: &mut Regs) -> Outcome {
     kernel.log_stub(kernel.gpu_attribute_stub);
     Outcome::Unsupported
 }

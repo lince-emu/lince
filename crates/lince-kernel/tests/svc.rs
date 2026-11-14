@@ -36,7 +36,7 @@ impl Fixture {
     fn svc(&mut self, number: u8, args: &[u64]) -> lince_kernel::Result<(Flow, Regs)> {
         let mut regs: Regs = [0; 8];
         regs[..args.len()].copy_from_slice(args);
-        let flow = self.kernel.dispatch(&mut self.mem, number, &mut regs)?;
+        let flow = self.kernel.dispatch(&self.mem, number, &mut regs)?;
         Ok((flow, regs))
     }
 
@@ -316,11 +316,11 @@ fn an_unknown_svc_returns_a_distinct_error_and_is_logged_once() {
     let mut regs: Regs = [0xAA; 8];
 
     for _ in 0..3 {
-        let error = f.kernel.dispatch(&mut f.mem, 0x55, &mut regs).unwrap_err();
+        let error = f.kernel.dispatch(&f.mem, 0x55, &mut regs).unwrap_err();
         assert_eq!(error, KernelError::UnknownSvc { number: 0x55 });
     }
     assert_eq!(regs, [0xAA; 8]);
-    let error = f.kernel.dispatch(&mut f.mem, 0x81, &mut regs).unwrap_err();
+    let error = f.kernel.dispatch(&f.mem, 0x81, &mut regs).unwrap_err();
     assert_eq!(error, KernelError::UnknownSvc { number: 0x81 });
 
     let logged: Vec<_> = f
@@ -342,7 +342,7 @@ fn the_switch_2_svc_0x80_is_reserved_by_name_and_never_succeeds() {
     let mut regs: Regs = [0; 8];
 
     for _ in 0..2 {
-        let error = f.kernel.dispatch(&mut f.mem, 0x80, &mut regs).unwrap_err();
+        let error = f.kernel.dispatch(&f.mem, 0x80, &mut regs).unwrap_err();
         assert_eq!(
             error,
             KernelError::Unimplemented {

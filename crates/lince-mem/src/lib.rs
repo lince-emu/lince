@@ -10,8 +10,10 @@
 //! explicit parameter, so native execution on ARM64 hosts with 16 KiB pages stays possible.
 //!
 //! # Threads
-//! An [`AddressSpace`] is used by one thread at a time. Reads and writes take no locks, perform
-//! no I/O and do not allocate; `map` and `unmap` call the host OS.
+//! One [`AddressSpace`] is shared by the core threads of a process (ADR-0019 B2 scope). Reads,
+//! writes and queries take the read side of the region-map lock, perform no I/O and do not
+//! allocate; `map`, `unmap` and `protect` take the write side, and `map` and `unmap` call the
+//! host OS. A [`SpaceView`] holds the read side across several accesses.
 //!
 //! # Safety
 //! `[unsafe]` crate (docs/04-rust-architecture.md §2, ARCH-24): host memory calls live in
@@ -26,4 +28,4 @@ mod platform;
 mod space;
 
 pub use error::{Access, MemError, Result};
-pub use space::{AddressSpace, GUEST_PAGE_SIZE, Permission, Scalar, SpaceConfig, Span};
+pub use space::{AddressSpace, GUEST_PAGE_SIZE, Permission, Scalar, SpaceConfig, SpaceView, Span};

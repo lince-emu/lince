@@ -22,7 +22,7 @@ const RX: Permission = Permission::READ.union(Permission::EXECUTE);
 
 /// `words` at `CODE` (read-execute) and a zeroed read-write page at `DATA`.
 fn space_with(words: &[u32]) -> AddressSpace {
-    let mut mem = AddressSpace::new(SpaceConfig::for_host()).expect("space");
+    let mem = AddressSpace::new(SpaceConfig::for_host()).expect("space");
     mem.map(GuestVa::new(CODE), GUEST_PAGE_SIZE, RW)
         .expect("map code");
     for (i, word) in (0u64..).zip(words) {
@@ -248,7 +248,7 @@ fn an_access_across_two_regions_takes_the_slow_path() {
     let next = DATA + GUEST_PAGE_SIZE;
     mem.map(GuestVa::new(next), GUEST_PAGE_SIZE, RW).unwrap();
     assert_eq!(
-        mem.regions().count(),
+        mem.view().regions().count(),
         3,
         "the data pages are two regions, so no single region holds the access"
     );

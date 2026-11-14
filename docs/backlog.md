@@ -59,8 +59,8 @@ Rules:
 | T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Done | T-046 | 0004, 0017, 0019, 0024 |
 | T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Done | — | 0024 |
 | T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Done | T-048 | 0001, 0002 |
-| T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | In progress | T-047, T-049 | 0004, 0005, 0031 |
-| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Ready | T-047, T-048 | 0004, 0017, 0024 |
+| T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Done | T-047, T-049 | 0004, 0005, 0031 |
+| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-048, T-059 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Blocked | T-052 | 0024 |
 | T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
@@ -68,6 +68,7 @@ Rules:
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Ready | T-047 | 0017, 0024 |
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
+| T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | In progress | T-047, T-050 | 0004, 0019, 0031 |
 
 ## Details
 
@@ -483,10 +484,6 @@ and the thread SVCs from T-048 (create, start, exit, sleep, priority, core mask)
 No threads beyond the six core threads (invariant 7).
 - **Acceptance:** kernel tests run threads on several cores; a thread pinned to a core never
   runs elsewhere; teardown joins every core thread.
-- **Also (from #56):** once the address space is shared across core threads (ADR-0019 B2
-  scope), a stress test runs two core threads contending on one exclusive pair through
-  `lince_cpu_a64::run` and checks that no update is lost; #56 only interleaves them on one
-  thread.
 
 ### T-052 — Handles, sync objects and events
 A per-process handle table, mutexes and condition variables (address arbitration), events,
@@ -535,3 +532,12 @@ source that no longer builds goes unnoticed. `cargo xtask ci` builds every progr
 comparing bytes (LLVM versions differ between hosts); the Linux job installs `lld`.
 - **Acceptance:** `cargo xtask ci` fails when a test program does not assemble or link, on
   Windows and Linux; `cargo xtask homebrew [--check]` behaves as before.
+
+### T-059 — Shared address space
+Split from T-051, which needs it first. The ADR-0019 B2 scope: the region map behind a
+reader–writer lock, so `map`, `unmap` and `protect` work from any core and never leave another
+core reading a half-updated map; `lince_cpu_a64::run` holds the read side for one slice, so a
+region cannot be unmapped under the interpreter's inline accesses. Page contents stay unlocked.
+- **Acceptance:** `AddressSpace` is `Send + Sync`; a test maps and unmaps from one thread
+  while another reads; a stress test (from #56) runs two threads contending on one exclusive
+  pair through `lince_cpu_a64::run` and checks that no update is lost.

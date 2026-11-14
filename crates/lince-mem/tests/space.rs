@@ -19,7 +19,7 @@ fn space() -> lince_mem::Result<AddressSpace> {
 
 #[test]
 fn mapped_memory_starts_zeroed_and_keeps_written_values() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x8000_0000), 2 * PAGE, RW).unwrap();
 
     assert_eq!(mem.read::<u64>(va(0x8000_0010)).unwrap(), 0);
@@ -36,7 +36,7 @@ fn mapped_memory_starts_zeroed_and_keeps_written_values() {
 
 #[test]
 fn an_access_across_two_adjacent_regions_succeeds() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x1_0000), PAGE, RW).unwrap();
     mem.map(va(0x1_1000), PAGE, RW).unwrap();
 
@@ -47,7 +47,7 @@ fn an_access_across_two_adjacent_regions_succeeds() {
 
 #[test]
 fn the_top_of_the_39_bit_space_is_usable() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     let last = (1 << 39) - PAGE;
     mem.map(va(last), PAGE, RW).unwrap();
 
@@ -62,7 +62,7 @@ fn the_top_of_the_39_bit_space_is_usable() {
 
 #[test]
 fn reading_unmapped_memory_faults_at_the_first_unmapped_byte() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x2_0000), PAGE, RW).unwrap();
 
     let fault = mem.read::<u64>(va(0x2_0FFC)).unwrap_err();
@@ -82,7 +82,7 @@ fn reading_unmapped_memory_faults_at_the_first_unmapped_byte() {
 
 #[test]
 fn accesses_the_permission_forbids_fault_and_leave_memory_unchanged() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x3_0000), PAGE, Permission::READ | Permission::EXECUTE)
         .unwrap();
     mem.map(va(0x4_0000), PAGE, Permission::NONE).unwrap();
@@ -109,7 +109,7 @@ fn accesses_the_permission_forbids_fault_and_leave_memory_unchanged() {
 
 #[test]
 fn protect_changes_what_accesses_are_allowed_and_keeps_the_contents() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x4_8000), 2 * PAGE, RW).unwrap();
     mem.write(va(0x4_8000), 0x55_u8).unwrap();
 
@@ -143,7 +143,7 @@ fn layout(mem: &AddressSpace) -> Vec<(u64, u64, Permission)> {
 fn protect_splits_a_region_at_its_head_middle_and_tail() {
     const R: Permission = Permission::READ;
     let base = 0x4_0000;
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(base), 6 * PAGE, RW).unwrap();
 
     mem.protect(va(base), PAGE, R).unwrap();
@@ -171,7 +171,7 @@ fn protect_splits_a_region_at_its_head_middle_and_tail() {
 
 #[test]
 fn protect_across_adjacent_regions_merges_what_ends_up_equal() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x4_0000), 2 * PAGE, RW).unwrap();
     mem.map(va(0x4_2000), 2 * PAGE, Permission::READ).unwrap();
 
@@ -188,7 +188,7 @@ fn protect_across_adjacent_regions_merges_what_ends_up_equal() {
 
 #[test]
 fn protect_rejects_a_range_with_an_unmapped_page_and_changes_nothing() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x4_C000), PAGE, RW).unwrap();
     mem.map(va(0x4_E000), PAGE, RW).unwrap();
     let before = layout(&mem);
@@ -203,7 +203,7 @@ fn protect_rejects_a_range_with_an_unmapped_page_and_changes_nothing() {
 
 #[test]
 fn unmap_removes_part_of_a_region_or_a_range_across_regions() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x4_0000), 4 * PAGE, RW).unwrap();
     mem.map(va(0x4_4000), 2 * PAGE, Permission::READ).unwrap();
     mem.write(va(0x4_0000), 7_u8).unwrap();
@@ -228,7 +228,7 @@ fn unmap_removes_part_of_a_region_or_a_range_across_regions() {
 
 #[test]
 fn unmapped_memory_faults_and_is_zero_when_mapped_again() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x5_0000), PAGE, RW).unwrap();
     mem.write(va(0x5_0000), 0xFF_u8).unwrap();
 
@@ -242,7 +242,7 @@ fn unmapped_memory_faults_and_is_zero_when_mapped_again() {
 
 #[test]
 fn invalid_ranges_are_rejected() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x6_0000), 2 * PAGE, RW).unwrap();
 
     assert!(matches!(
@@ -270,7 +270,7 @@ fn with_16_kib_host_pages_unmapping_keeps_neighbours_in_the_same_host_page() {
         address_bits: 39,
         host_page_size: 0x4000,
     };
-    let mut mem = AddressSpace::new(config).unwrap();
+    let mem = AddressSpace::new(config).unwrap();
     // Four guest pages share the host page at 0x10000; a fifth starts the next one.
     mem.map(va(0x1_0000), PAGE, RW).unwrap();
     mem.map(va(0x1_1000), 4 * PAGE, RW).unwrap();
@@ -293,7 +293,7 @@ fn with_16_kib_host_pages_unmapping_part_of_a_region_keeps_the_remnants() {
         address_bits: 39,
         host_page_size: 0x4000,
     };
-    let mut mem = AddressSpace::new(config).unwrap();
+    let mem = AddressSpace::new(config).unwrap();
     // Twelve guest pages over three host pages; the unmapped range [0x2_2000, 0x2_9000) shares
     // its first and last host pages with the remnants and covers the middle one entirely.
     mem.map(va(0x2_0000), 12 * PAGE, RW).unwrap();
@@ -336,7 +336,7 @@ fn unusable_configurations_are_rejected() {
 
 #[test]
 fn query_reports_the_region_or_the_free_gap_around_an_address() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     let size = 1u64 << 39;
     mem.map(va(0x10_0000), 2 * PAGE, RW).unwrap();
     mem.map(va(0x20_0000), PAGE, Permission::READ).unwrap();
@@ -371,13 +371,14 @@ fn query_reports_the_region_or_the_free_gap_around_an_address() {
 
 #[test]
 fn regions_lists_every_mapped_region_in_address_order() {
-    let mut mem = space().unwrap();
+    let mem = space().unwrap();
     mem.map(va(0x3_0000), PAGE, Permission::READ).unwrap();
     mem.map(va(0x1_0000), 2 * PAGE, RW).unwrap();
     mem.map(va(0x2_0000), PAGE, RW).unwrap();
     mem.unmap(va(0x2_0000), PAGE).unwrap();
 
     let regions: Vec<_> = mem
+        .view()
         .regions()
         .map(|s| (s.base, s.size, s.permission))
         .collect();
@@ -393,11 +394,11 @@ fn regions_lists_every_mapped_region_in_address_order() {
 
 #[test]
 fn host_base_is_the_same_for_the_life_of_the_space() {
-    let mut mem = space().unwrap();
-    let before = mem.host_base();
+    let mem = space().unwrap();
+    let before = mem.view().host_base();
     mem.map(va(0x1_0000), PAGE, RW).unwrap();
 
-    assert_eq!(mem.host_base(), before);
+    assert_eq!(mem.view().host_base(), before);
 }
 
 #[test]
@@ -406,4 +407,52 @@ fn permission_bits_match_the_c_header_values() {
     assert_eq!(Permission::WRITE.bits(), 2);
     assert_eq!(Permission::EXECUTE.bits(), 4);
     assert_eq!((Permission::READ | Permission::EXECUTE).bits(), 5);
+}
+
+#[test]
+fn the_space_can_be_shared_between_threads() {
+    fn shared<T: Send + Sync>() {}
+    shared::<AddressSpace>();
+}
+
+/// One thread maps, writes, reprotects and unmaps a page in a loop while another reads a page
+/// that stays mapped: the reader never sees an error or a wrong value, and every change the
+/// writer makes is visible once it returns (ADR-0019 B2 scope).
+#[test]
+fn map_unmap_and_protect_on_one_thread_never_disturb_reads_on_another() {
+    const ROUNDS: u32 = 2000;
+    let mem = space().unwrap();
+    mem.map(va(0x1_0000), PAGE, RW).unwrap();
+    mem.write(va(0x1_0000), 0x1234_5678u32).unwrap();
+    let done = std::sync::atomic::AtomicBool::new(false);
+
+    std::thread::scope(|scope| {
+        let reader = scope.spawn(|| {
+            let mut reads = 0u64;
+            while !done.load(std::sync::atomic::Ordering::Acquire) {
+                assert_eq!(mem.read::<u32>(va(0x1_0000)).unwrap(), 0x1234_5678);
+                reads += 1;
+            }
+            reads
+        });
+        for round in 0..ROUNDS {
+            let churn = va(0x2_0000 + u64::from(round % 4) * PAGE);
+            mem.map(churn, PAGE, RW).unwrap();
+            mem.write(churn, round).unwrap();
+            mem.protect(churn, PAGE, Permission::READ).unwrap();
+            assert_eq!(mem.read::<u32>(churn).unwrap(), round);
+            assert!(matches!(
+                mem.write(churn, 0u32),
+                Err(MemError::PermissionDenied {
+                    access: Access::Write,
+                    ..
+                })
+            ));
+            mem.unmap(churn, PAGE).unwrap();
+            assert_eq!(mem.permission(churn), None);
+        }
+        done.store(true, std::sync::atomic::Ordering::Release);
+        assert!(reader.join().unwrap() > 0, "the reader ran");
+    });
+    assert_eq!(mem.view().regions().count(), 1);
 }
