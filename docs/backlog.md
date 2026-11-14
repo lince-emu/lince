@@ -37,15 +37,15 @@ Rules:
 | T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | Done | — | 0006, 0007, 0009, 0030 |
 | T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Done | T-025 | 0030 |
 | T-036 | Study: what Rust and C++ should each own (refines ADR-0030) | Research | Done | T-026 | 0005, 0019, 0030, 0031 |
-| T-027 | Review the B1 ADRs for acceptance (0004, 0005 interpreter part, 0019 address-space part, 0024 SVC boundary, 0027 logging part) | Maintainer | Ready | — | 0004, 0005, 0019, 0024, 0027 |
+| T-027 | Review the B1 ADRs for acceptance (0004, 0005 interpreter part, 0019 address-space part, 0024 SVC boundary, 0027 logging part) | Maintainer | Done | — | 0004, 0005, 0019, 0024, 0027 |
 | T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | Ready | — | 0024 |
 | T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | Ready | T-028 | 0001, 0002 |
-| T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Blocked | T-027 | 0027 |
-| T-031 | `lince-mem`: flat guest address space with typed access | Impl | Blocked | T-027 | 0019 |
-| T-032 | `lince-loader`: load an NRO into guest memory | Impl | Blocked | T-028, T-031 | 0024 |
-| T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Blocked | T-027, T-029 | 0004, 0005, 0030 |
-| T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Blocked | T-027, T-028 | 0024 |
-| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034 | 0001 |
+| T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Ready | T-027 | 0027 |
+| T-031 | `lince-mem`: flat guest address space with typed access | Impl | Ready | T-027 | 0019 |
+| T-032 | `lince-loader`: load an NRO into guest memory | Impl | Ready | T-028, T-031 | 0024 |
+| T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Ready | T-027, T-029 | 0004, 0005, 0030 |
+| T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Ready | T-027, T-028 | 0024 |
+| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Ready | T-029–T-034 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Ready | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
@@ -256,6 +256,8 @@ part B1 needs as **B1 scope**; accepting means recording that the B1 scope is ac
 the rest stays Proposed. ADR-0031 (Rust/C++ placement) is already Accepted and applies to
 T-031 and T-033.
 - **Acceptance:** each ADR's status line states what is accepted; T-030 to T-034 become Ready.
+- **Done 2026-11-14:** the maintainer accepted the B1 scope of ADR-0004, 0005, 0019, 0024 and
+  0027; the rest of each stays Proposed.
 
 ### T-028 — Research: NRO format and B1 SVCs
 Use the `research-note` skill. From public sources only (switchbrew and similar, LEGAL-11;

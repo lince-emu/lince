@@ -1,6 +1,7 @@
 # ADR-0019: Guest and host memory management
 
-- **Status:** Proposed. B1 (doc 07) needs only the part marked **B1 scope** below accepted.
+- **Status:** Partially accepted. **B1 scope** accepted (maintainer, 2026-11-14); the rest
+  stays Proposed.
 - **Date:** 2026-11-13
 - **Related:** doc 01 E13, doc 04 §4; ADR-0021, ADR-0022
 
