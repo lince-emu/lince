@@ -107,6 +107,49 @@ fn set_memory_permission_changes_a_region_and_checks_its_arguments() {
 }
 
 #[test]
+fn set_memory_permission_changes_part_of_a_region() {
+    let mut f = fixture().unwrap();
+    f.mem.map(va(0x10_0000), 4 * PAGE, RW).unwrap();
+
+    assert_eq!(f.result(0x02, &[0x10_1000, 2 * PAGE, 1]).unwrap(), 0);
+
+    assert_eq!(f.mem.permission(va(0x10_0000)), Some(RW));
+    assert_eq!(f.mem.permission(va(0x10_1000)), Some(Permission::READ));
+    assert_eq!(f.mem.permission(va(0x10_2000)), Some(Permission::READ));
+    assert_eq!(f.mem.permission(va(0x10_3000)), Some(RW));
+}
+
+#[test]
+fn set_memory_permission_spans_heap_chunks_and_the_heap_still_shrinks() {
+    let mut f = fixture().unwrap();
+    f.svc(0x01, &[0, MIB2]).unwrap();
+    f.svc(0x01, &[0, 2 * MIB2]).unwrap();
+    let across = HEAP_BASE.get() + MIB2 - PAGE;
+
+    assert_eq!(f.result(0x02, &[across, 2 * PAGE, 1]).unwrap(), 0);
+    assert_eq!(f.mem.permission(va(across)), Some(Permission::READ));
+    assert_eq!(f.mem.permission(va(across + PAGE)), Some(Permission::READ));
+
+    assert_eq!(f.result(0x01, &[0, MIB2]).unwrap(), 0);
+    assert_eq!(f.mem.permission(va(across)), Some(Permission::READ));
+    assert!(f.mem.permission(va(across + PAGE)).is_none());
+    assert_eq!(f.result(0x01, &[0, 0]).unwrap(), 0);
+    assert!(f.mem.permission(HEAP_BASE).is_none());
+}
+
+#[test]
+fn set_memory_permission_with_an_unmapped_page_changes_nothing() {
+    let mut f = fixture().unwrap();
+    f.mem.map(va(0x10_0000), PAGE, RW).unwrap();
+    f.mem.map(va(0x10_2000), PAGE, RW).unwrap();
+
+    assert_eq!(f.result(0x02, &[0x10_0000, 3 * PAGE, 1]).unwrap(), 0xD401);
+
+    assert_eq!(f.mem.permission(va(0x10_0000)), Some(RW));
+    assert_eq!(f.mem.permission(va(0x10_2000)), Some(RW));
+}
+
+#[test]
 fn set_memory_attribute_accepts_mapped_memory_only() {
     let mut f = fixture().unwrap();
     f.mem.map(va(0x10_0000), 2 * PAGE, RW).unwrap();

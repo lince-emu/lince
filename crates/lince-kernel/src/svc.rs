@@ -141,8 +141,8 @@ fn aligned_range(regs: &Regs) -> std::result::Result<(GuestVa, u64), ResultCode>
     }
 }
 
-/// `X0` address, `X1` size, `W2` permission: none, read or read-write only (S6). The range must
-/// be one whole mapped region (limit of `AddressSpace::protect`).
+/// `X0` address, `X1` size, `W2` permission: none, read or read-write only (S6). The range may
+/// be part of a region or span several; every page in it must be mapped.
 fn set_memory_permission(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
     let (va, size) = match aligned_range(regs) {
         Ok(range) => range,

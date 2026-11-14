@@ -52,7 +52,7 @@ Rules:
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
-| T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | Blocked | T-034 | 0019, 0024 |
+| T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | In progress | T-034 | 0019, 0024 |
 
 ## Details
 
