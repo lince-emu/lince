@@ -41,7 +41,7 @@ Rules:
 | T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | In review | — | 0024 |
 | T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | Ready | T-028 | 0001, 0002 |
 | T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | In review | T-027 | 0027 |
-| T-031 | `lince-mem`: flat guest address space with typed access | Impl | Ready | T-027 | 0019 |
+| T-031 | `lince-mem`: flat guest address space with typed access | Impl | In review | T-027 | 0019 |
 | T-032 | `lince-loader`: load an NRO into guest memory | Impl | Ready | T-028, T-031 | 0024 |
 | T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Ready | T-027, T-029 | 0004, 0005, 0030 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Ready | T-027, T-028 | 0024 |
