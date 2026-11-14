@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 use std::ops::BitOr;
-use std::ptr;
+use std::ptr::{self, NonNull};
 
 use lince_common::GuestVa;
 
@@ -38,6 +38,11 @@ impl Permission {
     #[must_use]
     pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
+    }
+
+    /// The permission bits: read = 1, write = 2, execute = 4, as in `lince-cpu-a64`'s C header.
+    pub const fn bits(self) -> u8 {
+        self.0
     }
 
     /// Whether every permission in `other` is also in `self`.
@@ -264,6 +269,27 @@ impl AddressSpace {
     /// Size of the address space in bytes; every valid address is below it.
     pub fn size(&self) -> u64 {
         self.size
+    }
+
+    /// Every mapped region, in address order.
+    pub fn regions(&self) -> impl Iterator<Item = Span> + '_ {
+        self.regions.iter().map(|(&start, region)| Span {
+            base: GuestVa::new(start),
+            size: region.end - start,
+            permission: Some(region.perm),
+        })
+    }
+
+    /// The host address of guest address 0, for code that accesses guest memory inline (the
+    /// interpreter and JITs, ADR-0031).
+    ///
+    /// Guest byte `va` of a region listed by [`regions`](Self::regions) is at `host_base() + va`,
+    /// committed and host-writable until that region is unmapped. Every other address may be
+    /// uncommitted. Permissions are not enforced by the host: whoever uses the pointer checks
+    /// them against `regions`. Taking `&mut self` ties writes through the pointer to exclusive
+    /// access to the space.
+    pub fn host_base(&mut self) -> NonNull<u8> {
+        self.host.base()
     }
 
     /// Reads a little-endian value at `va`.

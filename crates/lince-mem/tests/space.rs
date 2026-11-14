@@ -252,3 +252,42 @@ fn query_reports_the_region_or_the_free_gap_around_an_address() {
     );
     assert_eq!(mem.query(va(size)), None);
 }
+
+#[test]
+fn regions_lists_every_mapped_region_in_address_order() {
+    let mut mem = space().unwrap();
+    mem.map(va(0x3_0000), PAGE, Permission::READ).unwrap();
+    mem.map(va(0x1_0000), 2 * PAGE, RW).unwrap();
+    mem.map(va(0x2_0000), PAGE, RW).unwrap();
+    mem.unmap(va(0x2_0000), PAGE).unwrap();
+
+    let regions: Vec<_> = mem
+        .regions()
+        .map(|s| (s.base, s.size, s.permission))
+        .collect();
+
+    assert_eq!(
+        regions,
+        [
+            (va(0x1_0000), 2 * PAGE, Some(RW)),
+            (va(0x3_0000), PAGE, Some(Permission::READ)),
+        ]
+    );
+}
+
+#[test]
+fn host_base_is_the_same_for_the_life_of_the_space() {
+    let mut mem = space().unwrap();
+    let before = mem.host_base();
+    mem.map(va(0x1_0000), PAGE, RW).unwrap();
+
+    assert_eq!(mem.host_base(), before);
+}
+
+#[test]
+fn permission_bits_match_the_c_header_values() {
+    assert_eq!(Permission::READ.bits(), 1);
+    assert_eq!(Permission::WRITE.bits(), 2);
+    assert_eq!(Permission::EXECUTE.bits(), 4);
+    assert_eq!((Permission::READ | Permission::EXECUTE).bits(), 5);
+}
