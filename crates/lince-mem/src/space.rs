@@ -117,6 +117,17 @@ struct Region {
     perm: Permission,
 }
 
+/// A maximal span of the address space with one state: a mapped region or a free gap.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    /// First address of the span.
+    pub base: GuestVa,
+    /// Length of the span in bytes.
+    pub size: u64,
+    /// The permission of a mapped region; `None` for a free gap.
+    pub permission: Option<Permission>,
+}
+
 /// A guest address space.
 pub struct AddressSpace {
     host: Reservation,
@@ -217,6 +228,37 @@ impl AddressSpace {
     /// The permission of the region containing `va`, or `None` if it is unmapped.
     pub fn permission(&self, va: GuestVa) -> Option<Permission> {
         self.region_at(va.get()).map(|(_, region)| region.perm)
+    }
+
+    /// The span containing `va`: its mapped region, or the free gap around it. `None` if `va`
+    /// is outside the address space.
+    pub fn query(&self, va: GuestVa) -> Option<Span> {
+        let addr = va.get();
+        if addr >= self.size {
+            return None;
+        }
+        if let Some((start, region)) = self.region_at(addr) {
+            return Some(Span {
+                base: GuestVa::new(start),
+                size: region.end - start,
+                permission: Some(region.perm),
+            });
+        }
+        let base = self
+            .regions
+            .range(..addr)
+            .next_back()
+            .map_or(0, |(_, region)| region.end);
+        let end = self
+            .regions
+            .range(addr..)
+            .next()
+            .map_or(self.size, |(&start, _)| start);
+        Some(Span {
+            base: GuestVa::new(base),
+            size: end - base,
+            permission: None,
+        })
     }
 
     /// Reads a little-endian value at `va`.

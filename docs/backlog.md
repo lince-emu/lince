@@ -39,12 +39,12 @@ Rules:
 | T-036 | Study: what Rust and C++ should each own (refines ADR-0030) | Research | Done | T-026 | 0005, 0019, 0030, 0031 |
 | T-027 | Review the B1 ADRs for acceptance (0004, 0005 interpreter part, 0019 address-space part, 0024 SVC boundary, 0027 logging part) | Maintainer | Done | — | 0004, 0005, 0019, 0024, 0027 |
 | T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | Done | — | 0024 |
-| T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | In progress | T-028 | 0001, 0002 |
+| T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | Done | T-028 | 0001, 0002 |
 | T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Done | T-027 | 0027 |
 | T-031 | `lince-mem`: flat guest address space with typed access | Impl | Done | T-027 | 0019 |
-| T-032 | `lince-loader`: load an NRO into guest memory | Impl | In progress | T-028, T-031 | 0024 |
+| T-032 | `lince-loader`: load an NRO into guest memory | Impl | Done | T-028, T-031 | 0024 |
 | T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Ready | T-027, T-029 | 0004, 0005, 0030 |
-| T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Ready | T-027, T-028 | 0024 |
+| T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | In progress | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Ready | T-029–T-034 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
