@@ -108,6 +108,36 @@ fn accesses_the_permission_forbids_fault_and_leave_memory_unchanged() {
 }
 
 #[test]
+fn protect_changes_what_accesses_are_allowed_and_keeps_the_contents() {
+    let mut mem = space().unwrap();
+    mem.map(va(0x4_8000), 2 * PAGE, RW).unwrap();
+    mem.write(va(0x4_8000), 0x55_u8).unwrap();
+
+    mem.protect(va(0x4_8000), 2 * PAGE, Permission::READ)
+        .unwrap();
+
+    assert!(matches!(
+        mem.write(va(0x4_8000), 1_u8),
+        Err(MemError::PermissionDenied { .. })
+    ));
+    assert_eq!(mem.read::<u8>(va(0x4_8000)).unwrap(), 0x55);
+    assert_eq!(mem.permission(va(0x4_9000)), Some(Permission::READ));
+}
+
+#[test]
+fn protect_rejects_ranges_that_are_not_one_whole_region() {
+    let mut mem = space().unwrap();
+    mem.map(va(0x4_C000), 2 * PAGE, RW).unwrap();
+
+    let part = mem.protect(va(0x4_C000), PAGE, Permission::READ);
+    let unmapped = mem.protect(va(0x5_8000), PAGE, Permission::READ);
+
+    assert!(matches!(part, Err(MemError::NotARegion { .. })));
+    assert!(matches!(unmapped, Err(MemError::NotARegion { .. })));
+    assert_eq!(mem.permission(va(0x4_C000)), Some(RW));
+}
+
+#[test]
 fn unmapped_memory_faults_and_is_zero_when_mapped_again() {
     let mut mem = space().unwrap();
     mem.map(va(0x5_0000), PAGE, RW).unwrap();

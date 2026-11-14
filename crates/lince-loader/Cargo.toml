@@ -1,0 +1,16 @@
+[package]
+name = "lince-loader"
+description = "Lince executable loaders (NRO for B1; NSO, NPDM, ExeFS and RomFS later)"
+license = "GPL-3.0-or-later"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+lince-common = { path = "../lince-common", version = "0.0.0" }
+lince-mem = { path = "../lince-mem", version = "0.0.0" }
+thiserror.workspace = true
+
+[lints]
+workspace = true

@@ -202,6 +202,18 @@ impl AddressSpace {
         Ok(())
     }
 
+    /// Sets the permission of the region that starts at `va` and is `size` bytes long.
+    pub fn protect(&mut self, va: GuestVa, size: u64, perm: Permission) -> Result<()> {
+        let end = self.checked_range(va, size)?;
+        match self.regions.get_mut(&va.get()) {
+            Some(region) if region.end == end => {
+                region.perm = perm;
+                Ok(())
+            }
+            _ => Err(MemError::NotARegion { va, size }),
+        }
+    }
+
     /// The permission of the region containing `va`, or `None` if it is unmapped.
     pub fn permission(&self, va: GuestVa) -> Option<Permission> {
         self.region_at(va.get()).map(|(_, region)| region.perm)
