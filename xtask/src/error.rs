@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Lince contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Errors reported by xtask commands (PAT-01 shape, without `thiserror` to keep xtask
-//! dependency-free).
+//! Errors reported by xtask commands (PAT-01 shape, without `thiserror`: xtask depends only
+//! on workspace tools).
 
 use std::fmt;
 use std::io;
@@ -32,6 +32,13 @@ pub(crate) enum XtaskError {
     Read { path: PathBuf, source: io::Error },
     /// A repository-wide check found violations, already listed on stderr.
     Violations { rule: &'static str, count: usize },
+    /// A file could not be written.
+    Write { path: PathBuf, source: io::Error },
+    /// A linked test program could not be converted to an NRO.
+    Convert {
+        path: PathBuf,
+        source: elf2nro::ConvertError,
+    },
 }
 
 impl fmt::Display for XtaskError {
@@ -57,6 +64,12 @@ impl fmt::Display for XtaskError {
             }
             Self::Violations { rule, count } => {
                 write!(f, "{count} {rule} violation(s), listed above")
+            }
+            Self::Write { path, source } => {
+                write!(f, "could not write {}: {source}", path.display())
+            }
+            Self::Convert { path, source } => {
+                write!(f, "could not convert {}: {source}", path.display())
             }
         }
     }

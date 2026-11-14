@@ -39,7 +39,7 @@ Rules:
 | T-036 | Study: what Rust and C++ should each own (refines ADR-0030) | Research | Done | T-026 | 0005, 0019, 0030, 0031 |
 | T-027 | Review the B1 ADRs for acceptance (0004, 0005 interpreter part, 0019 address-space part, 0024 SVC boundary, 0027 logging part) | Maintainer | Done | — | 0004, 0005, 0019, 0024, 0027 |
 | T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | Done | — | 0024 |
-| T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | Ready | T-028 | 0001, 0002 |
+| T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | In progress | T-028 | 0001, 0002 |
 | T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Done | T-027 | 0027 |
 | T-031 | `lince-mem`: flat guest address space with typed access | Impl | Done | T-027 | 0019 |
 | T-032 | `lince-loader`: load an NRO into guest memory | Impl | Ready | T-028, T-031 | 0024 |
