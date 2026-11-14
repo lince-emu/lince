@@ -83,7 +83,7 @@ fn components<'a>(files: &[&'a String]) -> BTreeMap<&'a str, Component> {
 }
 
 /// An LLVM tool by name: from `PATH`, else from the Windows installer's default directory.
-fn tool(root: &Path, name: &'static str) -> Result<PathBuf, XtaskError> {
+pub(crate) fn tool(root: &Path, name: &'static str) -> Result<PathBuf, XtaskError> {
     // A program missing from `PATH` fails to start; that is "not found", not an error.
     let on_path = process::command(root, name, &["--version"])
         .stdout(std::process::Stdio::null())
