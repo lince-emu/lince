@@ -55,6 +55,16 @@ pub enum Exit {
         /// The misaligned address.
         pc: GuestVa,
     },
+    /// A load or store at `pc` accessed a byte that is not mapped with the needed permission;
+    /// the instruction changed nothing.
+    DataAbort {
+        /// The address of the instruction.
+        pc: GuestVa,
+        /// The first guest address of the access.
+        address: GuestVa,
+        /// Whether the access was a write.
+        write: bool,
+    },
 }
 
 /// The result of one [`run`] call.
@@ -71,32 +81,38 @@ pub struct Run {
 pub fn run(state: &mut State, memory: &mut AddressSpace, limit: u64) -> Result<Run, CpuError> {
     let raw = ffi::run(state, memory, limit)?;
     Ok(Run {
-        exit: exit_from(raw)?,
+        exit: exit_from(raw, state.pc)?,
         executed: raw.executed,
     })
 }
 
-fn exit_from(raw: RawExit) -> Result<Exit, CpuError> {
+/// The exit `raw` describes; `pc` is the core's pc after the call.
+fn exit_from(raw: RawExit, pc_after: u64) -> Result<Exit, CpuError> {
     let unknown = CpuError::UnknownExit {
         reason: raw.reason,
         detail: raw.detail,
     };
-    let pc = GuestVa::new(raw.address);
+    let address = GuestVa::new(raw.address);
     Ok(match raw.reason {
         ffi::EXIT_SVC => Exit::Svc {
             number: u16::try_from(raw.detail).map_err(|_| unknown)?,
         },
         ffi::EXIT_LIMIT => Exit::Limit,
-        ffi::EXIT_UNDEFINED => Exit::Undefined { pc },
+        ffi::EXIT_UNDEFINED => Exit::Undefined { pc: address },
         ffi::EXIT_UNIMPLEMENTED => Exit::Unimplemented {
-            pc,
+            pc: address,
             insn: u16::try_from(raw.detail)
                 .ok()
                 .and_then(Insn::from_id)
                 .ok_or(unknown)?,
         },
-        ffi::EXIT_FETCH_ABORT => Exit::FetchAbort { pc },
-        ffi::EXIT_PC_MISALIGNED => Exit::PcMisaligned { pc },
+        ffi::EXIT_FETCH_ABORT => Exit::FetchAbort { pc: address },
+        ffi::EXIT_PC_MISALIGNED => Exit::PcMisaligned { pc: address },
+        ffi::EXIT_DATA_ABORT => Exit::DataAbort {
+            pc: GuestVa::new(pc_after),
+            address,
+            write: raw.detail == ffi::ACCESS_WRITE,
+        },
         _ => return Err(unknown),
     })
 }

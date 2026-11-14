@@ -11,7 +11,9 @@
 //! programs use.
 //!
 //! The Tier A interpreter ([`run`]) executes decoded forms with the reference semantics of the
-//! Arm specification and reads guest memory inline through the address space's host base.
+//! Arm specification. It accesses guest memory inline through the address space's host base
+//! when one region holds an access with the needed permission, and through `lince-mem`'s
+//! checked reads and writes otherwise (the slow path); an access neither allows is a data abort.
 //!
 //! # Threads
 //! Decoding is a pure function of the instruction word: no allocation, locks or I/O, callable

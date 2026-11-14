@@ -50,16 +50,48 @@ const _: () = {
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct lca_callbacks {
+    pub context: *mut ::core::ffi::c_void,
+    pub read: ::core::option::Option<
+        unsafe extern "C" fn(
+            context: *mut ::core::ffi::c_void,
+            va: u64,
+            out: *mut u8,
+            size: u64,
+        ) -> i32,
+    >,
+    pub write: ::core::option::Option<
+        unsafe extern "C" fn(
+            context: *mut ::core::ffi::c_void,
+            va: u64,
+            data: *const u8,
+            size: u64,
+        ) -> i32,
+    >,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of lca_callbacks"][::core::mem::size_of::<lca_callbacks>() - 24usize];
+    ["Alignment of lca_callbacks"][::core::mem::align_of::<lca_callbacks>() - 8usize];
+    ["Offset of field: lca_callbacks::context"]
+        [::core::mem::offset_of!(lca_callbacks, context) - 0usize];
+    ["Offset of field: lca_callbacks::read"][::core::mem::offset_of!(lca_callbacks, read) - 8usize];
+    ["Offset of field: lca_callbacks::write"]
+        [::core::mem::offset_of!(lca_callbacks, write) - 16usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct lca_memory {
     pub host_base: *mut u8,
     pub host_size: u64,
     pub regions: *const lca_region,
     pub region_count: u32,
     pub reserved: u32,
+    pub callbacks: lca_callbacks,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of lca_memory"][::core::mem::size_of::<lca_memory>() - 32usize];
+    ["Size of lca_memory"][::core::mem::size_of::<lca_memory>() - 56usize];
     ["Alignment of lca_memory"][::core::mem::align_of::<lca_memory>() - 8usize];
     ["Offset of field: lca_memory::host_base"]
         [::core::mem::offset_of!(lca_memory, host_base) - 0usize];
@@ -71,6 +103,8 @@ const _: () = {
         [::core::mem::offset_of!(lca_memory, region_count) - 24usize];
     ["Offset of field: lca_memory::reserved"]
         [::core::mem::offset_of!(lca_memory, reserved) - 28usize];
+    ["Offset of field: lca_memory::callbacks"]
+        [::core::mem::offset_of!(lca_memory, callbacks) - 32usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -99,6 +133,7 @@ pub const LCA_EXIT_UNDEFINED: lca_exit_reason = 3;
 pub const LCA_EXIT_UNIMPLEMENTED: lca_exit_reason = 4;
 pub const LCA_EXIT_FETCH_ABORT: lca_exit_reason = 5;
 pub const LCA_EXIT_PC_MISALIGNED: lca_exit_reason = 6;
+pub const LCA_EXIT_DATA_ABORT: lca_exit_reason = 7;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct lca_exit {
