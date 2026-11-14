@@ -18,7 +18,7 @@ pub enum KernelError {
         /// The SVC number.
         number: u32,
     },
-    /// The SVC is named and reserved, but this build has no behavior for it.
+    /// The SVC is named, but this build has no behavior for it or for the arguments given.
     #[error("SVC {number:#04x} ({name}) is not implemented")]
     Unimplemented {
         /// The SVC number.

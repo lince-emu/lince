@@ -41,8 +41,8 @@ pub(crate) enum Outcome {
     Exit,
     /// The guest aborted through `Break` with this reason.
     Break(u64),
-    /// The SVC is reserved and has no behavior yet.
-    Reserved,
+    /// The SVC is reserved, or was called with arguments this build has no behavior for.
+    Unsupported,
 }
 
 pub(crate) type Handler = fn(&mut Kernel, &mut AddressSpace, &mut Regs) -> Outcome;
@@ -58,6 +58,7 @@ pub struct Kernel {
     recorder: Recorder,
     pub(crate) break_stub: NameId,
     pub(crate) gpu_attribute_stub: NameId,
+    pub(crate) attribute_stub: NameId,
     pub(crate) heap_chunks: Vec<u64>,
     pub(crate) debug_output: Vec<u8>,
 }
@@ -69,6 +70,7 @@ impl Kernel {
             recorder: trace.recorder(ThreadRole::GuestCore),
             break_stub: trace.name(svc::BREAK_NAME)?,
             gpu_attribute_stub: trace.name(svc::GPU_ATTRIBUTE_NAME)?,
+            attribute_stub: trace.name(svc::ATTRIBUTE_NAME)?,
             heap_chunks: Vec::new(),
             debug_output: Vec::new(),
         })
@@ -76,9 +78,9 @@ impl Kernel {
 
     /// Runs SVC `number` against `mem`, reading arguments from and writing results to `regs`.
     ///
-    /// An SVC the table does not know returns [`KernelError::UnknownSvc`]; a reserved one with
-    /// no behavior returns [`KernelError::Unimplemented`]. Both are recorded once, by number or
-    /// by name.
+    /// An SVC the table does not know returns [`KernelError::UnknownSvc`]; a reserved one, or one
+    /// called with arguments this build cannot handle, returns [`KernelError::Unimplemented`].
+    /// Both are recorded once, by number or by name.
     pub fn dispatch(
         &mut self,
         mem: &mut AddressSpace,
@@ -95,7 +97,7 @@ impl Kernel {
             Outcome::Resume => Ok(Flow::Continue),
             Outcome::Exit => Ok(Flow::Exit),
             Outcome::Break(reason) => Ok(Flow::Break { reason }),
-            Outcome::Reserved => Err(KernelError::Unimplemented {
+            Outcome::Unsupported => Err(KernelError::Unimplemented {
                 number: u32::from(number),
                 name: entry.name,
             }),

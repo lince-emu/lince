@@ -35,6 +35,7 @@ const SET_GPU_MEMORY_ATTRIBUTE: SvcNumber = 0x80;
 
 pub(crate) const BREAK_NAME: &str = "Break";
 pub(crate) const GPU_ATTRIBUTE_NAME: &str = "SetGpuMemoryAttribute";
+pub(crate) const ATTRIBUTE_NAME: &str = "SetMemoryAttribute";
 
 /// Heap sizes are multiples of 2 MiB and at most 4 GiB (S5).
 const HEAP_ALIGN: u64 = 0x20_0000;
@@ -47,6 +48,8 @@ const DEBUG_STRING_MAX: u64 = 0x1_0000;
 const DEBUG_PENDING_MAX: usize = 0x10_0000;
 /// `Break` reason bit that makes the call return (S10).
 const BREAK_RETURN_BIT: u64 = 1 << 31;
+/// The only memory attribute `SetMemoryAttribute` may change in B1: Uncached (S4, S7).
+const ATTRIBUTE_UNCACHED: u64 = 1 << 3;
 
 const MEMORY_INFO_SIZE: usize = 0x28;
 const TYPE_FREE: u32 = 0;
@@ -61,7 +64,7 @@ const fn build_table() -> [Option<Entry>; 256] {
     table[SET_HEAP_SIZE as usize] = Some(entry("SetHeapSize", set_heap_size));
     table[SET_MEMORY_PERMISSION as usize] =
         Some(entry("SetMemoryPermission", set_memory_permission));
-    table[SET_MEMORY_ATTRIBUTE as usize] = Some(entry("SetMemoryAttribute", set_memory_attribute));
+    table[SET_MEMORY_ATTRIBUTE as usize] = Some(entry(ATTRIBUTE_NAME, set_memory_attribute));
     table[QUERY_MEMORY as usize] = Some(entry("QueryMemory", query_memory));
     table[EXIT_PROCESS as usize] = Some(entry("ExitProcess", exit_process));
     table[BREAK as usize] = Some(entry(BREAK_NAME, break_));
@@ -159,14 +162,21 @@ fn set_memory_permission(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs
     done(regs, code)
 }
 
-/// `X0` address, `X1` size, `W2` mask, `W3` value. A no-op on mapped memory.
-// GUESS: accepting any mask and value is enough for B1, which has no uncached or device memory;
-// the invalid-combination result is undocumented (research O3).
-fn set_memory_attribute(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
+/// `X0` address, `X1` size, `W2` mask, `W3` value. A no-op on mapped memory when only the
+/// Uncached bit is named (S7). Other bits (`PermissionLocked` on newer firmware, or bits S7 does
+/// not allow) return the distinct `Unimplemented` error, logged once by name: their result code
+/// is undocumented (research O3), so none is invented.
+// GUESS: accepting Uncached as a no-op is enough for B1, which has no device memory.
+fn set_memory_attribute(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
     let (va, size) = match aligned_range(regs) {
         Ok(range) => range,
         Err(code) => return done(regs, code),
     };
+    let (mask, value) = (regs[2] & 0xFFFF_FFFF, regs[3] & 0xFFFF_FFFF);
+    if (mask | value) & !ATTRIBUTE_UNCACHED != 0 {
+        kernel.log_stub(kernel.attribute_stub);
+        return Outcome::Unsupported;
+    }
     let mapped = mem.query(va).is_some_and(|span| {
         span.permission.is_some()
             && span.base.get().saturating_add(span.size) >= va.get().saturating_add(size)
@@ -270,5 +280,5 @@ fn output_debug_string(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut R
 /// Reserved for Switch 2 (research S11): named, but its behavior is UNKNOWN.
 fn set_gpu_memory_attribute(kernel: &mut Kernel, _: &mut AddressSpace, _: &mut Regs) -> Outcome {
     kernel.log_stub(kernel.gpu_attribute_stub);
-    Outcome::Reserved
+    Outcome::Unsupported
 }
