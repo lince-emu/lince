@@ -24,9 +24,11 @@ Option 3 per doc 04 §3. Guest cores are real host threads (6). Background pools
 Critical-path queues are bounded SPSC rings; blocking uses parking, not spinning (short bounded
 spins allowed where measured).
 
-**B2 scope:** guest cores only: six host threads, one per guest core, created at process start
-and joined at teardown, each parking while the guest threads it hosts are idle. The role
-threads, `lince-sched` pools, priority classes and the governor stay out.
+**B2 scope:** six host threads, one per guest core, created at process start and joined at
+teardown, each parking while the guest threads it hosts are idle; and a minimal `lince-sched`
+that owns one service-I/O role thread fed by a bounded queue, for blocking service calls
+(ADR-0024 B2 scope; maintainer, 2026-11-14). The other role threads, worker pools, priority
+classes and the governor stay out.
 
 ## Technical justification
 Latency-critical stages need predictable scheduling that async executors and work stealing do
