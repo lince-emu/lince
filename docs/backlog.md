@@ -56,9 +56,9 @@ Rules:
 | T-044 | Close two local CI blind spots (clang-tidy header filter on Windows, PR title length) | Impl | Done | — | — |
 | T-045 | Break B2 into tasks; record the D-006 answer | Docs | Done | T-035 | 0017, 0024 |
 | T-046 | Mark the **B2 scope** in ADR-0004, 0017, 0019 and 0024 | Docs | Done | T-045 | 0004, 0017, 0019, 0024 |
-| T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Ready | T-046 | 0004, 0017, 0019, 0024 |
-| T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | In progress | — | 0024 |
-| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Blocked | T-048 | 0001, 0002 |
+| T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Done | T-046 | 0004, 0017, 0019, 0024 |
+| T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Done | — | 0024 |
+| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Ready | T-048 | 0001, 0002 |
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Blocked | T-047, T-049 | 0004, 0005, 0031 |
 | T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-047, T-048 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
@@ -66,7 +66,7 @@ Rules:
 | T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
-| T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Blocked | T-047 | 0017, 0024 |
+| T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Ready | T-047 | 0017, 0024 |
 
 ## Details
 
@@ -447,6 +447,8 @@ framework). No decision changes; a scope that needs a new decision is listed for
 ### T-047 — B2 ADR review (maintainer)
 Accept the B2 scope marked by T-046, or send it back with questions.
 - **Acceptance:** each ADR's status line states what is accepted; T-050 to T-055 can start.
+- **Done 2026-11-14:** the maintainer accepted the B2 scope of ADR-0004, 0017, 0019 and 0024,
+  and left CMIF domains out of B2 (one object per session).
 
 ### T-048 — Research: B2 SVCs, IPC and service commands
 Use the `research-note` skill. From public sources only (LEGAL-10/11): the thread, TLS,

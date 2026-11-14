@@ -1,7 +1,7 @@
 # ADR-0024: HLE architecture
 
-- **Status:** Partially accepted. **B1 scope** accepted (maintainer, 2026-11-14); the rest
-  stays Proposed.
+- **Status:** Partially accepted. **B1 scope** and **B2 scope** accepted (maintainer,
+  2026-11-14); the rest stays Proposed.
 - **Date:** 2026-11-13
 - **Related:** doc 08 §3; doc 09; ADR-0017
 
@@ -37,7 +37,8 @@ service calls run on service host threads and resume the guest thread through ke
 address arbitration in `lince-kernel`; IPC sessions with exact CMIF and TIPC layouts; the
 explicit service registry in `lince-hle` with the `sm:`, `set:`, `fs`, `time` and `hid` stubs
 the B2 test program calls. Unknown SVCs and commands are logged by name through `lince-trace`;
-the ledger event and the debug auto-stub mode stay out. A blocking service call (such as `fs`
+the ledger event, the debug auto-stub mode and CMIF domains stay out (each B2 session serves
+one object; maintainer, 2026-11-14). A blocking service call (such as `fs`
 reading the host directory) never runs on a guest core thread (invariant 3): it is queued to
 the service-I/O role thread (ADR-0017 B2 scope) and resumes the guest thread through a kernel
 event (maintainer, 2026-11-14).

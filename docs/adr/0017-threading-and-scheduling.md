@@ -1,6 +1,7 @@
 # ADR-0017: Threading and scheduling model
 
-- **Status:** Proposed
+- **Status:** Partially accepted. **B2 scope** accepted (maintainer, 2026-11-14); the rest
+  stays Proposed.
 - **Date:** 2026-11-13
 - **Related:** doc 04 §3; ADR-0005, ADR-0008, ADR-0018
 
