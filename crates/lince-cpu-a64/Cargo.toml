@@ -1,0 +1,26 @@
+[package]
+name = "lince-cpu-a64"
+description = "Lince A64 guest CPU: decoder now; interpreter and JIT tiers later (C++, ADR-0030)"
+license = "GPL-3.0-or-later"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+# Regenerates src/ffi/bindings.rs from the C header with bindgen (needs libclang).
+regen = ["dep:bindgen"]
+
+[dependencies]
+bindgen = { version = "0.73.2", optional = true }
+
+[build-dependencies]
+cc = "1.11.2"
+
+[[bin]]
+name = "regen_bindings"
+required-features = ["regen"]
+
+[lints]
+workspace = true
