@@ -12,6 +12,9 @@ dependencies = [
 [[package]]
 name = "lince-trace"
 version = "0.0.0"
+dependencies = [
+ "thiserror",
+]
 
 [[package]]
 name = "proc-macro2"
