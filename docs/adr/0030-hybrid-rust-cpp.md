@@ -6,6 +6,8 @@
 - **Deciders:** maintainer
 - **Supersedes:** ADR-0001 in part (the "Rust as the only language" clause, charter R1);
   ADR-0026 (foreign code policy)
+- **Amended by:** [ADR-0031](0031-rust-cpp-placement.md) (code memory, fault lookup, no second
+  emitter)
 - **Related:** ADR-0002, ADR-0005, ADR-0009, ADR-0017, ADR-0027, doc 04, doc 09, PoC-11
 
 ## Context

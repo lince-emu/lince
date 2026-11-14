@@ -36,6 +36,7 @@ Rules:
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Done | T-010 | 0015 |
 | T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | Done | — | 0006, 0007, 0009, 0030 |
 | T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Done | T-025 | 0030 |
+| T-036 | Study: what Rust and C++ should each own (refines ADR-0030) | Research | In review | T-026 | 0005, 0019, 0030, 0031 |
 
 ## Details
 
@@ -224,3 +225,10 @@ Follow `docs/06-poc-roadmap.md` PoC-11 and ADR-0030. Standalone crate in `poc/cp
   report in `docs/poc-reports/poc-11-cpp-boundary.md` with the measured call costs, build
   times, chosen binding generator and minimum clang version.
 - **PR:** https://github.com/lince-emu/lince/pull/27
+
+### T-036 — Study: Rust/C++ split
+Asked by the maintainer: where each language pays off, given ADR-0030 and PoC-11's measured
+boundary cost. Output `docs/research/rust-cpp-split.md`, with three proposed amendments to
+ADR-0030 / doc 04 (executable code memory in `lince-mem`, a fault-lookup function in the CPU
+header, no separate Rust emitter for the MME64 JIT).
+- **Accepted** as ADR-0031 (maintainer, 2026-11-13).

@@ -22,8 +22,9 @@ semantics; cross-channel semaphore correctness; no global stalls.
 
 ## Decision
 Option 2.
-- **Front:** parses GPFIFO and command lists; runs MME64 macros via a JIT (interpreter as
-  reference), with call memoization keyed by parameters and the data-RAM words read; keeps
+- **Front:** parses GPFIFO and command lists; runs MME64 macros on an interpreter with call
+  memoization keyed by parameters and the data-RAM words read; a macro JIT is added only if
+  the ledger shows macro time in the frame, reusing the C++ emitters (ADR-0031); keeps
   register mirrors required by macros; handles semaphore acquires by parking the channel and
   running another.
 - **Back:** applies method writes in order; tracks dirty state; builds packets (ADR-0006);

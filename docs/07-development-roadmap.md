@@ -54,7 +54,7 @@ T-017 (Tier-0 harness) returns after B6. T-026 (Rust↔C++ boundary) is needed i
 | **M2 Core Rust architecture** | Workspace, xtask, CI, `lince-common`, `lince-trace` (ledger), `lince-sched`, `lince-mem` (fastmem) | CI green on Windows/Linux; Miri/loom on primitives | Structure, unsafe discipline |
 | **M3 CPU foundation** | A64 decoder (full A78C set), interpreter, coverage tool, baseline JIT x64 | Coverage tool shows 0 undecoded encodings on test executables; differential tests pass | CPU correctness |
 | **M4 System & HLE** | Loader (decrypted ExeFS/RomFS), kernel, IPC, core services, Switch 2 services skeleton | A title reaches its first GPU submission with no auto-stub | Boot path |
-| **M5 GPU command processing** | Channels, GPFIFO, MME64 (interp + JIT + memo), Ampere engines, packets, null backend, capture tool; PoC-9 | Captures replay deterministically; throughput target | GPU-thread saturation |
+| **M5 GPU command processing** | Channels, GPFIFO, MME64 (interpreter + memoization; JIT only if measured, ADR-0031), Ampere engines, packets, null backend, capture tool; PoC-9 | Captures replay deterministically; throughput target | GPU-thread saturation |
 | **M6 Vulkan backend & shader IR** | Device/capability tiers, memory, resources, sync, present; IR + Ampere front-end + SPIR-V (from PoC-4) | First correct frames with Tier 1 only (blocking allowed in this milestone only, flagged) | Integration |
 | **M7 Generic shader execution** | Tier 0 integrated (from PoC-2); discovery-time pre-decode | Zero pipeline waits outside no-fallback list | Core charter goal |
 | **M8 Specialized compilation & pipelines** | Tier 1/2, pipeline slots, atomic publish, governor (PoC-8) | Time-on-Tier-0 distributions; governed compile | Background interference |
