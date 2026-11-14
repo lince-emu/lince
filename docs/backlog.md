@@ -456,6 +456,7 @@ reaches `sm:` and the commands B2's program calls on `sm:`, `set:`, `fs`, `time`
 Mark what is Switch 1 knowledge and what is known on Switch 2 (doc 08).
 - **Acceptance:** `docs/research/b2-svcs-and-ipc.md` with per-field sources and evidence
   levels; UNKNOWN items listed in doc 08.
+- **PR:** https://github.com/lince-emu/lince/pull/52
 
 ### T-049 — B2 test program
 Extend the T-029 programs: one NRO starts threads on several cores, synchronizes them
