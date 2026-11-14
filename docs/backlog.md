@@ -67,6 +67,7 @@ Rules:
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Ready | T-047 | 0017, 0024 |
+| T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | In progress | T-049 | 0002 |
 
 ## Details
 
@@ -521,3 +522,10 @@ bounded queue; a full queue makes the caller wait on a kernel event, never drops
 classes and the governor come later.
 - **Acceptance:** tests for submission, completion through an event, a full queue, and
   teardown that completes or reports every request still pending.
+
+### T-058 — Build the test programs in CI
+Found on #54: CI checks the checked-in NROs but never assembles `tests/homebrew/*.s`, so a
+source that no longer builds goes unnoticed. `cargo xtask ci` builds every program without
+comparing bytes (LLVM versions differ between hosts); the Linux job installs `lld`.
+- **Acceptance:** `cargo xtask ci` fails when a test program does not assemble or link, on
+  Windows and Linux; `cargo xtask homebrew [--check]` behaves as before.

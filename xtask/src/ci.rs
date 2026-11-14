@@ -8,6 +8,7 @@ use std::path::Path;
 use crate::commits;
 use crate::cpp;
 use crate::error::XtaskError;
+use crate::homebrew;
 use crate::license;
 use crate::process;
 use crate::repository;
@@ -21,7 +22,8 @@ const PROJECT_DIR_VAR: &str = "CLAUDE_PROJECT_DIR";
 /// Files passed to one run of the invariant script; keeps command lines short on Windows.
 const INVARIANT_BATCH: usize = 200;
 
-/// Runs fmt, commit-message, SPDX, license, invariant, C++, clippy, test and cargo-deny checks.
+/// Runs fmt, commit-message, SPDX, license, invariant, C++, test-program build, clippy, test
+/// and cargo-deny checks.
 pub(crate) fn run(root: &Path, range: &commits::Range) -> Result<(), XtaskError> {
     process::run_step(
         "rustfmt",
@@ -33,6 +35,7 @@ pub(crate) fn run(root: &Path, range: &commits::Range) -> Result<(), XtaskError>
     license::check(root, &files)?;
     invariants(root, &files)?;
     cpp::check(root, &files)?;
+    homebrew::run(root, homebrew::Mode::Build)?;
     let clippy = [
         "clippy",
         "--workspace",
