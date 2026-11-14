@@ -33,10 +33,11 @@ jobs:
       - name: Install the toolchain pinned in rust-toolchain.toml
         run: rustup toolchain install
       # C++ checks (ADR-0030, ARCH-54) need clang, clang-format, clang-tidy, and libclang for
-      # bindgen. The Windows image ships LLVM in C:\Program Files\LLVM, which xtask finds.
+      # bindgen; building the test programs (tests/homebrew) needs ld.lld. The Windows image
+      # ships LLVM in C:\Program Files\LLVM, which xtask finds.
       - name: Install LLVM tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang clang-format clang-tidy libclang-dev
+        run: sudo apt-get update && sudo apt-get install -y clang clang-format clang-tidy libclang-dev lld
       - name: Show the clang version used
         shell: bash
         run: clang --version || "C:/Program Files/LLVM/bin/clang.exe" --version
