@@ -54,9 +54,9 @@ Rules:
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
 | T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | Done | T-034 | 0019, 0024 |
 | T-044 | Close two local CI blind spots (clang-tidy header filter on Windows, PR title length) | Impl | Done | — | — |
-| T-045 | Break B2 into tasks; record the D-006 answer | Docs | In progress | T-035 | 0017, 0024 |
-| T-046 | Mark the **B2 scope** in ADR-0004, 0017, 0019 and 0024 | Docs | Ready | T-045 | 0004, 0017, 0019, 0024 |
-| T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Blocked | T-046 | 0004, 0017, 0019, 0024 |
+| T-045 | Break B2 into tasks; record the D-006 answer | Docs | Done | T-035 | 0017, 0024 |
+| T-046 | Mark the **B2 scope** in ADR-0004, 0017, 0019 and 0024 | Docs | Done | T-045 | 0004, 0017, 0019, 0024 |
+| T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Ready | T-046 | 0004, 0017, 0019, 0024 |
 | T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Ready | — | 0024 |
 | T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Blocked | T-048 | 0001, 0002 |
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Blocked | T-047, T-049 | 0004, 0005, 0031 |
