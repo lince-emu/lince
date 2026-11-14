@@ -35,7 +35,8 @@ Rules:
 | T-023 | Optional: SASS corpus reference outputs on an NVIDIA RTX 30/40 GPU | Maintainer | Blocked | T-014 | 0028 |
 | T-024 | PoC-6: time each engine's reader in another process (`redb` in `SingleWriter` mode) | PoC | Done | T-010 | 0015 |
 | T-025 | Record the hybrid Rust + C++ decision (ADR-0030) and the planned D3D12/Metal backends; update docs, rules and hooks | Docs | Done | — | 0006, 0007, 0009, 0030 |
-| T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | In review | T-025 | 0030 |
+| T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Done | T-025 | 0030 |
+| T-036 | Study: what Rust and C++ should each own (refines ADR-0030) | Research | Done | T-026 | 0005, 0019, 0030, 0031 |
 | T-027 | Review the B1 ADRs for acceptance (0004, 0005 interpreter part, 0019 address-space part, 0024 SVC boundary, 0027 logging part) | Maintainer | Ready | — | 0004, 0005, 0019, 0024, 0027 |
 | T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | Ready | — | 0024 |
 | T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | Ready | T-028 | 0001, 0002 |
@@ -45,6 +46,7 @@ Rules:
 | T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Blocked | T-027, T-029 | 0004, 0005, 0030 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Blocked | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034 | 0001 |
+| T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Ready | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Ready | — | 0005 |
@@ -235,21 +237,33 @@ Follow `docs/06-poc-roadmap.md` PoC-11 and ADR-0030. Standalone crate in `poc/cp
 - **Acceptance:** `cargo xtask ci` passes from a clean checkout on Windows x64 and Linux x64;
   report in `docs/poc-reports/poc-11-cpp-boundary.md` with the measured call costs, build
   times, chosen binding generator and minimum clang version.
+- **PR:** https://github.com/lince-emu/lince/pull/27
+
+### T-036 — Study: Rust/C++ split
+Asked by the maintainer: where each language pays off, given ADR-0030 and PoC-11's measured
+boundary cost. Output `docs/research/rust-cpp-split.md`, with three proposed amendments to
+ADR-0030 / doc 04 (executable code memory in `lince-mem`, a fault-lookup function in the CPU
+header, no separate Rust emitter for the MME64 JIT).
+- **Accepted** as ADR-0031 (maintainer, 2026-11-13).
+- **PR:** https://github.com/lince-emu/lince/pull/31
 
 ### T-027 — B1 ADR review (maintainer)
 The boot-first roadmap (doc 07, B1) needs these accepted before its `Impl` tasks start:
 ADR-0004 (guest CPU model), ADR-0005 (the interpreter part), ADR-0019 (the guest address-space
 part), ADR-0024 (the SVC boundary) and ADR-0027 (the logging part: B1 logs every stub by name;
-the frame ledger stays with PoC-7 and its ARM run). Accepting a part means recording which
-sections are accepted and which stay Proposed.
+the frame ledger stays with PoC-7 and its ARM run). Since PR #30 each of these ADRs marks the
+part B1 needs as **B1 scope**; accepting means recording that the B1 scope is accepted while
+the rest stays Proposed. ADR-0031 (Rust/C++ placement) is already Accepted and applies to
+T-031 and T-033.
 - **Acceptance:** each ADR's status line states what is accepted; T-030 to T-034 become Ready.
 
 ### T-028 — Research: NRO format and B1 SVCs
 Use the `research-note` skill. From public sources only (switchbrew and similar, LEGAL-11;
 never SDK material, LEGAL-10): the NRO header and segment layout, how a homebrew program
 receives its entry arguments, and the numbers, arguments and results of the SVCs B1 uses
-(memory query/set, exit, `OutputDebugString`). Note what is Switch 1 knowledge and what is
-known to hold on Switch 2 (doc 08).
+(memory query/set, exit, `OutputDebugString`), plus what public sources say about the Switch 2
+SVC `0x80` (doc 01 E2), which ADR-0024's SVC table must reserve. Note what is Switch 1
+knowledge and what is known to hold on Switch 2 (doc 08).
 - **Acceptance:** `docs/research/nro-and-b1-svcs.md` with per-field sources and evidence
   levels; UNKNOWN items listed in doc 08.
 
@@ -266,15 +280,20 @@ The B1 programs are written by the team, never taken from homebrew projects (LEG
 ### T-030 — `lince-trace` log facade
 Only what B1 needs: a log call that records a named stub or event once per name (no flood),
 usable from every crate, with no I/O on render-critical threads (ARCH-03: records go to a
-buffer drained elsewhere). The frame ledger is promoted from PoC-7 later, by ADR-0027.
+buffer drained elsewhere). Records use the frame ledger's event shape (ADR-0027 B1 scope), so
+the ledger promoted from PoC-7 later reads the same data instead of a second log format.
 - **Acceptance:** follows the `lince-common` reference layout; tests cover once-per-name and
   draining; no new dependency without approval.
 
 ### T-031 — `lince-mem` flat guest address space
-A flat guest address space (ADR-0019, address-space part) with typed reads and writes by
-`GuestVa`, mapping and permission checks; enough for B1, not the host-backed fast path.
-- **Acceptance:** tests for mapped, unmapped and permission-faulting accesses; access through
-  `GuestVa` only (QUAL-20).
+The ADR-0019 B1 scope: a 39-bit guest address space of mapped regions with permissions,
+typed reads and writes by `GuestVa` (QUAL-20), by software lookup. The layout already follows
+ADR-0019's rule for later native execution: one contiguous host reservation whose base and
+guest-page-to-host-page mapping are explicit parameters, with no 4 KiB host-page assumption.
+The interpreter (T-033) gets the base pointer and reads guest memory inline (ADR-0031).
+JIT code memory and W^X (ADR-0031) come with the first JIT tier, not in B1.
+- **Acceptance:** tests for mapped, unmapped and permission-faulting accesses; a test with a
+  16 KiB host-page configuration; access through `GuestVa` only.
 
 ### T-032 — `lince-loader` NRO
 Parse the NRO header and map its segments into `lince-mem` with their permissions; decode raw
@@ -284,9 +303,13 @@ fields once at the boundary (PAT-03).
 
 ### T-033 — `lince-cpu-a64` decoder and interpreter
 The first `[c++]` crate (ADR-0030 layout validated by PoC-11): decoder and interpreter for
-the instructions the T-029 programs use. Guest memory is accessed inline through the base
-pointer Rust provides; the callback table is the slow path only (ADR-0031). Instruction
-semantics come from Arm's public specification (LEGAL-11).
+the instructions the T-029 programs use. The decoder is generated from one instruction
+description table (ADR-0004), the only A64 decoder in Lince: the interpreter now and the JIT
+tiers later share it, and Rust tools decode through the C API (ADR-0031). An encoding the
+table lacks is reported as unknown, never guessed. Guest memory is accessed inline through the
+base pointer Rust provides; the callback table is the slow path only (ADR-0031). Tests run with
+ADR-0004's deterministic clock. Instruction semantics come from Arm's public specification
+(LEGAL-11).
 - **Acceptance:** differential tests of every implemented instruction against expected values
   derived from the specification (and against the host CPU on ARM hosts where available);
   `cargo xtask ci` C++ checks pass; a benchmark records interpreter throughput (ns per guest
@@ -294,8 +317,10 @@ semantics come from Arm's public specification (LEGAL-11).
   stay in Tier A before Tier B publishes (ADR-0005).
 
 ### T-034 — `lince-kernel` SVC dispatch
-Dispatch the SVCs from T-028 (memory, exit, `OutputDebugString`); unknown SVCs are logged by
-name and number through `lince-trace` and return the documented error, never a panic.
+Dispatch the SVCs from T-028 (memory, exit, `OutputDebugString`) through a table indexed by
+SVC number with the Switch 2 SVC `0x80` reserved (ADR-0024 B1 scope). An unknown SVC returns a
+distinct error, never success or a panic, and is logged once by name and number through
+`lince-trace`. Names come from public documentation or are descriptive (LEGAL-12).
 - **Acceptance:** each SVC tested through the dispatch API; unknown SVCs logged once.
 
 ### T-035 — `lince run` (B1 exit)
@@ -330,3 +355,13 @@ loaded. No code is copied or paraphrased (LEGAL-20/21); the note replaces the RE
 ADR-0005.
 - **Acceptance:** `docs/research/cpu-jit-scheduling.md` with evidence levels; ADR-0005's
   RECALL sentence updated to cite it.
+
+### T-040 — Full A64 decode table and coverage tool
+Populate the decoder's description table (T-033) to the v8.0–v8.5 feature set ADR-0004
+requires (LSE, CAS/CASP, LDAPR, PAC, MTE, …), from Arm's public specification, and build
+`lince-a64-coverage`, a Rust tool that decodes executables through the C API (ADR-0031) and
+lists every encoding the table lacks. Decoding an encoding is not implementing it: the
+interpreter only gains what the next phase's programs need.
+- **Acceptance:** differential decode tests per instruction class; the coverage tool runs on
+  the T-029 programs in CI and reports zero unknown encodings; it can be pointed at a
+  user-supplied executable without any of its content entering the repository (LEGAL-50).

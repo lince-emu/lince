@@ -1,6 +1,6 @@
 # ADR-0024: HLE architecture
 
-- **Status:** Proposed
+- **Status:** Proposed. B1 (doc 07) needs only the part marked **B1 scope** below accepted.
 - **Date:** 2026-11-13
 - **Related:** doc 08 §3; doc 09; ADR-0017
 
@@ -23,6 +23,14 @@ silently "successful" by default; services must not block guest cores unnecessar
 Option 2. Kernel objects (threads, events, mutex/condvar via address arbitration, memory) in
 `lince-kernel`; services in `lince-hle` / `lince-hle-nx2`, each with protocol tests. Blocking
 service calls run on service host threads and resume the guest thread through kernel events.
+- **SVC boundary:** SVCs are dispatched through a table indexed by number, including the
+  Switch 2 SVC `0x80` (doc 01 E2). An unknown SVC or command returns a distinct error and is
+  logged once by name and number (ADR-0027); it never reports success by default.
+- **Names:** service, command and structure names come from public documentation, otherwise
+  descriptive names chosen by the project; never names recovered from game symbols
+  (LEGAL-12; `docs/research/switch2-emulator-projects.md` L2).
+
+**B1 scope:** the SVC boundary above, for the memory, exit and `OutputDebugString` SVCs.
 
 ## Technical justification
 Declarative descriptions make protocol differences between Switch 1 and 2 explicit and testable;

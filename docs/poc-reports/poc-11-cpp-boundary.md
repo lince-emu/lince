@@ -1,7 +1,6 @@
 # PoC-11 — Rust↔C++ boundary
 
-- **Status:** Done on Windows x64. The Linux x64 result comes from CI on the pull request (see
-  "Linux").
+- **Status:** Done on Windows x64 and Linux x64 (Linux from CI, run 43487434671).
 - **Decides:** ADR-0030 details: binding generator, compiler discovery, minimum clang version.
 - **Code:** [`poc/cpp-boundary/`](../../poc/cpp-boundary/README.md).
 
@@ -47,8 +46,17 @@
 
 ## Linux
 
-*(Filled from the pull request's CI run: clang version of `ubuntu-latest`, and whether
-`cargo xtask ci` and the PoC-11 step pass.)*
+From the CI run of PR #27 (GitHub Actions run 43487434671, 2026-11-13):
+
+| Host | clang | `cargo xtask ci` (format, tidy, ASan + UBSan) | PoC-11 tests and bindings check |
+|------|-------|-----------------------------------------------|----------------------------------|
+| `ubuntu-latest` | Ubuntu clang 18.1.3 | Passed | Passed |
+| `windows-latest` | clang 20.1.8 | Passed | Passed |
+| Maintainer's machine (Windows) | clang 23.1.5 | Passed | Passed |
+
+`clang-format` gave the same result on all three versions. Call costs and build times were
+not measured on Linux; CI runners are shared machines, so their timings would not be
+comparable.
 
 ## Comparison with the hypothesis
 
@@ -60,7 +68,7 @@
 
 ## Verdict
 
-**Success on Windows; Linux pending CI.** Proposed ADR-0030 details:
+**Success on Windows x64 and Linux x64.** Proposed ADR-0030 details:
 
 1. **Binding generator:** bindgen, run by a developer tool and checked in, with a CI check
    that it matches. It writes the layout assertions automatically and costs about 9 s of
@@ -73,5 +81,5 @@
    - `noexcept` must be on the declarations too, so the header uses an `LB_NOEXCEPT` macro;
    - status codes are `static const` values of a fixed-width type, because bindgen does not
      translate macros with casts.
-4. **Minimum clang version:** the lowest version that passes CI (Linux `ubuntu-latest`,
-   recorded above), until a lower one is tested.
+4. **Minimum clang version:** 18.1.3, the lowest version that passed (Linux CI). Versions
+   below 18 are untested.
