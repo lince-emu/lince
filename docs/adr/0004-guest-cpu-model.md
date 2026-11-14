@@ -35,6 +35,13 @@ Option 2.
 - **Memory ordering:** guest acquire/release and LSE atomics map to host atomics with at least
   the guest's ordering; exclusive pairs (`LDXR`/`STXR`) are emulated with a host
   compare-and-swap on the reserved value (see Risks).
+- **Not paced by presentation:** guest cores run on their own host threads and keep the
+  guest's time from the emulated clock (counter registers derived from the host monotonic
+  clock), never from frames. A guest core blocks only on synchronization the guest itself
+  requests (a syncpoint or fence wait, an event, a buffer acquire), never on host
+  presentation, the swapchain or host GPU completion; every such wait is bounded and
+  recorded in the ledger (ADR-0023). A slow frame on the host can therefore delay what the
+  guest sees, but never stops a core that has other work.
 
 **B1 scope:** the decoder table, the six-core model and the ordering rule above; the B1
 interpreter implements the instructions the B1 test programs use (backlog T-033).
