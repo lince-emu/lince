@@ -100,9 +100,12 @@ the guest core free of compile work, the same rule AGENTS.md invariant 2 sets fo
 
 Evidence from other projects (doc 01): the Eden/yuzu lineage uses `dynarmic` plus native
 execution (NCE) on ARM64 hosts; Ryujinx persists translations (PPTC, R3), and its boot cost
-grows with the cache like every other project in the comparison (§6). How `dynarmic` and
-ARMeilleure schedule compilation is not yet documented with sources (RECALL only); a research
-note should confirm it before the JIT tiers are implemented.
+grows with the cache like every other project in the comparison (§6). `dynarmic` (Eden
+`63e957b`) compiles every first-executed block on the guest thread, with no interpreter or
+tiers; ARMeilleure (Ryubing fork `4d5a19d`) does the same for its low-quality tier and moves
+only hot-function recompilation to 1–4 background threads; PPTC is loaded, and its gaps
+recompiled, before the guest starts (SRC, `docs/research/cpu-jit-scheduling.md`). Lince's
+"a guest core never compiles" rule and lazy cache lookup therefore depart from both.
 
 ## Advantages
 No JIT stalls by construction; tiers share the decoder.
