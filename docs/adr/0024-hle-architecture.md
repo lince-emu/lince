@@ -37,8 +37,10 @@ service calls run on service host threads and resume the guest thread through ke
 address arbitration in `lince-kernel`; IPC sessions with exact CMIF and TIPC layouts; the
 explicit service registry in `lince-hle` with the `sm:`, `set:`, `fs`, `time` and `hid` stubs
 the B2 test program calls. Unknown SVCs and commands are logged by name through `lince-trace`;
-the ledger event and the debug auto-stub mode stay out. Where a blocking service call runs
-(service host threads) is not settled for B2 yet (see T-047).
+the ledger event and the debug auto-stub mode stay out. A blocking service call (such as `fs`
+reading the host directory) never runs on a guest core thread (invariant 3): it is queued to
+the service-I/O role thread (ADR-0017 B2 scope) and resumes the guest thread through a kernel
+event (maintainer, 2026-11-14).
 
 ## Technical justification
 Declarative descriptions make protocol differences between Switch 1 and 2 explicit and testable;
