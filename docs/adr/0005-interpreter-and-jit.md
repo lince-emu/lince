@@ -21,6 +21,8 @@ neither used nor consulted as code (LEGAL-20).
    on background workers.
 4. Native execution on ARM64 hosts (NCE-style), with traps for SVCs and special instructions.
 5. Persistent translation cache (PPTC-style).
+6. Pluggable backends behind the own IR (own, LLVM, Cranelift). Discarded: see
+   [`docs/discarded-ideas/pluggable-jit-backends.md`](../discarded-ideas/pluggable-jit-backends.md).
 
 ## Decision
 Option 3 as the primary design, with one rule that removes JIT stalls by construction:
@@ -43,39 +45,40 @@ Option 3 as the primary design, with one rule that removes JIT stalls by constru
 **Pipeline.** Every JIT tier follows one pipeline whose middle is Lince's own:
 
 ```text
-A64 decoder → LCIR (Lince CPU IR) → backend → code cache + dispatcher
+A64 decoder → LCIR (Lince CPU IR) → own backend → code cache + dispatcher
 ```
 
 - **LCIR** is the contract between front and back. It is Lince's own IR, designed from the Arm
   specification and Lince's requirements, not modelled on another emulator's IR
   (LEGAL-20/21). It is host-independent, deterministic and serializable as plain data, so
   it can cross the C ABI (ARCH-50) in one call per region and be hashed for the cache.
-- **Backends are pluggable.** A backend lowers LCIR to host code and nothing else. The
-  default is Lince's own backend in C++ (a fast lowering for Tier B, an optimizing one for
-  Tier C). A compiler framework (LLVM, Cranelift, …) may be added later as an alternative
-  backend behind the same interface, never as a dependency of the front end, the IR, the
-  cache or the dispatcher; each needs its own ADR (third-party code, ADR-0030) and a
-  measured comparison with the own backend. Because LCIR is plain data, a Rust-side backend
-  such as Cranelift is reachable through the boundary without changing the C++ front end.
-- **Code cache and dispatcher belong to Lince, not to a backend.** Every backend returns the
-  same output: position-independent code plus an explicit relocation list. Lookup,
+- **One backend, Lince's own, in C++:** a fast lowering for Tier B and an optimizing one for
+  Tier C. No compiler framework (LLVM, Cranelift, …) is used in any tier. A pluggable-backend
+  layer was considered and discarded as a speculative abstraction
+  ([`docs/discarded-ideas/pluggable-jit-backends.md`](../discarded-ideas/pluggable-jit-backends.md));
+  LCIR stays a clean, plain-data contract, so a different backend remains possible later
+  without designing for it now.
+- **Code cache and dispatcher belong to Lince.** The backend returns position-independent
+  code plus an explicit relocation list and the fault metadata ADR-0031 needs; lookup,
   publication (atomic patching of entry points by Rust, ADR-0031), persistence and lazy
-  resolution therefore stay the same whichever backend produced the code.
+  resolution are separate from code generation.
 
 The pipeline is shaped by the three problems the charter targets:
-- **Stutter:** compile time is bounded by the pipeline, not by a backend. Regions have a size
-  limit, own passes are linear or near-linear in region size, and every compile has a time
-  budget; a backend that cannot meet it (a general-purpose optimizer, for example) runs only
-  for Tier C in the background and is abandoned when the budget runs out, leaving the Tier B
-  code in place. Nothing compiles on a guest core in any case.
+- **Stutter:** regions have a size limit and every pass is linear or near-linear in region
+  size, so the worst-case compile time is bounded and known; every compile also has a time
+  budget, and a Tier C compile that exceeds it is abandoned, leaving the Tier B code in place.
+  Nothing compiles on a guest core in any case.
 - **Cache:** a translation is keyed by the hash of the guest code bytes plus the LCIR and
   backend versions, persisted in `lince-cache` and resolved lazily per block (option 5),
   instead of being retranslated at every boot.
-- **Performance:** guest registers and flags are explicit LCIR values inside a region, so a
+- **Performance:** guest registers and flags are explicit LCIR values inside a region, so the
   backend can keep them in host registers across a hot region; memory operations carry their
   size and ordering (plain, acquire, release, exclusive), so ordering is preserved without
   blanket barriers; exits (branch, SVC, exception, interrupt check) are explicit, so guest
   state is precise at every exit.
+
+LCIR v1 is deliberately minimal: only what Tier B needs to lower the B1/B2 instruction set;
+optimization-oriented features are added with Tier C.
 
 Tier A interprets the decoded instructions directly and does not use LCIR. Tier B is LCIR
 without optimization passes, lowered by the own fast backend; since it runs on workers, the
