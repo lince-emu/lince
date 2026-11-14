@@ -364,6 +364,7 @@ distinct error, never success or a panic, and is logged once by name and number 
 `OutputDebugString` text on the host terminal.
 - **Acceptance:** the B1 exit criterion of doc 07, demonstrated: the T-029 hello NRO prints
   "hello"; an integration test runs it in CI on Windows and Linux.
+- **PR:** https://github.com/lince-emu/lince/pull/47
 
 ### T-037 — Study: host core budget
 ADR-0005 moves all JIT work to `lince-sched` workers, which then compete with the six guest
