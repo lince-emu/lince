@@ -31,4 +31,4 @@ mod interp;
 
 pub use decode::{Insn, decode};
 pub use error::CpuError;
-pub use interp::{Exit, Run, State, run};
+pub use interp::{Exclusive, Exit, Run, State, run};

@@ -151,7 +151,12 @@ Outcome exec_move_wide(Core &core, Insn insn, uint32_t word) {
   const uint64_t imm = uint64_t{field(word, kImm16)} << shift;
   const Reg rd = reg(word, kRd);
   constexpr uint64_t kHalfword = 0xffff;
-  const uint64_t value = insn == Insn::MOVK ? (core.xr(rd) & ~(kHalfword << shift)) | imm : imm;
+  uint64_t value = imm;
+  if (insn == Insn::MOVK) {
+    value = (core.xr(rd) & ~(kHalfword << shift)) | imm;
+  } else if (insn == Insn::MOVN) {
+    value = ~imm;
+  }
   core.set_xr(rd, value, width(word));
   return Outcome::Next;
 }
@@ -297,6 +302,37 @@ Outcome exec_logical_reg(Core &core, Insn insn, uint32_t word) {
   return Outcome::Next;
 }
 
+// CSEL and CSINC (CSET and CINC are aliases): Rn if the condition holds, else Rm (plus one).
+Outcome exec_cond_select(Core &core, Insn insn, uint32_t word) {
+  constexpr Field kSelectCond{.lsb = 12, .width = 4};
+  uint64_t value = core.xr(reg(word, kRn));
+  if (!condition_holds(field(word, kSelectCond), core)) {
+    value = core.xr(reg(word, kRm)) + (insn == Insn::CSINC ? 1U : 0U);
+  }
+  core.set_xr(reg(word, kRd), value, width(word));
+  return Outcome::Next;
+}
+
+// LSRV (LSR register): Rn shifted right by Rm modulo the operand width.
+Outcome exec_shift_variable(Core &core, uint32_t word) {
+  const Width w = width(word);
+  const auto amount = static_cast<unsigned>(core.xr(reg(word, kRm)) % bits_of(w));
+  core.set_xr(reg(word, kRd), shift_register(core.xr(reg(word, kRn)), Shift::LSR, amount, w), w);
+  return Outcome::Next;
+}
+
+// MRS: only TPIDRRO_EL0 (op0 3, op1 3, CRn 13, CRm 0, op2 3), the thread pointer B2 programs
+// read; any other system register is unimplemented.
+Outcome exec_mrs(Core &core, uint32_t word) {
+  constexpr Field kSysReg{.lsb = 5, .width = 15}; // o0:op1:CRn:CRm:op2
+  constexpr uint32_t kTpidrroEl0 = 0b1'011'1101'0000'011;
+  if (field(word, kSysReg) != kTpidrroEl0) {
+    return Outcome::Unimplemented;
+  }
+  core.set_xr(reg(word, kRt), core.tpidrro_el0(), Width::X);
+  return Outcome::Next;
+}
+
 Outcome execute(Core &core, Memory &memory, Insn insn, uint32_t word) {
   switch (insn) {
   case Insn::UNKNOWN:
@@ -314,6 +350,16 @@ Outcome execute(Core &core, Memory &memory, Insn insn, uint32_t word) {
     return Outcome::Svc;
   case Insn::NOP:
     return Outcome::Next;
+  case Insn::CLREX:
+    core.clear_exclusive();
+    return Outcome::Next;
+  case Insn::MRS:
+    return exec_mrs(core, word);
+  case Insn::CSEL:
+  case Insn::CSINC:
+    return exec_cond_select(core, insn, word);
+  case Insn::LSRV:
+    return exec_shift_variable(core, word);
   case Insn::ADR:
   case Insn::ADRP:
     return exec_pc_relative(core, insn, word);
@@ -323,6 +369,7 @@ Outcome execute(Core &core, Memory &memory, Insn insn, uint32_t word) {
   case Insn::SUBS_IMM:
     return exec_add_sub_imm(core, insn, word);
   case Insn::MOVZ:
+  case Insn::MOVN:
   case Insn::MOVK:
     return exec_move_wide(core, insn, word);
   case Insn::AND_IMM:
@@ -347,6 +394,13 @@ Outcome execute(Core &core, Memory &memory, Insn insn, uint32_t word) {
   case Insn::LDRB_POST:
   case Insn::STP_OFF:
   case Insn::LDP_OFF:
+  case Insn::LDR_REG:
+  case Insn::LDRB_REG:
+  case Insn::STRB_REG:
+  case Insn::LDXR:
+  case Insn::LDAXR:
+  case Insn::STXR:
+  case Insn::STLXR:
     return exec_load_store(core, memory, insn, word);
   default:
     return Outcome::Unimplemented;

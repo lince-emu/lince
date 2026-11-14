@@ -74,6 +74,10 @@ constexpr Field kLoad{.lsb = 22, .width = 1}; // L of the unsigned-offset forms
 constexpr Field kPreIndex{.lsb = 11, .width = 1};
 constexpr Field kLitOpc{.lsb = 30, .width = 1};  // LDR (literal): 0 is W, 1 is X
 constexpr Field kPairOpc{.lsb = 31, .width = 1}; // LDP/STP: 0 is W, 1 is X
+constexpr Field kOption{.lsb = 13, .width = 3};  // extend of the register-offset forms
+constexpr Field kScaled{.lsb = 12, .width = 1};  // S of the register-offset forms
+constexpr Field kRs = kRm;                       // status register of the store-exclusives
+constexpr Field kAcqRel{.lsb = 15, .width = 1};  // o0 of the exclusives: acquire or release
 constexpr unsigned kImm12Shift = 12;
 constexpr unsigned kHwScale = 16;
 constexpr unsigned kB5Shift = 5;
@@ -147,6 +151,24 @@ public:
     return false;
   }
 
+  // Atomically replaces the `size` bytes at the aligned `addr` with `desired` if they hold
+  // `expected`, through the compare_exchange callback (lca_callbacks). Whether it stored, or
+  // nullopt (and the fault recorded) when the bytes are not mapped writable.
+  [[nodiscard]] std::optional<bool> compare_exchange(uint64_t addr, uint64_t size,
+                                                     uint64_t expected, uint64_t desired) {
+    uint32_t stored = 0;
+    if (callbacks_.compare_exchange != nullptr &&
+        callbacks_.compare_exchange(callbacks_.context, addr, size, expected, desired, &stored) ==
+            0) {
+      return stored != 0;
+    }
+    fault_ = {.address = addr, .access = LCA_PERM_WRITE};
+    return std::nullopt;
+  }
+
+  // Records an alignment fault of an exclusive access at `addr`.
+  void misaligned(uint64_t addr, uint32_t access) { fault_ = {.address = addr, .access = access}; }
+
   // The last failed access.
   [[nodiscard]] Fault fault() const { return fault_; }
 
@@ -199,7 +221,9 @@ enum class Outcome : uint8_t {
 // The core's registers while lca_run executes.
 class Core {
 public:
-  explicit Core(const lca_state &state) : sp_(state.sp), pc_(state.pc), nzcv_(state.nzcv) {
+  explicit Core(const lca_state &state)
+      : sp_(state.sp), pc_(state.pc), nzcv_(state.nzcv), tpidrro_el0_(state.tpidrro_el0),
+        exclusive_(state.exclusive) {
     std::ranges::copy(state.x, x_.begin());
   }
 
@@ -208,7 +232,18 @@ public:
     state.sp = sp_;
     state.pc = pc_;
     state.nzcv = nzcv_;
+    state.tpidrro_el0 = tpidrro_el0_;
+    state.exclusive = exclusive_;
   }
+
+  [[nodiscard]] uint64_t tpidrro_el0() const { return tpidrro_el0_; }
+
+  // The exclusive monitor: the reservation of the last load-exclusive, if any.
+  [[nodiscard]] const lca_exclusive &exclusive() const { return exclusive_; }
+  void reserve(uint64_t address, uint64_t value, uint32_t size) {
+    exclusive_ = {.address = address, .value = value, .size = size, .reserved = 0};
+  }
+  void clear_exclusive() { exclusive_ = {}; }
 
   [[nodiscard]] uint64_t pc() const { return pc_; }
   void set_pc(uint64_t pc) { pc_ = pc; }
@@ -243,6 +278,8 @@ private:
   uint64_t sp_;
   uint64_t pc_;
   uint32_t nzcv_;
+  uint64_t tpidrro_el0_;
+  lca_exclusive exclusive_;
 };
 
 // Executes a load or store form (load_store.cpp).

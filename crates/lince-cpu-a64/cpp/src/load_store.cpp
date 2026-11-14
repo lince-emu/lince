@@ -16,6 +16,13 @@
 namespace lince::a64 {
 namespace {
 
+constexpr unsigned kByteBits = 8;
+
+// The low `size` bytes set; `size` is at most 8.
+constexpr uint64_t ones_for(std::size_t size) {
+  return size >= sizeof(uint64_t) ? ~uint64_t{0} : (uint64_t{1} << (size * kByteBits)) - 1;
+}
+
 // One data access: `size` bytes at guest address `addr`.
 struct Access {
   uint64_t addr;
@@ -133,6 +140,84 @@ Outcome exec_pair(Core &core, Memory &memory, Insn insn, uint32_t word) {
   return Outcome::Next;
 }
 
+// The register offset of the register-offset forms: Rm extended by `option` (UXTW, LSL, SXTW
+// or SXTX; the table admits no other value), shifted by the access size when S is set.
+uint64_t register_offset(const Core &core, uint32_t word) {
+  constexpr uint32_t kUxtw = 0b010;
+  constexpr uint32_t kSxtw = 0b110;
+  const uint64_t rm = core.xr(reg(word, kRm));
+  uint64_t offset = rm;
+  switch (field(word, kOption)) {
+  case kUxtw:
+    offset = rm & kWMask;
+    break;
+  case kSxtw:
+    offset = sign_extend<kWBits>(rm);
+    break;
+  default: // LSL (UXTX) and SXTX use all 64 bits
+    break;
+  }
+  return field(word, kScaled) != 0 ? offset << field(word, kSize) : offset;
+}
+
+// LDR, LDRB and STRB (register offset).
+Outcome exec_load_store_reg(Core &core, Memory &memory, Insn insn, uint32_t word) {
+  const uint64_t addr = core.xs(reg(word, kRn)) + register_offset(core, word);
+  return transfer(core, memory, reg(word, kRt), sized_access(word, addr), insn != Insn::STRB_REG);
+}
+
+// LDXR and LDAXR: a load that opens a reservation on its address and value (ADR-0004). The
+// acquire ordering of LDAXR holds because one core runs per lca_run call; the shared-memory
+// ordering comes with ADR-0019's B2 scope.
+Outcome exec_load_exclusive(Core &core, Memory &memory, uint32_t word) {
+  const Access access = sized_access(word, core.xs(reg(word, kRn)));
+  if (access.addr % access.size != 0) {
+    memory.misaligned(access.addr, LCA_PERM_READ);
+    return Outcome::DataAbort;
+  }
+  const std::optional<uint64_t> value = load(memory, access);
+  if (!value) {
+    return Outcome::DataAbort;
+  }
+  core.set_xr(reg(word, kRt), *value, Width::X);
+  core.reserve(access.addr, *value, static_cast<uint32_t>(access.size));
+  return Outcome::Next;
+}
+
+// STXR and STLXR: store only if the reservation covers this access and the memory still holds
+// the reserved value, as one host compare-and-swap (ADR-0004); Rs is 0 on success, 1 on
+// failure. Either way the reservation is cleared.
+Outcome exec_store_exclusive(Core &core, Memory &memory, uint32_t word) {
+  const Reg rs = reg(word, kRs);
+  const Reg rn = reg(word, kRn);
+  if (rs == reg(word, kRt) || (rs == rn && rn != kZr)) {
+    // CONSTRAINED UNPREDICTABLE status register overlap: UNDEFINED is one permitted choice.
+    // UNKNOWN: which choice the Switch 2 cores make (docs/08-switch2-hardware.md §4).
+    return Outcome::Undefined;
+  }
+  const Access access = sized_access(word, core.xs(rn));
+  if (access.addr % access.size != 0) {
+    memory.misaligned(access.addr, LCA_PERM_WRITE);
+    return Outcome::DataAbort;
+  }
+  const lca_exclusive &reservation = core.exclusive();
+  // GUESS: without a matching reservation the store fails without probing the address; the
+  // Arm ARM may still take a data abort there (IMPLEMENTATION DEFINED).
+  bool stored = false;
+  if (reservation.size == access.size && reservation.address == access.addr) {
+    const uint64_t desired = core.xr(reg(word, kRt)) & ones_for(access.size);
+    const std::optional<bool> exchanged =
+        memory.compare_exchange(access.addr, access.size, reservation.value, desired);
+    if (!exchanged) {
+      return Outcome::DataAbort;
+    }
+    stored = *exchanged;
+  }
+  core.clear_exclusive();
+  core.set_xr(rs, stored ? 0 : 1, Width::W);
+  return Outcome::Next;
+}
+
 } // namespace
 
 Outcome exec_load_store(Core &core, Memory &memory, Insn insn, uint32_t word) {
@@ -150,6 +235,16 @@ Outcome exec_load_store(Core &core, Memory &memory, Insn insn, uint32_t word) {
   case Insn::STP_OFF:
   case Insn::LDP_OFF:
     return exec_pair(core, memory, insn, word);
+  case Insn::LDR_REG:
+  case Insn::LDRB_REG:
+  case Insn::STRB_REG:
+    return exec_load_store_reg(core, memory, insn, word);
+  case Insn::LDXR:
+  case Insn::LDAXR:
+    return exec_load_exclusive(core, memory, word);
+  case Insn::STXR:
+  case Insn::STLXR:
+    return exec_store_exclusive(core, memory, word);
   default:
     return Outcome::Unimplemented;
   }

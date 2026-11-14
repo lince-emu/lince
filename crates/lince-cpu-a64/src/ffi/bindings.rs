@@ -68,16 +68,28 @@ pub struct lca_callbacks {
             size: u64,
         ) -> i32,
     >,
+    pub compare_exchange: ::core::option::Option<
+        unsafe extern "C" fn(
+            context: *mut ::core::ffi::c_void,
+            va: u64,
+            size: u64,
+            expected: u64,
+            desired: u64,
+            stored: *mut u32,
+        ) -> i32,
+    >,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of lca_callbacks"][::core::mem::size_of::<lca_callbacks>() - 24usize];
+    ["Size of lca_callbacks"][::core::mem::size_of::<lca_callbacks>() - 32usize];
     ["Alignment of lca_callbacks"][::core::mem::align_of::<lca_callbacks>() - 8usize];
     ["Offset of field: lca_callbacks::context"]
         [::core::mem::offset_of!(lca_callbacks, context) - 0usize];
     ["Offset of field: lca_callbacks::read"][::core::mem::offset_of!(lca_callbacks, read) - 8usize];
     ["Offset of field: lca_callbacks::write"]
         [::core::mem::offset_of!(lca_callbacks, write) - 16usize];
+    ["Offset of field: lca_callbacks::compare_exchange"]
+        [::core::mem::offset_of!(lca_callbacks, compare_exchange) - 24usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -91,7 +103,7 @@ pub struct lca_memory {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of lca_memory"][::core::mem::size_of::<lca_memory>() - 56usize];
+    ["Size of lca_memory"][::core::mem::size_of::<lca_memory>() - 64usize];
     ["Alignment of lca_memory"][::core::mem::align_of::<lca_memory>() - 8usize];
     ["Offset of field: lca_memory::host_base"]
         [::core::mem::offset_of!(lca_memory, host_base) - 0usize];
@@ -108,16 +120,39 @@ const _: () = {
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
+pub struct lca_exclusive {
+    pub address: u64,
+    pub value: u64,
+    pub size: u32,
+    pub reserved: u32,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of lca_exclusive"][::core::mem::size_of::<lca_exclusive>() - 24usize];
+    ["Alignment of lca_exclusive"][::core::mem::align_of::<lca_exclusive>() - 8usize];
+    ["Offset of field: lca_exclusive::address"]
+        [::core::mem::offset_of!(lca_exclusive, address) - 0usize];
+    ["Offset of field: lca_exclusive::value"]
+        [::core::mem::offset_of!(lca_exclusive, value) - 8usize];
+    ["Offset of field: lca_exclusive::size"]
+        [::core::mem::offset_of!(lca_exclusive, size) - 16usize];
+    ["Offset of field: lca_exclusive::reserved"]
+        [::core::mem::offset_of!(lca_exclusive, reserved) - 20usize];
+};
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct lca_state {
     pub x: [u64; 31usize],
     pub sp: u64,
     pub pc: u64,
     pub nzcv: u32,
     pub reserved: u32,
+    pub tpidrro_el0: u64,
+    pub exclusive: lca_exclusive,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of lca_state"][::core::mem::size_of::<lca_state>() - 272usize];
+    ["Size of lca_state"][::core::mem::size_of::<lca_state>() - 304usize];
     ["Alignment of lca_state"][::core::mem::align_of::<lca_state>() - 8usize];
     ["Offset of field: lca_state::x"][::core::mem::offset_of!(lca_state, x) - 0usize];
     ["Offset of field: lca_state::sp"][::core::mem::offset_of!(lca_state, sp) - 248usize];
@@ -125,6 +160,10 @@ const _: () = {
     ["Offset of field: lca_state::nzcv"][::core::mem::offset_of!(lca_state, nzcv) - 264usize];
     ["Offset of field: lca_state::reserved"]
         [::core::mem::offset_of!(lca_state, reserved) - 268usize];
+    ["Offset of field: lca_state::tpidrro_el0"]
+        [::core::mem::offset_of!(lca_state, tpidrro_el0) - 272usize];
+    ["Offset of field: lca_state::exclusive"]
+        [::core::mem::offset_of!(lca_state, exclusive) - 280usize];
 };
 pub type lca_exit_reason = u32;
 pub const LCA_EXIT_SVC: lca_exit_reason = 1;

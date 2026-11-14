@@ -61,10 +61,18 @@ typedef struct lca_region {
 // 0, or returns nonzero and copies nothing when any byte cannot be accessed (a data abort).
 // A null function pointer makes every such access a data abort. `context` is passed back
 // unchanged; the callbacks may not change the mapped regions.
+//
+// `compare_exchange` serves every store-exclusive (ADR-0004: a host compare-and-swap on the
+// reserved value), inline or not: `size` is 4 or 8 and `va` is a multiple of it. It atomically
+// replaces the `size` bytes at `va` with `desired` if they equal `expected`, sets `*stored` to 1
+// if it did and 0 if not, and returns 0; it returns nonzero and changes nothing when the bytes
+// are not mapped writable.
 typedef struct lca_callbacks {
   void *context;
   int32_t (*read)(void *context, uint64_t va, uint8_t *out, uint64_t size);
   int32_t (*write)(void *context, uint64_t va, const uint8_t *data, uint64_t size);
+  int32_t (*compare_exchange)(void *context, uint64_t va, uint64_t size, uint64_t expected,
+                              uint64_t desired, uint32_t *stored);
 } lca_callbacks;
 
 // Guest memory for one lca_run call (ADR-0031: accessed inline through the host base). Guest
@@ -83,14 +91,26 @@ typedef struct lca_memory {
 // General-purpose registers X0 to X30 in lca_state.
 #define LCA_GPR_COUNT 31
 
+// The exclusive monitor of one core (ADR-0004): the reservation the last load-exclusive made.
+// `size` 0 means no reservation; otherwise `size` (4 or 8) bytes at `address` held `value`.
+typedef struct lca_exclusive {
+  uint64_t address;
+  uint64_t value;
+  uint32_t size;
+  uint32_t reserved;
+} lca_exclusive;
+
 // The architectural state of one guest core. Register 31 is SP or the zero register depending
 // on the instruction, so it is not in `x`. `nzcv` holds the flags in bits 31..28.
+// `tpidrro_el0` is the thread pointer the guest reads but cannot write (the kernel sets it).
 typedef struct lca_state {
   uint64_t x[LCA_GPR_COUNT];
   uint64_t sp;
   uint64_t pc;
   uint32_t nzcv;
   uint32_t reserved;
+  uint64_t tpidrro_el0;
+  lca_exclusive exclusive;
 } lca_state;
 
 // Why lca_run returned.
@@ -108,9 +128,9 @@ static const lca_exit_reason LCA_EXIT_UNIMPLEMENTED = 4;
 static const lca_exit_reason LCA_EXIT_FETCH_ABORT = 5;
 // pc is not a multiple of 4 (PC alignment fault): `address` is pc; nothing was fetched.
 static const lca_exit_reason LCA_EXIT_PC_MISALIGNED = 6;
-// A data access failed on both the inline and the slow path: `address` is the guest address
-// accessed, `detail` is LCA_PERM_READ or LCA_PERM_WRITE; pc is unchanged and the instruction
-// changed nothing.
+// A data access failed on both the inline and the slow path, or an exclusive access is not
+// aligned to its size: `address` is the guest address accessed, `detail` is LCA_PERM_READ or
+// LCA_PERM_WRITE; pc is unchanged and the instruction changed nothing.
 static const lca_exit_reason LCA_EXIT_DATA_ABORT = 7;
 
 typedef struct lca_exit {
