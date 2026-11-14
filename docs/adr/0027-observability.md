@@ -1,7 +1,7 @@
 # ADR-0027: Observability — frame ledger and tracing
 
-- **Status:** Proposed (the ledger needs PoC-7's ARM run). B1 (doc 07) needs only the part marked
-  **B1 scope** below accepted.
+- **Status:** Partially accepted. **B1 scope** (logging) accepted (maintainer, 2026-11-14);
+  the ledger stays Proposed until PoC-7's ARM run.
 - **Date:** 2026-11-13
 - **Related:** doc 05 §3–§4
 
