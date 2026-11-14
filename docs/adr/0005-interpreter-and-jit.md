@@ -40,36 +40,52 @@ Option 3 as the primary design, with one rule that removes JIT stalls by constru
 
 **B1 scope:** Tier A only, as the reference implementation and test oracle.
 
-Both tiers are C++ (ADR-0030). The code emitter (an own assembler or a third-party C++
-assembler library) is not decided; a third-party emitter needs its own ADR (ADR-0030).
-The Rust candidates considered earlier (`dynasm-rs`, `iced-x86`, Cranelift) no longer apply.
+**Pipeline.** Every JIT tier follows one pipeline whose middle is Lince's own:
 
-**Own IR, no compiler framework.** No tier depends on LLVM, Cranelift or any other compiler
-framework. Tier C optimizes over Lince's own CPU IR (LCIR), designed from the Arm
-specification and Lince's requirements, not modelled on another emulator's IR (LEGAL-20/21).
-LCIR exists to fix the three problems the charter targets:
-- **Stutter:** every pass is linear or near-linear in region size and regions have a size
-  limit, so the worst-case compile time of a region is bounded and known, not left to a
-  general-purpose optimizer.
-- **Cache:** LCIR is host-independent and deterministic, and emitted code is
-  position-independent with an explicit relocation list. A translation is keyed by the hash
-  of the guest code bytes plus the LCIR and emitter versions, so it can be persisted and
-  resolved lazily per block (option 5) instead of being retranslated at every boot.
-- **Performance:** guest registers and flags are explicit values inside a region, so they
-  stay in host registers across a hot region; memory operations carry their size and
-  ordering (plain, acquire, release, exclusive), so ordering is preserved without blanket
-  barriers; exits (branch, SVC, exception, interrupt check) are explicit, so guest state is
-  precise at every exit.
+```text
+A64 decoder → LCIR (Lince CPU IR) → backend → code cache + dispatcher
+```
 
-Tier B emits directly from the decoded instructions (no IR), so its cost per block stays
-minimal; LCIR is only for Tier C. LCIR's format is specified in its own design document
-before Tier C is implemented.
+- **LCIR** is the contract between front and back. It is Lince's own IR, designed from the Arm
+  specification and Lince's requirements, not modelled on another emulator's IR
+  (LEGAL-20/21). It is host-independent, deterministic and serializable as plain data, so
+  it can cross the C ABI (ARCH-50) in one call per region and be hashed for the cache.
+- **Backends are pluggable.** A backend lowers LCIR to host code and nothing else. The
+  default is Lince's own backend in C++ (a fast lowering for Tier B, an optimizing one for
+  Tier C). A compiler framework (LLVM, Cranelift, …) may be added later as an alternative
+  backend behind the same interface, never as a dependency of the front end, the IR, the
+  cache or the dispatcher; each needs its own ADR (third-party code, ADR-0030) and a
+  measured comparison with the own backend. Because LCIR is plain data, a Rust-side backend
+  such as Cranelift is reachable through the boundary without changing the C++ front end.
+- **Code cache and dispatcher belong to Lince, not to a backend.** Every backend returns the
+  same output: position-independent code plus an explicit relocation list. Lookup,
+  publication (atomic patching of entry points by Rust, ADR-0031), persistence and lazy
+  resolution therefore stay the same whichever backend produced the code.
 
-Option 4 is an ARM64-host experiment after M6. Option 5 is deferred until frame-ledger data
-shows boot-time JIT cost matters (expected small with tier B).
+The pipeline is shaped by the three problems the charter targets:
+- **Stutter:** compile time is bounded by the pipeline, not by a backend. Regions have a size
+  limit, own passes are linear or near-linear in region size, and every compile has a time
+  budget; a backend that cannot meet it (a general-purpose optimizer, for example) runs only
+  for Tier C in the background and is abandoned when the budget runs out, leaving the Tier B
+  code in place. Nothing compiles on a guest core in any case.
+- **Cache:** a translation is keyed by the hash of the guest code bytes plus the LCIR and
+  backend versions, persisted in `lince-cache` and resolved lazily per block (option 5),
+  instead of being retranslated at every boot.
+- **Performance:** guest registers and flags are explicit LCIR values inside a region, so a
+  backend can keep them in host registers across a hot region; memory operations carry their
+  size and ordering (plain, acquire, release, exclusive), so ordering is preserved without
+  blanket barriers; exits (branch, SVC, exception, interrupt check) are explicit, so guest
+  state is precise at every exit.
 
-LLVM and Cranelift are rejected for every tier: compile latency that Lince cannot bound, a
-large dependency, and no control over the cacheable code format above.
+Tier A interprets the decoded instructions directly and does not use LCIR. Tier B is LCIR
+without optimization passes, lowered by the own fast backend; since it runs on workers, the
+cost of building LCIR does not reach the guest. LCIR's format is specified in its own design
+document before the first JIT tier is implemented. The machine-code emitter inside the own
+backend (own assembler or a third-party C++ assembler library) is not decided; a third-party
+emitter needs its own ADR (ADR-0030).
+
+Option 4 is an ARM64-host experiment after M6. Option 5 lands with the first JIT tier,
+behind the cache's lazy lookup.
 
 ## Technical justification
 Mirrors the shader tiering: always-available correct execution, background optimization. The
