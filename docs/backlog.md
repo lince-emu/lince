@@ -45,6 +45,9 @@ Rules:
 | T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Blocked | T-027, T-029 | 0004, 0005, 0030 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Blocked | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034 | 0001 |
+| T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Ready | — | 0017, 0005 |
+| T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
+| T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Ready | — | 0005 |
 
 ## Details
 
@@ -281,11 +284,14 @@ fields once at the boundary (PAT-03).
 
 ### T-033 — `lince-cpu-a64` decoder and interpreter
 The first `[c++]` crate (ADR-0030 layout validated by PoC-11): decoder and interpreter for
-the instructions the T-029 programs use, with guest memory accessed through the Rust callback
-table. Instruction semantics come from Arm's public specification (LEGAL-11).
+the instructions the T-029 programs use. Guest memory is accessed inline through the base
+pointer Rust provides; the callback table is the slow path only (ADR-0031). Instruction
+semantics come from Arm's public specification (LEGAL-11).
 - **Acceptance:** differential tests of every implemented instruction against expected values
   derived from the specification (and against the host CPU on ARM hosts where available);
-  `cargo xtask ci` C++ checks pass.
+  `cargo xtask ci` C++ checks pass; a benchmark records interpreter throughput (ns per guest
+  instruction per instruction group) on the B1 programs, the baseline for how long code may
+  stay in Tier A before Tier B publishes (ADR-0005).
 
 ### T-034 — `lince-kernel` SVC dispatch
 Dispatch the SVCs from T-028 (memory, exit, `OutputDebugString`); unknown SVCs are logged by
@@ -297,3 +303,30 @@ name and number through `lince-trace` and return the documented error, never a p
 `OutputDebugString` text on the host terminal.
 - **Acceptance:** the B1 exit criterion of doc 07, demonstrated: the T-029 hello NRO prints
   "hello"; an integration test runs it in CI on Windows and Linux.
+
+### T-037 — Study: host core budget
+ADR-0005 moves all JIT work to `lince-sched` workers, which then compete with the six guest
+core threads, the GPU front and back, Vulkan submit, present and audio. On 6–8-core hosts
+that is more runnable threads than cores. Study how many threads each role needs, how
+priorities (ADR-0017 P0–P4) and the governor share the cores, what happens when the host has
+fewer cores than guest cores, and what the ledger must record to see it.
+- **Acceptance:** `docs/research/host-core-budget.md` with a proposed policy per host core
+  count and the ledger events to validate it; proposed ADR-0017 changes listed, not applied.
+
+### T-038 — LCIR v1 design
+Specify the minimal LCIR that Tier B needs for the B1/B2 instruction set (ADR-0005): values,
+guest-state access, memory operations with size and ordering, explicit exits, the serialized
+form that crosses the C ABI and is hashed for the cache. Written from the Arm specification
+and Lince's requirements, after T-039 so known pitfalls are listed without borrowing any
+design (LEGAL-20/21).
+- **Acceptance:** `docs/design/lcir-v1.md` (or a doc 03-style chapter) the maintainer
+  approves before the first JIT tier is implemented.
+
+### T-039 — Research: how other JITs schedule compilation
+Use the `research-note` skill. Behavior only, cited by repository, commit and file: when
+`dynarmic` (Eden lineage) and ARMeilleure (Ryujinx) compile guest code (on the guest thread
+or in the background), how they handle first execution, and how persistent caches are
+loaded. No code is copied or paraphrased (LEGAL-20/21); the note replaces the RECALL in
+ADR-0005.
+- **Acceptance:** `docs/research/cpu-jit-scheduling.md` with evidence levels; ADR-0005's
+  RECALL sentence updated to cite it.
