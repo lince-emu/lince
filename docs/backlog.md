@@ -44,15 +44,16 @@ Rules:
 | T-031 | `lince-mem`: flat guest address space with typed access | Impl | Done | T-027 | 0019 |
 | T-032 | `lince-loader`: load an NRO into guest memory | Impl | Done | T-028, T-031 | 0024 |
 | T-033 | `lince-cpu-a64` `[c++]`: crate, A64 description table and decoder for the B1 instructions | Impl | Done | T-027, T-029 | 0004, 0030, 0031 |
-| T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | In progress | T-033 | 0004, 0005, 0019, 0031 |
-| T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Blocked | T-042 | 0005 |
+| T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | Done | T-033 | 0004, 0005, 0019, 0031 |
+| T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | In progress | T-042 | 0005 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Done | T-027, T-028 | 0024 |
-| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | In progress | T-029–T-034, T-042 | 0001 |
+| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Ready | T-029–T-034, T-042 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
-| T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
+| T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | In progress | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
 | T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | Done | T-034 | 0019, 0024 |
+| T-044 | Close two local CI blind spots (clang-tidy header filter on Windows, PR title length) | Impl | Done | — | — |
 
 ## Details
 
@@ -329,6 +330,7 @@ clock. Instruction semantics come from Arm's public specification (LEGAL-11).
 - **Acceptance:** differential tests of every implemented instruction against expected values
   derived from the specification (and against the host CPU on ARM hosts where available); the
   B1 programs run to their exit SVC and print "ok"; `cargo xtask ci` C++ checks pass.
+- **PR:** https://github.com/lince-emu/lince/pull/42, https://github.com/lince-emu/lince/pull/45
 
 ### T-043 — Interpreter throughput benchmark
 A benchmark records interpreter throughput (ns per guest instruction per instruction group)
@@ -336,6 +338,11 @@ on the B1 programs, the baseline for how long code may stay in Tier A before Tie
 (ADR-0005). No new dependency without approval.
 - **Acceptance:** `cargo xtask bench` (or the crate's bench target) prints the per-group
   numbers; the measured baseline is recorded with the machine it ran on.
+- **Baseline** (`cargo bench -p lince-cpu-a64 --bench interp`, 2026-11-14, AMD Ryzen 5 7600,
+  32 GB, Windows 11, rustc 1.100.0; median ns per guest instruction, SVC exits included):
+  exit (hello, 6 insns) 37 · integer (alu, 34) 17 · branch (branch, 74) 13 · load/store
+  (memory, 41) 22. Runs are short, so the min–max spread is wide (10–205 ns).
+- **PR:** https://github.com/lince-emu/lince/pull/46
 
 ### T-044 — Close two local CI blind spots
 Found on #42: `.clang-tidy`'s `HeaderFilterRegex` matches only `/` separators, so on Windows
@@ -376,6 +383,7 @@ and Lince's requirements, after T-039 so known pitfalls are listed without borro
 design (LEGAL-20/21).
 - **Acceptance:** `docs/design/lcir-v1.md` (or a doc 03-style chapter) the maintainer
   approves before the first JIT tier is implemented.
+- **PR:** https://github.com/lince-emu/lince/pull/48
 
 ### T-039 — Research: how other JITs schedule compilation
 Use the `research-note` skill. Behavior only, cited by repository, commit and file: when
