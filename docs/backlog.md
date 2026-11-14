@@ -50,6 +50,7 @@ Rules:
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
+| T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | Blocked | T-034 | 0019, 0024 |
 
 ## Details
 
@@ -367,3 +368,15 @@ interpreter only gains what the next phase's programs need.
 - **Acceptance:** differential decode tests per instruction class; the coverage tool runs on
   the T-029 programs in CI and reports zero unknown encodings; it can be pointed at a
   user-supplied executable without any of its content entering the repository (LEGAL-50).
+
+### T-041 — SetMemoryPermission on part of a region
+`AddressSpace::protect` only changes a whole mapped region, so SetMemoryPermission (T-034)
+returns `0xD401` for a page range inside a region, or one that spans the heap's chunks, although
+S6 asks only for page alignment (docs/research/nro-and-b1-svcs.md). Let `protect`
+split and merge regions for any page-aligned range that is fully mapped, keeping the
+region map free of overlaps, and drop the whole-region limit from the kernel. Needed before
+the first program that changes permissions on part of a mapping; the B1 programs do not.
+- **Acceptance:** `lince-mem` tests for protecting the head, middle and tail of a region and a
+  range across adjacent regions, with `query` showing the resulting regions; kernel tests for
+  SetMemoryPermission on a sub-range and across heap chunks; an unmapped page in the range
+  still returns `0xD401` and changes nothing.
