@@ -466,6 +466,7 @@ Extend the T-029 programs: one NRO starts threads on several cores, synchronizes
 `fs`, `time` and `hid`, printing each result through `OutputDebugString`. Team-written
 assembly only; the expected output is checked in.
 - **Acceptance:** the program builds in CI; its expected output is documented per step.
+- **PR:** https://github.com/lince-emu/lince/pull/54
 
 ### T-050 — Interpreter: what B2's program needs
 Add to the Tier A interpreter the instructions T-049's program uses that B1 lacks: exclusive
