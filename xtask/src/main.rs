@@ -56,7 +56,14 @@ fn main() -> ExitCode {
     };
     let result = match command {
         Command::Ci(range) => ci::run(workspace_root(), &range),
-        Command::Homebrew { check } => homebrew::run(workspace_root(), check),
+        Command::Homebrew { check } => {
+            let mode = if check {
+                homebrew::Mode::Check
+            } else {
+                homebrew::Mode::Write
+            };
+            homebrew::run(workspace_root(), mode)
+        }
         Command::PrTitle(title) => {
             return match commits::validate_pr_title(&title) {
                 Ok(()) => {

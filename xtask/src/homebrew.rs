@@ -7,6 +7,8 @@
 //! `clang --target=aarch64-none-elf`, linked after `start.s` with `ld.lld` and
 //! `tests/homebrew/nro.ld`, and converted by `elf2nro` to `tests/homebrew/<name>.nro`. The NROs
 //! are checked in so tests need no LLVM; `--check` rebuilds them and fails if any differs.
+//! `cargo xtask ci` only builds them ([`Mode::Build`]): LLVM versions differ between hosts, so
+//! the bytes may too, but every program must still assemble and link.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,8 +24,19 @@ const LINKER_SCRIPT: &str = "tests/homebrew/nro.ld";
 const BUILD_DIR: &str = "target/xtask-homebrew";
 const TARGET: &str = "--target=aarch64-none-elf";
 
-/// Rebuilds every test NRO; with `check`, compares instead of writing.
-pub(crate) fn run(root: &Path, check: bool) -> Result<(), XtaskError> {
+/// What to do with each freshly built NRO.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Mode {
+    /// Overwrite the checked-in NRO.
+    Write,
+    /// Fail if the checked-in NRO differs.
+    Check,
+    /// Only build; leave the checked-in NRO alone.
+    Build,
+}
+
+/// Rebuilds every test NRO and handles the result as `mode` says.
+pub(crate) fn run(root: &Path, mode: Mode) -> Result<(), XtaskError> {
     let clang = cpp::tool(root, "clang")?;
     let lld = cpp::tool(root, "ld.lld")?;
     let build = root.join(BUILD_DIR);
@@ -53,14 +66,18 @@ pub(crate) fn run(root: &Path, check: bool) -> Result<(), XtaskError> {
             source,
         })?;
         let output = root.join(SOURCE_DIR).join(format!("{name}.nro"));
-        if !check {
-            fs::write(&output, nro).map_err(|source| XtaskError::Write {
+        match mode {
+            Mode::Write => fs::write(&output, nro).map_err(|source| XtaskError::Write {
                 path: output,
                 source,
-            })?;
-        } else if fs::read(&output).ok().as_deref() != Some(nro.as_slice()) {
-            eprintln!("  {}: differs from a fresh build", output.display());
-            differ += 1;
+            })?,
+            Mode::Check => {
+                if fs::read(&output).ok().as_deref() != Some(nro.as_slice()) {
+                    eprintln!("  {}: differs from a fresh build", output.display());
+                    differ += 1;
+                }
+            }
+            Mode::Build => {}
         }
     }
     if differ == 0 {
