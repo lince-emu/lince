@@ -375,6 +375,7 @@ and Lince's requirements, after T-039 so known pitfalls are listed without borro
 design (LEGAL-20/21).
 - **Acceptance:** `docs/design/lcir-v1.md` (or a doc 03-style chapter) the maintainer
   approves before the first JIT tier is implemented.
+- **PR:** https://github.com/lince-emu/lince/pull/48
 
 ### T-039 — Research: how other JITs schedule compilation
 Use the `research-note` skill. Behavior only, cited by repository, commit and file: when
