@@ -217,3 +217,38 @@ fn unusable_configurations_are_rejected() {
         Err(MemError::InvalidConfig { .. })
     ));
 }
+
+#[test]
+fn query_reports_the_region_or_the_free_gap_around_an_address() {
+    let mut mem = space().unwrap();
+    let size = 1u64 << 39;
+    mem.map(va(0x10_0000), 2 * PAGE, RW).unwrap();
+    mem.map(va(0x20_0000), PAGE, Permission::READ).unwrap();
+
+    let region = mem.query(va(0x10_0000 + PAGE + 8)).unwrap();
+    assert_eq!(
+        (region.base, region.size, region.permission),
+        (va(0x10_0000), 2 * PAGE, Some(RW))
+    );
+
+    let before = mem.query(va(0x1000)).unwrap();
+    assert_eq!(
+        (before.base, before.size, before.permission),
+        (va(0), 0x10_0000, None)
+    );
+    let between = mem.query(va(0x10_0000 + 2 * PAGE)).unwrap();
+    assert_eq!(
+        (between.base, between.size, between.permission),
+        (
+            va(0x10_0000 + 2 * PAGE),
+            0x20_0000 - 0x10_0000 - 2 * PAGE,
+            None
+        )
+    );
+    let after = mem.query(va(0x30_0000)).unwrap();
+    assert_eq!(
+        (after.base, after.size, after.permission),
+        (va(0x20_0000 + PAGE), size - 0x20_0000 - PAGE, None)
+    );
+    assert_eq!(mem.query(va(size)), None);
+}

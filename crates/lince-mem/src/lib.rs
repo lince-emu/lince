@@ -26,4 +26,4 @@ mod platform;
 mod space;
 
 pub use error::{Access, MemError, Result};
-pub use space::{AddressSpace, GUEST_PAGE_SIZE, Permission, Scalar, SpaceConfig};
+pub use space::{AddressSpace, GUEST_PAGE_SIZE, Permission, Scalar, SpaceConfig, Span};
