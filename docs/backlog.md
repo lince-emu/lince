@@ -69,6 +69,7 @@ Rules:
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Ready | T-047 | 0017, 0024 |
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | In progress | T-047, T-050 | 0004, 0019, 0031 |
+| T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
 
 ## Details
 
@@ -541,3 +542,29 @@ region cannot be unmapped under the interpreter's inline accesses. Page contents
 - **Acceptance:** `AddressSpace` is `Send + Sync`; a test maps and unmaps from one thread
   while another reads; a stress test (from #56) runs two threads contending on one exclusive
   pair through `lince_cpu_a64::run` and checks that no update is lost.
+
+### T-060 — Shared guest memory follow-ups (deferred)
+Recorded on #57 so the analysis is not lost; not scheduled. **Start only when a trigger below
+fires**, even after T-059 is Done.
+- **C++ inline accesses are plain.** `Memory::read`/`write` in
+  `crates/lince-cpu-a64/cpp/src/machine.hpp` use `memcpy`. With several cores this is a data
+  race under the C++ memory model (undefined behavior), although ADR-0019 leaves page contents
+  unlocked and it works on x86-64 and ARM64 today. Fix: `std::atomic_ref<T>` with
+  `memory_order_relaxed` — no lock and no ordering, only a defined access (guest ordering stays
+  with LDAR/STLR/DMB, ADR-0004). Expected cost, **not measured**: none for aligned 1/2/4/8-byte
+  accesses (same `mov`/`ldr`/`str`); an alignment branch and a split for unaligned guest
+  accesses; a split for 16-byte accesses (`LDP`, Q registers), which have no cheap portable
+  atomic; the generic variable-size `memcpy` becomes a loop; MSVC's `atomic_ref` codegen is
+  unchecked. Measure with the T-043 benchmark before and after.
+  *Trigger:* a miscompile or sanitizer (TSan) report on guest memory, a JIT that must define
+  the same rule, or before calling the interpreter's memory model final.
+- **Rust slow-path copies are one relaxed `AtomicU8` per byte** (`SpaceView::read_bytes` /
+  `write_bytes` in `crates/lince-mem/src/space.rs`), so bulk copies are slower than `memcpy`.
+  Fix: copy aligned `AtomicU64` words with byte heads and tails. *Trigger:* bulk copies on a
+  guest core in steady state (ledger or benchmark).
+- **`map` zero-fills under the region write lock**, and `run` holds the read side for a whole
+  slice, so one core's `map`/`unmap`/`protect` waits for every other core's slice and stalls
+  them meanwhile (bounded, no deadlock; invariant-reviewer on #57). Fix: shrink the critical
+  section or the slice. *Trigger:* the ledger shows guest cores waiting in `view()`.
+- **Acceptance (per item taken):** before/after numbers from the benchmark or ledger; existing
+  differential and stress tests still pass.
