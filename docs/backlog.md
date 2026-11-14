@@ -45,15 +45,27 @@ Rules:
 | T-032 | `lince-loader`: load an NRO into guest memory | Impl | Done | T-028, T-031 | 0024 |
 | T-033 | `lince-cpu-a64` `[c++]`: crate, A64 description table and decoder for the B1 instructions | Impl | Done | T-027, T-029 | 0004, 0030, 0031 |
 | T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | Done | T-033 | 0004, 0005, 0019, 0031 |
-| T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | In progress | T-042 | 0005 |
+| T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Done | T-042 | 0005 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Done | T-027, T-028 | 0024 |
-| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Ready | T-029–T-034, T-042 | 0001 |
+| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Done | T-029–T-034, T-042 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
-| T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | In progress | T-039 | 0005 |
+| T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Done | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
 | T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | Done | T-034 | 0019, 0024 |
 | T-044 | Close two local CI blind spots (clang-tidy header filter on Windows, PR title length) | Impl | Done | — | — |
+| T-045 | Break B2 into tasks; record the D-006 answer | Docs | In progress | T-035 | 0017, 0024 |
+| T-046 | Mark the **B2 scope** in ADR-0004, 0017, 0019 and 0024 | Docs | Ready | T-045 | 0004, 0017, 0019, 0024 |
+| T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Blocked | T-046 | 0004, 0017, 0019, 0024 |
+| T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Ready | — | 0024 |
+| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Blocked | T-048 | 0001, 0002 |
+| T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Blocked | T-047, T-049 | 0004, 0005, 0031 |
+| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-047, T-048 | 0004, 0017, 0024 |
+| T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
+| T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Blocked | T-052 | 0024 |
+| T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053 | 0024 |
+| T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
+| T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
 
 ## Details
 
@@ -175,7 +187,8 @@ licensed substitute, or a documented "unavailable" behavior. Extend
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
 T-017 is paused until after B6 (`docs/07-development-roadmap.md`, "What pauses").
-T-018: decision [D-006](decisions/D-006-oboromi-sass-tables-off-limits.md) must be answered first.
+T-018: [D-006](decisions/D-006-oboromi-sass-tables-off-limits.md) is answered (option A, LEGAL-16);
+T-018 returns in B5.
 
 ### T-020 — PoC-6 XXH3 checksum
 Decision [D-001](decisions/D-001-cache-hash-xxh3.md). Add `xxhash-rust` (`xxh3` feature) to
@@ -415,3 +428,82 @@ the first program that changes permissions on part of a mapping; the B1 programs
   range across adjacent regions, with `query` showing the resulting regions; kernel tests for
   SetMemoryPermission on a sub-range and across heap chunks; an unmapped page in the range
   still returns `0xD401` and changes nothing.
+
+### T-045 — Break B2 into tasks
+Turn doc 07's B2 phase (Kernel and IPC) into backlog tasks shaped like B1's, and record the
+maintainer's answer to D-006 (option A) in the decision and in `legal-rules.md`.
+- **Acceptance:** B2 rows and details below; D-006 answered; LEGAL-16 lists the off-limits
+  sources.
+
+### T-046 — Mark the B2 scope in the ADRs
+As PR #30 did for B1, add a **B2 scope** line to each ADR B2 needs, naming the part to accept:
+ADR-0004 (exclusive monitor and memory ordering across cores), ADR-0017 (guest core threads
+only; pools and the governor stay out), ADR-0019 (guest memory shared by several core
+threads) and ADR-0024 (handles, sync objects, IPC sessions, CMIF/TIPC and the service
+framework). No decision changes; a scope that needs a new decision is listed for T-047.
+- **Acceptance:** each ADR states its B2 scope; open questions listed in the PR.
+
+### T-047 — B2 ADR review (maintainer)
+Accept the B2 scope marked by T-046, or send it back with questions.
+- **Acceptance:** each ADR's status line states what is accepted; T-050 to T-055 can start.
+
+### T-048 — Research: B2 SVCs, IPC and service commands
+Use the `research-note` skill. From public sources only (LEGAL-10/11): the thread, TLS,
+synchronization, event, handle and IPC SVCs (numbers, arguments, results, error codes); the
+CMIF and TIPC message layouts (header, handle descriptor, buffers, domains); how a program
+reaches `sm:` and the commands B2's program calls on `sm:`, `set:`, `fs`, `time` and `hid`.
+Mark what is Switch 1 knowledge and what is known on Switch 2 (doc 08).
+- **Acceptance:** `docs/research/b2-svcs-and-ipc.md` with per-field sources and evidence
+  levels; UNKNOWN items listed in doc 08.
+
+### T-049 — B2 test program
+Extend the T-029 programs: one NRO starts threads on several cores, synchronizes them
+(mutex, condition variable, event), reads its TLS, and opens sessions to `sm:`, `set:`,
+`fs`, `time` and `hid`, printing each result through `OutputDebugString`. Team-written
+assembly only; the expected output is checked in.
+- **Acceptance:** the program builds in CI; its expected output is documented per step.
+
+### T-050 — Interpreter: what B2's program needs
+Add to the Tier A interpreter the instructions T-049's program uses that B1 lacks: exclusive
+loads/stores with a per-core exclusive monitor, barriers, and the system registers for TLS
+and the counter. Differential tests per instruction, as in T-042.
+- **Acceptance:** each new instruction tested; two cores contending on an exclusive pair
+  never both succeed.
+
+### T-051 — Guest threads
+One host thread per guest core (ADR-0017), a simple per-core scheduler with guest priorities,
+and the thread SVCs from T-048 (create, start, exit, sleep, priority, core mask) with TLS.
+No threads beyond the six core threads (invariant 7).
+- **Acceptance:** kernel tests run threads on several cores; a thread pinned to a core never
+  runs elsewhere; teardown joins every core thread.
+
+### T-052 — Handles, sync objects and events
+A per-process handle table, mutexes and condition variables (address arbitration), events,
+and the wait SVCs with timeouts and cancellation. A guest core blocks only on guest
+synchronization (ADR-0004).
+- **Acceptance:** tests for wake order, timeout and cancellation; closing a handle twice
+  returns the documented error.
+
+### T-053 — IPC sessions, CMIF/TIPC and `sm:`
+Kernel sessions and the IPC SVCs in `lince-kernel`; the CMIF/TIPC message framework and the
+`sm:` service in `lince-hle` (doc 04). Unknown commands return a distinct error and are
+logged by name, never silently succeed (ADR-0024).
+- **Acceptance:** round-trip tests for each message layout from T-048; an unknown command is
+  logged once and returns an error.
+
+### T-054 — First service stubs
+`set:`, `fs` (a host directory the user chooses), `time` and `hid` with the commands B2's
+program calls; every stub logs by name. No game content enters the repository (LEGAL-50).
+- **Acceptance:** each command tested through the IPC framework; `fs` cannot reach outside
+  its host directory.
+
+### T-055 — SVC and IPC coverage tool
+A run records every SVC and IPC command it reaches that has no implementation, and prints the
+list at exit (doc 07 B2 exit criterion), through `lince-trace`.
+- **Acceptance:** a test program calling an unimplemented SVC and command shows both in the
+  list; a clean run prints an empty list.
+
+### T-056 — `lince run` (B2 exit)
+`lince run` runs T-049's program on several core threads to completion.
+- **Acceptance:** the B2 exit criterion of doc 07, demonstrated: the program's output matches
+  its expected output; an integration test runs it in CI on Windows and Linux.
