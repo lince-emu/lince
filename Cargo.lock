@@ -118,6 +118,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lince-app"
+version = "0.0.0"
+dependencies = [
+ "lince-common",
+ "lince-cpu-a64",
+ "lince-kernel",
+ "lince-loader",
+ "lince-mem",
+ "lince-trace",
+ "thiserror",
+]
+
+[[package]]
 name = "lince-common"
 version = "0.0.0"
 dependencies = [

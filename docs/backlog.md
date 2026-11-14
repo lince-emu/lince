@@ -47,7 +47,7 @@ Rules:
 | T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | In progress | T-033 | 0004, 0005, 0019, 0031 |
 | T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Blocked | T-042 | 0005 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Done | T-027, T-028 | 0024 |
-| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034, T-042 | 0001 |
+| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | In progress | T-029–T-034, T-042 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
