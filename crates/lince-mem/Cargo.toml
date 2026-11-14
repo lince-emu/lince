@@ -8,7 +8,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-lince-common = { path = "../lince-common" }
+lince-common = { path = "../lince-common", version = "0.0.0" }
 thiserror.workspace = true
 
 [target.'cfg(unix)'.dependencies]
