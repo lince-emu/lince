@@ -63,8 +63,8 @@ pub enum MemError {
         /// Length of the range in bytes.
         size: u64,
     },
-    /// An unmap range is not exactly one mapped region.
-    #[error("range {va:#x}+{size:#x} is not a mapped region")]
+    /// An unmap or protect range is not fully mapped.
+    #[error("range {va:#x}+{size:#x} is not fully mapped")]
     NotARegion {
         /// Start of the range.
         va: GuestVa,

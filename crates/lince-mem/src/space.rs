@@ -192,14 +192,16 @@ impl AddressSpace {
         Ok(())
     }
 
-    /// Unmaps the region that starts at `va` and is `size` bytes long.
+    /// Unmaps `[va, va + size)`, which must be page-aligned and fully mapped; it may cover
+    /// several regions or part of one. A region that extends past either end keeps its outer
+    /// part.
     pub fn unmap(&mut self, va: GuestVa, size: u64) -> Result<()> {
-        let end = self.checked_range(va, size)?;
-        let removed = match self.regions.get(&va.get()) {
-            Some(region) if region.end == end => *region,
-            _ => return Err(MemError::NotARegion { va, size }),
-        };
-        self.regions.remove(&va.get());
+        let end = self.mapped_range(va, size)?;
+        self.split_at(va.get());
+        self.split_at(end);
+        let mut removed = self.regions.split_off(&va.get());
+        let mut after = removed.split_off(&end);
+        self.regions.append(&mut after);
         // Host pages at either edge may still hold other mapped guest pages.
         let mut lo = round_down(va.get(), self.host_page);
         let mut hi = round_up(end, self.host_page);
@@ -212,22 +214,26 @@ impl AddressSpace {
         if hi > lo
             && let Err(error) = self.host.decommit(to_usize(lo), to_usize(hi - lo))
         {
-            self.regions.insert(va.get(), removed);
+            self.regions.append(&mut removed);
+            self.merge(va.get(), end);
             return Err(error.into());
         }
         Ok(())
     }
 
-    /// Sets the permission of the region that starts at `va` and is `size` bytes long.
+    /// Sets the permission of `[va, va + size)`, which must be page-aligned and fully mapped;
+    /// it may cover several regions or part of one. Regions are split at the range's ends, and
+    /// neighbours that end up with the same permission are merged, so the region map stays the
+    /// smallest one that describes the space.
     pub fn protect(&mut self, va: GuestVa, size: u64, perm: Permission) -> Result<()> {
-        let end = self.checked_range(va, size)?;
-        match self.regions.get_mut(&va.get()) {
-            Some(region) if region.end == end => {
-                region.perm = perm;
-                Ok(())
-            }
-            _ => Err(MemError::NotARegion { va, size }),
+        let end = self.mapped_range(va, size)?;
+        self.split_at(va.get());
+        self.split_at(end);
+        for (_, region) in self.regions.range_mut(va.get()..end) {
+            region.perm = perm;
         }
+        self.merge(va.get(), end);
+        Ok(())
     }
 
     /// The permission of the region containing `va`, or `None` if it is unmapped.
@@ -368,6 +374,65 @@ impl AddressSpace {
             .checked_add(size)
             .filter(|end| *end <= self.size)
             .ok_or(MemError::OutOfRange { va, size })
+    }
+
+    /// Checks that `[va, va + size)` is page-aligned, inside the space and mapped with no gap;
+    /// returns its end.
+    fn mapped_range(&self, va: GuestVa, size: u64) -> Result<u64> {
+        let end = self.checked_range(va, size)?;
+        let mut addr = va.get();
+        while addr < end {
+            let (_, region) = self
+                .region_at(addr)
+                .ok_or(MemError::NotARegion { va, size })?;
+            addr = region.end;
+        }
+        Ok(end)
+    }
+
+    /// Makes `addr` a region boundary: a region that contains it is split in two.
+    fn split_at(&mut self, addr: u64) {
+        if let Some((start, region)) = self.region_at(addr)
+            && start < addr
+        {
+            self.regions.insert(
+                start,
+                Region {
+                    end: addr,
+                    ..region
+                },
+            );
+            self.regions.insert(addr, region);
+        }
+    }
+
+    /// Merges adjacent regions with the same permission from the region that ends at `lo` up
+    /// to the region that starts at `hi`.
+    fn merge(&mut self, lo: u64, hi: u64) {
+        let mut cursor = self
+            .regions
+            .range(..lo)
+            .next_back()
+            .filter(|(_, region)| region.end == lo)
+            .map_or(lo, |(&start, _)| start);
+        while let Some(&region) = self.regions.get(&cursor) {
+            if region.end > hi {
+                break;
+            }
+            match self.regions.get(&region.end).copied() {
+                Some(next) if next.perm == region.perm => {
+                    self.regions.remove(&region.end);
+                    self.regions.insert(
+                        cursor,
+                        Region {
+                            end: next.end,
+                            ..region
+                        },
+                    );
+                }
+                _ => cursor = region.end,
+            }
+        }
     }
 
     fn region_at(&self, addr: u64) -> Option<(u64, Region)> {

@@ -36,13 +36,16 @@ commands:
         run every check that CI runs (fmt, commit messages, SPDX, license, invariants,
         C++ format/lint/sanitizers, clippy, tests, deny); commits are checked from REV (default origin/main) to HEAD
   homebrew [--check]
-        rebuild tests/homebrew/*.nro with LLVM; --check fails if a rebuild differs";
+        rebuild tests/homebrew/*.nro with LLVM; --check fails if a rebuild differs
+  pr-title TITLE
+        check a pull-request title with the rule `ci --pr-title` applies";
 
 /// A parsed command line.
 #[derive(Debug, PartialEq, Eq)]
 enum Command {
     Ci(commits::Range),
     Homebrew { check: bool },
+    PrTitle(String),
 }
 
 fn main() -> ExitCode {
@@ -54,6 +57,18 @@ fn main() -> ExitCode {
     let result = match command {
         Command::Ci(range) => ci::run(workspace_root(), &range),
         Command::Homebrew { check } => homebrew::run(workspace_root(), check),
+        Command::PrTitle(title) => {
+            return match commits::validate_pr_title(&title) {
+                Ok(()) => {
+                    eprintln!("xtask: pull-request title is valid");
+                    ExitCode::SUCCESS
+                }
+                Err(reason) => {
+                    eprintln!("xtask: pull-request title {title:?}: {reason}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -72,6 +87,7 @@ fn parse_args(args: &[String]) -> Option<Command> {
         [command, flag] if command == "homebrew" && flag == "--check" => {
             Some(Command::Homebrew { check: true })
         }
+        [command, title] if command == "pr-title" => Some(Command::PrTitle(title.clone())),
         _ => None,
     }
 }
@@ -136,6 +152,10 @@ mod tests {
             parse_args(&args(&["homebrew", "--check"])),
             Some(Command::Homebrew { check: true })
         );
+        assert_eq!(
+            parse_args(&args(&["pr-title", "feat(x): y"])),
+            Some(Command::PrTitle("feat(x): y".to_owned()))
+        );
     }
 
     #[test]
@@ -144,6 +164,8 @@ mod tests {
         assert_eq!(parse_args(&args(&["ci", "--verbose", "1"])), None);
         assert_eq!(parse_args(&args(&["ci", "--base"])), None);
         assert_eq!(parse_args(&args(&["homebrew", "--write"])), None);
+        assert_eq!(parse_args(&args(&["pr-title"])), None);
+        assert_eq!(parse_args(&args(&["pr-title", "a", "b"])), None);
         assert_eq!(parse_args(&args(&[])), None);
     }
 }
