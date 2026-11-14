@@ -58,7 +58,7 @@ Rules:
 | T-046 | Mark the **B2 scope** in ADR-0004, 0017, 0019 and 0024 | Docs | Done | T-045 | 0004, 0017, 0019, 0024 |
 | T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Done | T-046 | 0004, 0017, 0019, 0024 |
 | T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Done | — | 0024 |
-| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Ready | T-048 | 0001, 0002 |
+| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | In progress | T-048 | 0001, 0002 |
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Blocked | T-047, T-049 | 0004, 0005, 0031 |
 | T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-047, T-048 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
@@ -466,6 +466,7 @@ Extend the T-029 programs: one NRO starts threads on several cores, synchronizes
 `fs`, `time` and `hid`, printing each result through `OutputDebugString`. Team-written
 assembly only; the expected output is checked in.
 - **Acceptance:** the program builds in CI; its expected output is documented per step.
+- **PR:** https://github.com/lince-emu/lince/pull/54
 
 ### T-050 — Interpreter: what B2's program needs
 Add to the Tier A interpreter the instructions T-049's program uses that B1 lacks: exclusive

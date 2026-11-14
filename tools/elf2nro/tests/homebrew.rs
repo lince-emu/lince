@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use elf2nro::{ConvertError, convert};
 
 const PAGE: u32 = 0x1000;
-const PROGRAMS: [&str; 4] = ["alu", "branch", "hello", "memory"];
+const PROGRAMS: [&str; 5] = ["alu", "b2", "branch", "hello", "memory"];
 
 fn nro(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
