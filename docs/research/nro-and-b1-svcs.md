@@ -83,6 +83,11 @@ Evidence levels: DOC = public documentation, read, not reproduced. "Applies" = t
 - O4: the full MemoryType table (S3) needs a raw re-read.
 - O5: which Switch 2 SVC numbers other than `0x80` exist (S11 lists `0x81`-`0x88` with no
   Switch 2 confirmation).
+- O6 (T-034 GUESSes, `crates/lince-kernel`): the heap base the kernel picks for SetHeapSize
+  (B1 fixes `0x20_0000_0000`), shrinking the heap to sizes other than 0 or an earlier size,
+  the OutputDebugString length limit (B1: 64 KiB), the extent of the Inaccessible region
+  QueryMemory reports past the address space, and what Break does when reason bit 31 is clear
+  (B1 stops the guest).
 
 ## 6. Affected ADRs, PoCs and tasks
 

@@ -39,13 +39,20 @@ pub(crate) const GPU_ATTRIBUTE_NAME: &str = "SetGpuMemoryAttribute";
 /// Heap sizes are multiples of 2 MiB and at most 4 GiB (S5).
 const HEAP_ALIGN: u64 = 0x20_0000;
 const HEAP_MAX: u64 = 0x1_0000_0000;
-/// Longest `OutputDebugString` accepted per call (GUESS: the note gives no limit).
+/// Longest `OutputDebugString` accepted per call.
+// GUESS: the note gives no limit; 64 KiB exceeds any B1 message.
 const DEBUG_STRING_MAX: u64 = 0x1_0000;
+/// Most undrained debug-output bytes kept; past it `OutputDebugString` returns
+/// `OUT_OF_RESOURCE`, so a guest cannot grow host memory without bound.
+const DEBUG_PENDING_MAX: usize = 0x10_0000;
+/// `Break` reason bit that makes the call return (S10).
+const BREAK_RETURN_BIT: u64 = 1 << 31;
 
 const MEMORY_INFO_SIZE: usize = 0x28;
 const TYPE_FREE: u32 = 0;
 const TYPE_CODE: u32 = 0xDC_7E03;
 const TYPE_NORMAL: u32 = 0x37E_BD05;
+const TYPE_INACCESSIBLE: u32 = 0x10;
 
 pub(crate) static TABLE: [Option<Entry>; 256] = build_table();
 
@@ -80,7 +87,8 @@ fn done(regs: &mut Regs, code: ResultCode) -> Outcome {
 }
 
 /// `X1` = size; out `W0`, `X1` = heap base. The heap is kept as the chunks that grew it, so it
-/// can shrink only to a size where a chunk ends (GUESS: B1 programs shrink to 0 or not at all).
+/// can shrink only to a size where a chunk ends.
+// GUESS: B1 programs shrink the heap to 0 or not at all; other sizes return `INVALID_STATE`.
 fn set_heap_size(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
     let size = regs[1];
     if !size.is_multiple_of(HEAP_ALIGN) || size > HEAP_MAX {
@@ -105,14 +113,14 @@ fn set_heap_size(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -
             if end <= size {
                 break;
             }
-            kernel.heap_chunks.pop();
-            let start = kernel.heap_chunks.last().copied().unwrap_or(0);
+            let start = kernel.heap_chunks.iter().rev().nth(1).copied().unwrap_or(0);
             if mem
                 .unmap(HEAP_BASE.wrapping_add(start), end - start)
                 .is_err()
             {
                 return done(regs, INVALID_STATE);
             }
+            kernel.heap_chunks.pop();
         }
     }
     regs[1] = HEAP_BASE.get();
@@ -151,8 +159,9 @@ fn set_memory_permission(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs
     done(regs, code)
 }
 
-/// `X0` address, `X1` size, `W2` mask, `W3` value. B1 accepts it as a no-op on mapped memory
-/// (GUESS, research O3): B1 programs have no uncached or device memory to change.
+/// `X0` address, `X1` size, `W2` mask, `W3` value. A no-op on mapped memory.
+// GUESS: accepting any mask and value is enough for B1, which has no uncached or device memory;
+// the invalid-combination result is undocumented (research O3).
 fn set_memory_attribute(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
     let (va, size) = match aligned_range(regs) {
         Ok(range) => range,
@@ -165,15 +174,44 @@ fn set_memory_attribute(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs)
     done(regs, if mapped { SUCCESS } else { INVALID_STATE })
 }
 
-/// `X0` = pointer to a 0x28-byte `MemoryInfo`, `X2` = address; out `W0`, `W1` page info (0:
-/// undocumented, GUESS). Type is Free, Code (executable) or Normal; the note's full table is
-/// unchecked (research O4).
+/// `X0` = pointer to a 0x28-byte `MemoryInfo`, `X2` = address; out `W0`, `W1` page info.
+// GUESS: page info is 0 and a bad output pointer returns `INVALID_ADDRESS`; neither is
+// documented (research O3).
 fn query_memory(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
     let out = GuestVa::new(regs[0]);
-    let Some(span) = mem.query(GuestVa::new(regs[2])) else {
-        return done(regs, INVALID_ADDRESS);
+    // GUESS: an address past the space is one Inaccessible region from the end of the space to
+    // the top of the 64-bit range; S3 names the type, the extent is not documented.
+    let (base, size, kind, bits) = match mem.query(GuestVa::new(regs[2])) {
+        None => (
+            mem.size(),
+            0u64.wrapping_sub(mem.size()),
+            TYPE_INACCESSIBLE,
+            0,
+        ),
+        Some(span) => {
+            let (kind, bits) = span_type(span.permission);
+            (span.base.get(), span.size, kind, bits)
+        }
     };
-    let (kind, bits) = match span.permission {
+    let mut info = [0u8; MEMORY_INFO_SIZE];
+    info[0x00..0x08].copy_from_slice(&base.to_le_bytes());
+    info[0x08..0x10].copy_from_slice(&size.to_le_bytes());
+    info[0x10..0x14].copy_from_slice(&kind.to_le_bytes());
+    info[0x18..0x1C].copy_from_slice(&bits.to_le_bytes());
+    let code = if mem.write_bytes(out, &info).is_ok() {
+        SUCCESS
+    } else {
+        INVALID_ADDRESS
+    };
+    regs[1] = 0;
+    done(regs, code)
+}
+
+/// The `MemoryInfo` type and permission bits of a span.
+// GUESS: executable regions are Code and other mapped regions Normal; the full type table is
+// unchecked (research O4).
+fn span_type(permission: Option<Permission>) -> (u32, u32) {
+    match permission {
         None => (TYPE_FREE, 0),
         Some(perm) => {
             let bits = u32::from(perm.contains(Permission::READ))
@@ -186,32 +224,28 @@ fn query_memory(_: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outc
             };
             (kind, bits)
         }
-    };
-    let mut info = [0u8; MEMORY_INFO_SIZE];
-    info[0x00..0x08].copy_from_slice(&span.base.get().to_le_bytes());
-    info[0x08..0x10].copy_from_slice(&span.size.to_le_bytes());
-    info[0x10..0x14].copy_from_slice(&kind.to_le_bytes());
-    info[0x18..0x1C].copy_from_slice(&bits.to_le_bytes());
-    let code = if mem.write_bytes(out, &info).is_ok() {
-        SUCCESS
-    } else {
-        INVALID_ADDRESS
-    };
-    regs[1] = 0;
-    done(regs, code)
+    }
 }
 
 fn exit_process(_: &mut Kernel, _: &mut AddressSpace, _: &mut Regs) -> Outcome {
     Outcome::Exit
 }
 
-/// A named stub (research S10): logged once, returns success.
+/// `X0` reason, `X1`, `X2` info (S10). A named stub, logged once. With reason bit 31 set the
+/// call returns; otherwise the guest aborted and stops.
+// GUESS: without bit 31 Horizon ends the process or enters a debugger (S10 says only that bit 31
+// makes the call return); stopping the guest keeps an abort visible.
 fn break_(kernel: &mut Kernel, _: &mut AddressSpace, regs: &mut Regs) -> Outcome {
     kernel.log_stub(kernel.break_stub);
+    let reason = regs[0];
+    if reason & BREAK_RETURN_BIT == 0 {
+        return Outcome::Break(reason);
+    }
     done(regs, SUCCESS)
 }
 
-/// `X0` = pointer, `X1` = byte length; out `W0`. The bytes are kept for the host to print.
+/// `X0` = pointer, `X1` = byte length; out `W0`. The bytes are kept for the host to print; the
+/// host drains them with [`Kernel::take_debug_output`].
 fn output_debug_string(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut Regs) -> Outcome {
     let (ptr, len) = (GuestVa::new(regs[0]), regs[1]);
     if len > DEBUG_STRING_MAX {
@@ -220,11 +254,16 @@ fn output_debug_string(kernel: &mut Kernel, mem: &mut AddressSpace, regs: &mut R
     let Ok(len) = usize::try_from(len) else {
         return done(regs, INVALID_SIZE);
     };
-    let mut bytes = vec![0u8; len];
-    if mem.read_bytes(ptr, &mut bytes).is_err() {
+    let start = kernel.debug_output.len();
+    if start + len > DEBUG_PENDING_MAX {
+        return done(regs, OUT_OF_RESOURCE);
+    }
+    kernel.debug_output.resize(start + len, 0);
+    let (_, tail) = kernel.debug_output.split_at_mut(start);
+    if mem.read_bytes(ptr, tail).is_err() {
+        kernel.debug_output.truncate(start);
         return done(regs, INVALID_ADDRESS);
     }
-    kernel.debug_output.extend_from_slice(&bytes);
     done(regs, SUCCESS)
 }
 

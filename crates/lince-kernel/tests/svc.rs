@@ -155,10 +155,25 @@ mod tests {
     }
 
     #[test]
-    fn query_memory_reports_a_bad_output_pointer_or_address() {
+    fn query_memory_reports_a_bad_output_pointer() {
         let mut f = fixture();
         assert_eq!(f.result(0x06, &[0x10_0000, 0, 0]), 0xCC01);
-        assert_eq!(f.result(0x06, &[0, 0, 1 << 39]), 0xCC01);
+    }
+
+    #[test]
+    fn query_memory_past_the_space_reports_one_inaccessible_region() {
+        let mut f = fixture();
+        f.mem.map(va(0x10_0000), PAGE, RW).unwrap();
+        let end = 1u64 << 39;
+
+        assert_eq!(f.result(0x06, &[0x10_0000, 0, end + 0x1234]), 0);
+        assert_eq!(f.mem.read::<u64>(va(0x10_0000)).unwrap(), end);
+        assert_eq!(
+            f.mem.read::<u64>(va(0x10_0008)).unwrap(),
+            0u64.wrapping_sub(end)
+        );
+        assert_eq!(f.mem.read::<u32>(va(0x10_0010)).unwrap(), 0x10);
+        assert_eq!(f.mem.read::<u32>(va(0x10_0018)).unwrap(), 0);
     }
 
     #[test]
@@ -186,10 +201,37 @@ mod tests {
     }
 
     #[test]
-    fn break_returns_and_is_logged_once_by_name() {
+    fn undrained_debug_output_is_bounded() {
         let mut f = fixture();
-        assert_eq!(f.result(0x26, &[0, 0, 0]), 0);
-        assert_eq!(f.result(0x26, &[0, 0, 0]), 0);
+        f.mem.map(va(0x10_0000), 0x1_0000, RW).unwrap();
+        f.mem.write_bytes(va(0x10_0000), b"x").unwrap();
+
+        for _ in 0..16 {
+            assert_eq!(f.result(0x27, &[0x10_0000, 0x1_0000]), 0);
+        }
+        assert_eq!(f.result(0x27, &[0x10_0000, 1]), 0xD001);
+        let output = f.kernel.take_debug_output();
+        assert_eq!(output.len(), 0x10_0000);
+        assert_eq!(output.first(), Some(&b'x'));
+
+        assert_eq!(f.result(0x27, &[0x10_0000, 1]), 0);
+        assert_eq!(f.kernel.take_debug_output(), b"x");
+    }
+
+    #[test]
+    fn break_without_the_return_bit_stops_the_guest() {
+        let mut f = fixture();
+        let (flow, _) = f.svc(0x26, &[0x1, 0, 0]);
+        assert_eq!(flow, Flow::Break { reason: 0x1 });
+    }
+
+    #[test]
+    fn break_with_the_return_bit_returns_and_is_logged_once_by_name() {
+        let mut f = fixture();
+        assert_eq!(f.result(0x26, &[0x8000_0000, 0, 0]), 0);
+        assert_eq!(f.result(0x26, &[0x8000_0001, 0, 0]), 0);
+        let (flow, _) = f.svc(0x26, &[0, 0, 0]);
+        assert_eq!(flow, Flow::Break { reason: 0 });
 
         let drained = f.trace.drain();
         let names: Vec<_> = drained

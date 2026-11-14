@@ -14,7 +14,9 @@ use crate::svc::{self, SvcNumber};
 pub type Regs = [u64; 8];
 
 /// Base of the guest heap that `SetHeapSize` maps. The kernel picks the base on Horizon; B1
-/// fixes it (GUESS: any free address in the 39-bit space works for B1 programs).
+/// fixes it.
+// GUESS: B1 programs take the base from `X1` and need no particular address; the caller must
+// load the program elsewhere (docs/research/nro-and-b1-svcs.md O6).
 pub const HEAP_BASE: GuestVa = GuestVa::new(0x20_0000_0000);
 
 /// What the guest core does after an SVC.
@@ -24,6 +26,11 @@ pub enum Flow {
     Continue,
     /// The process exited; stop the guest.
     Exit,
+    /// The guest called `Break` without the "return" bit: it aborted; stop the guest.
+    Break {
+        /// The reason the guest passed in `X0`.
+        reason: u64,
+    },
 }
 
 /// What a handler tells the dispatcher.
@@ -32,6 +39,8 @@ pub(crate) enum Outcome {
     Resume,
     /// The process exited.
     Exit,
+    /// The guest aborted through `Break` with this reason.
+    Break(u64),
     /// The SVC is reserved and has no behavior yet.
     Reserved,
 }
@@ -85,6 +94,7 @@ impl Kernel {
         match (entry.handler)(self, mem, regs) {
             Outcome::Resume => Ok(Flow::Continue),
             Outcome::Exit => Ok(Flow::Exit),
+            Outcome::Break(reason) => Ok(Flow::Break { reason }),
             Outcome::Reserved => Err(KernelError::Unimplemented {
                 number: u32::from(number),
                 name: entry.name,

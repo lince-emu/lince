@@ -261,6 +261,11 @@ impl AddressSpace {
         })
     }
 
+    /// Size of the address space in bytes; every valid address is below it.
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
     /// Reads a little-endian value at `va`.
     pub fn read<T: Scalar>(&self, va: GuestVa) -> Result<T> {
         let mut bytes = T::Bytes::default();
