@@ -36,8 +36,10 @@ Fastmem, write tracking and the GPU page table come with the JIT and GPU phases.
 **B2 scope:** the B1 address space shared by the six guest core threads: typed accesses from
 any core, guest atomics and exclusives applied with host atomics at the ordering ADR-0004
 requires, and region changes (map, unmap, protect) that never leave another core reading a
-half-updated region map. How changes are made safe against concurrent accesses is not decided
-by this ADR yet (see T-047).
+half-updated region map. The region map sits behind a reader–writer lock: accesses look a
+region up under the read side, and map, unmap and protect take the write side. Page contents
+are read and written without that lock, through atomics where the guest asks for ordering
+(maintainer, 2026-11-14). Fastmem replaces the lookup in the JIT phase.
 
 **Keep native execution possible.** The guest address-space layout must not rule out native
 execution on ARM64 hosts later (ADR-0005 option 4): the guest space is reserved as one
