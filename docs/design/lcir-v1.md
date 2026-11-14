@@ -277,9 +277,34 @@ From `docs/research/cpu-jit-scheduling.md`, listed as hazards, not as designs to
 3. When the backend exists, its code is compared with the evaluator on the same regions.
 4. Determinism: translating the same guest bytes twice gives identical buffers (L2).
 
-## 13. Open questions for the maintainer
+## 13. Design decisions
 
-1. Region limits (64 instructions, 1024 ops): accept as starting values to tune by measurement?
-2. LSE atomics (`rmw`, `cas`) in v1, or only when a B2 program uses them?
-3. Flags as four `b1` slots (chosen here) or one packed NZCV slot?
-4. Pairs as `probe` + two `nofault` accesses (chosen here) or a dedicated pair operation?
+Each choice below was made against the charter's three problems (stutter, cache, performance)
+and the correctness rules. The rejected alternative is recorded so a later version can revisit
+it with data.
+
+1. **Region limits: 64 instructions, 1024 operations, 256 constants, as `GUESS:` starting
+   values.** They bound compile time (stutter) and keep every index in 16 bits (smaller records,
+   cheaper hashing). Changing them changes no semantics: only the format version and the cache
+   key change. They are retuned once a backend gives measured compile times per region. Rejected:
+   no limit (unbounded compile time) and choosing values now without measurements.
+2. **LSE `rmw` and `cas` are part of v1.** The ordering field (§6.2) is the risky part of the
+   memory design, and atomics are where it matters most. Defining them now tests that design
+   before the format is frozen. Adding them later would also bump the format version and
+   invalidate every cached translation. Titles built for v8.1 and later use LSE for every
+   lock, so Tier B needs them early. The front end emits them only for instructions that Tier A
+   already implements, because Tier A is the oracle. Rejected: deferring them until a B2
+   program uses them.
+3. **Flags are four `b1` slots.** Most flag consumers read one or two flags (`B.EQ`, `CBZ`-like
+   sequences, `CSEL`), and many producers set flags nobody reads. Separate slots let the
+   backend keep each flag where it is cheapest and let Tier C drop dead flags without unpacking
+   and repacking. On x86 hosts the guest's C has the opposite sense after subtraction, so a
+   packed slot would need conversion at every access anyway. Rejected: one packed NZCV slot,
+   which saves three slots but costs a pack or unpack at every partial access.
+4. **Pairs use `probe` plus `nofault` accesses.** One `probe` makes any multi-access
+   instruction all-or-nothing (`LDP`/`STP` now; `CASP`, `LDXP`/`STXP` and SIMD multi-register
+   loads later) without one operation per form, so the operation set and the backend stay
+   small. A backend that sees a `probe` followed by accesses inside its range may fuse them into
+   one host access; the verifier's coverage rule (§9) makes that fusion safe. Rejected: a
+   dedicated pair operation, which needs two results (SSA with multiple results) and a new
+   operation for every multi-access form.
