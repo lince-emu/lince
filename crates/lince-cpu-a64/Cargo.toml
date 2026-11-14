@@ -1,6 +1,6 @@
 [package]
 name = "lince-cpu-a64"
-description = "Lince A64 guest CPU: decoder now; interpreter and JIT tiers later (C++, ADR-0030)"
+description = "Lince A64 guest CPU: decoder and interpreter now, JIT tiers later (C++, ADR-0030)"
 license = "GPL-3.0-or-later"
 version.workspace = true
 edition.workspace = true
@@ -14,6 +14,12 @@ regen = ["dep:bindgen"]
 
 [dependencies]
 bindgen = { version = "0.73.2", optional = true }
+lince-common = { path = "../lince-common", version = "0.0.0" }
+lince-mem = { path = "../lince-mem", version = "0.0.0" }
+thiserror.workspace = true
+
+[dev-dependencies]
+lince-loader = { path = "../lince-loader", version = "0.0.0" }
 
 [build-dependencies]
 cc = "1.11.2"

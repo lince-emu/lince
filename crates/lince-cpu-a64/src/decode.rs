@@ -20,6 +20,11 @@ impl Insn {
     pub fn name(self) -> String {
         ffi::insn_name(self.0.get())
     }
+
+    /// The form with table id `id`; `None` for the unknown id 0.
+    pub(crate) fn from_id(id: u16) -> Option<Self> {
+        NonZeroU16::new(id).map(Self)
+    }
 }
 
 impl fmt::Debug for Insn {

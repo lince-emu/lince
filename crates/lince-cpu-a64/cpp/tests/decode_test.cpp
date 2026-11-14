@@ -3,13 +3,14 @@
 
 // C++ test driver for the sanitizer runs (`cargo xtask ci` builds it with ASan and UBSan).
 // No test framework (ADR-0030): each check prints its name on failure and the exit status
-// counts the failures. Decoding is tested in depth from Rust (tests/decode.rs).
+// counts the failures. Decoding and execution are tested in depth from Rust (tests/*.rs).
 
 #include "lince-cpu-a64.h"
 
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <string_view>
 
@@ -29,9 +30,49 @@ std::string_view name_of(lca_insn insn, std::array<char, LCA_INSN_NAME_MAX> &buf
   return {buffer.data(), length};
 }
 
+// A two-instruction program in a buffer twice its size that stands in for the host
+// reservation; only the program is mapped.
+void check_run() {
+  constexpr uint32_t kMovX1 = 0xd2800541; // mov x1, #42
+  constexpr uint64_t kMovedValue = 42;
+  constexpr uint32_t kSvc = 0xd40000e1; // svc #0x7
+  constexpr uint32_t kSvcNumber = 7;
+  constexpr uint64_t kLimit = 10;
+  const std::array<uint32_t, 2> program{kMovX1, kSvc};
+  std::array<uint8_t, 2 * sizeof program> host{};
+  std::memcpy(host.data(), program.data(), sizeof program);
+  const lca_region code{
+      .base = 0,
+      .size = sizeof program,
+      .perm = LCA_PERM_READ | LCA_PERM_EXECUTE,
+      .reserved = 0,
+  };
+  const lca_memory memory{
+      .host_base = host.data(),
+      .host_size = host.size(),
+      .regions = &code,
+      .region_count = 1,
+      .reserved = 0,
+  };
+  lca_state state{};
+  lca_exit out{};
+
+  check(lca_run(&state, &memory, kLimit, &out) == LCA_OK, "lca_run succeeds");
+  check(out.reason == LCA_EXIT_SVC && out.detail == kSvcNumber && out.executed == 2,
+        "lca_run exits on SVC");
+  check(state.x[1] == kMovedValue && state.pc == sizeof program, "lca_run writes the state back");
+
+  check(lca_run(&state, &memory, kLimit, &out) == LCA_OK && out.reason == LCA_EXIT_FETCH_ABORT,
+        "lca_run aborts when pc leaves the region");
+  check(lca_run(nullptr, &memory, 1, &out) == LCA_NULL_ARGUMENT, "lca_run rejects null state");
+  check(lca_run(&state, nullptr, 1, &out) == LCA_NULL_ARGUMENT, "lca_run rejects null memory");
+  check(lca_run(&state, &memory, 1, nullptr) == LCA_NULL_ARGUMENT, "lca_run rejects null exit");
+}
+
 } // namespace
 
 int main() {
+  check_run();
   std::array<char, LCA_INSN_NAME_MAX> buffer{};
   const uint32_t ret_x30 = 0xd65f03c0; // ret
   check(name_of(lca_decode(ret_x30), buffer) == "RET", "lca_decode finds RET");

@@ -4,8 +4,9 @@
 //! Decoder tests through the public API.
 //!
 //! The known encodings are every distinct instruction of the B1 programs
-//! (`tests/homebrew/{alu,branch,memory,hello}.s`) as LLVM assembles them (clang
-//! `--target=aarch64-none-elf`, listed with `llvm-objdump -d`); the forms they map to follow the
+//! (`tests/homebrew/{alu,branch,memory,hello}.s`) as LLVM assembles and links them (clang
+//! `--target=aarch64-none-elf` and `ld.lld` via `cargo xtask homebrew`, listed with
+//! `llvm-objdump -d`); linking relaxes some ADRP + ADD pairs into NOP + ADR. The forms they map to follow the
 //! Arm Architecture Reference Manual, chapter C4.
 
 use lince_cpu_a64::decode;
@@ -30,6 +31,7 @@ fn decode_finds_the_form_when_the_word_is_a_b1_branch_or_system_instruction() {
         (0xd65f_03c0, "RET", "ret"),
         (0xd400_04e1, "SVC", "svc #0x27"),
         (0xd400_00e1, "SVC", "svc #0x7"),
+        (0xd503_201f, "NOP", "nop"),
     ];
     for (word, form, text) in cases {
         assert_eq!(
@@ -43,6 +45,7 @@ fn decode_finds_the_form_when_the_word_is_a_b1_branch_or_system_instruction() {
 #[test]
 fn decode_finds_the_form_when_the_word_is_a_b1_data_processing_instruction() {
     let cases = [
+        (0x1000_7b60, "ADR", "adr x0 (hello.nro)"),
         (0x9000_0001, "ADRP", "adrp x1"),
         (0x9100_5c85, "ADD_IMM", "add x5, x4, #23"),
         (0x3100_05f0, "ADDS_IMM", "adds w16, w15, #1"),
@@ -121,7 +124,7 @@ fn decode_reports_unknown_when_a_field_holds_a_reserved_value() {
 fn decode_reports_unknown_when_the_form_is_not_in_the_b1_table() {
     // Valid A64 instructions outside the B1 scope stay unknown until the table has them.
     let cases = [
-        (0xd503_201f, "nop"),
+        (0xd503_203f, "yield"),
         (0x9b02_7c20, "mul x0, x1, x2"),
         (0x1e20_2800, "fadd s0, s0, s0"),
     ];

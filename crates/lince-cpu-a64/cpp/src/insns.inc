@@ -13,7 +13,8 @@
 //
 // Encodings come from the Arm Architecture Reference Manual for A-profile (public, LEGAL-11),
 // chapter C4 "A64 Instruction Set Encoding"; names follow the manual's instruction titles.
-// B1 scope: the forms the B1 test programs use (tests/homebrew/*.s); T-040 completes the table.
+// B1 scope: the forms the linked B1 test programs use (tests/homebrew/*.nro; the linker relaxes
+// some ADRP + ADD pairs into NOP + ADR); T-040 completes the table.
 
 // Branches, exception generation and system
 LCA_INSN(B, "000101 xxxxxxxxxxxxxxxxxxxxxxxxxx")
@@ -25,9 +26,12 @@ LCA_INSN(TBZ, "x 011011 0 xxxxx xxxxxxxxxxxxxx xxxxx")
 LCA_INSN(TBNZ, "x 011011 1 xxxxx xxxxxxxxxxxxxx xxxxx")
 LCA_INSN(RET, "1101011 0010 11111 000000 xxxxx 00000")
 LCA_INSN(SVC, "11010100 000 xxxxxxxxxxxxxxxx 000 01")
+// NOP is the hint with CRm = 0, op2 = 0; the other hints stay unknown until implemented.
+LCA_INSN(NOP, "1101010100 0 00 011 0010 0000 000 11111")
 
 // Data processing, immediate. 32-bit forms (sf = 0) require N = 0 and, for the
 // bitfield forms, immr and imms below 32; move-wide 32-bit forms require hw < 2.
+LCA_INSN(ADR, "0 xx 10000 xxxxxxxxxxxxxxxxxxx xxxxx")
 LCA_INSN(ADRP, "1 xx 10000 xxxxxxxxxxxxxxxxxxx xxxxx")
 LCA_INSN(ADD_IMM, "x 0 0 100010 x xxxxxxxxxxxx xxxxx xxxxx")
 LCA_INSN(ADDS_IMM, "x 0 1 100010 x xxxxxxxxxxxx xxxxx xxxxx")

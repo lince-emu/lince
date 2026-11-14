@@ -130,6 +130,10 @@ version = "0.0.0"
 dependencies = [
  "bindgen",
  "cc",
+ "lince-common",
+ "lince-loader",
+ "lince-mem",
+ "thiserror",
 ]
 
 [[package]]

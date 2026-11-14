@@ -43,17 +43,16 @@ Rules:
 | T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Done | T-027 | 0027 |
 | T-031 | `lince-mem`: flat guest address space with typed access | Impl | Done | T-027 | 0019 |
 | T-032 | `lince-loader`: load an NRO into guest memory | Impl | Done | T-028, T-031 | 0024 |
-| T-033 | `lince-cpu-a64` `[c++]`: crate, A64 description table and decoder for the B1 instructions | Impl | In progress | T-027, T-029 | 0004, 0030, 0031 |
-| T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | Blocked | T-033 | 0004, 0005, 0019, 0031 |
+| T-033 | `lince-cpu-a64` `[c++]`: crate, A64 description table and decoder for the B1 instructions | Impl | Done | T-027, T-029 | 0004, 0030, 0031 |
+| T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | In progress | T-033 | 0004, 0005, 0019, 0031 |
 | T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Blocked | T-042 | 0005 |
-| T-044 | Tooling: lint C headers on Windows and check the PR-title limit before opening a PR | Impl | In progress | — | 0002, 0030 |
-| T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | In progress | T-027, T-028 | 0024 |
+| T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Done | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034, T-042 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
-| T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | In progress | T-034 | 0019, 0024 |
+| T-041 | `lince-mem` + `lince-kernel`: SetMemoryPermission on any page range inside a region | Impl | Ready | T-034 | 0019, 0024 |
 
 ## Details
 
