@@ -36,6 +36,76 @@ lca_insn lca_decode(uint32_t word) LCA_NOEXCEPT;
 // LCA_INSN_UNKNOWN, out of range, or `out` is null.
 uint32_t lca_insn_name(lca_insn insn, char *out) LCA_NOEXCEPT;
 
+// ---- Tier A interpreter (ADR-0005) ----
+
+// Status codes. A fixed-width integer, not an enum, so its size is the same in C, C++ and Rust.
+typedef int32_t lca_status;
+static const lca_status LCA_OK = 0;
+static const lca_status LCA_NULL_ARGUMENT = 1;
+
+// Guest permission bits, the same values as lince-mem's Permission.
+static const uint32_t LCA_PERM_READ = 1;
+static const uint32_t LCA_PERM_WRITE = 2;
+static const uint32_t LCA_PERM_EXECUTE = 4;
+
+// One mapped guest region: [base, base + size) with `perm`.
+typedef struct lca_region {
+  uint64_t base;
+  uint64_t size;
+  uint32_t perm;
+  uint32_t reserved;
+} lca_region;
+
+// Guest memory for one lca_run call (ADR-0031: accessed inline through the host base). Guest
+// byte `va` of a listed region is at host_base + va; host_size bounds every such address.
+// Addresses outside the regions, or without the needed permission, are never touched.
+typedef struct lca_memory {
+  uint8_t *host_base;
+  uint64_t host_size;
+  const lca_region *regions;
+  uint32_t region_count;
+  uint32_t reserved;
+} lca_memory;
+
+// The architectural state of one guest core. Register 31 is SP or the zero register depending
+// on the instruction, so it is not in `x`. `nzcv` holds the flags in bits 31..28.
+typedef struct lca_state {
+  uint64_t x[31];
+  uint64_t sp;
+  uint64_t pc;
+  uint32_t nzcv;
+  uint32_t reserved;
+} lca_state;
+
+// Why lca_run returned.
+typedef uint32_t lca_exit_reason;
+// An SVC completed: pc is the next instruction, `detail` the SVC number.
+static const lca_exit_reason LCA_EXIT_SVC = 1;
+// `limit` instructions ran: pc is the next instruction.
+static const lca_exit_reason LCA_EXIT_LIMIT = 2;
+// The word at pc is unallocated or reserved: nothing was executed for it; `address` is pc.
+static const lca_exit_reason LCA_EXIT_UNDEFINED = 3;
+// The table decodes the word at pc but the interpreter has no semantics for it yet: `detail`
+// is its lca_insn, `address` is pc; nothing was executed for it.
+static const lca_exit_reason LCA_EXIT_UNIMPLEMENTED = 4;
+// pc is not in a region with execute permission: `address` is pc.
+static const lca_exit_reason LCA_EXIT_FETCH_ABORT = 5;
+// pc is not a multiple of 4 (PC alignment fault): `address` is pc; nothing was fetched.
+static const lca_exit_reason LCA_EXIT_PC_MISALIGNED = 6;
+
+typedef struct lca_exit {
+  lca_exit_reason reason;
+  uint32_t detail;
+  uint64_t address;
+  // Instructions completed by this call (the deterministic clock of ADR-0004 counts these).
+  uint64_t executed;
+} lca_exit;
+
+// Runs the core in `state` until an exit or until `limit` instructions completed. `state` is
+// read on entry and written back on return. Every pointer is borrowed for the call only.
+lca_status lca_run(lca_state *state, const lca_memory *memory, uint64_t limit,
+                   lca_exit *out) LCA_NOEXCEPT;
+
 #ifdef __cplusplus
 }
 #endif

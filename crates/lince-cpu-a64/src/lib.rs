@@ -8,16 +8,25 @@
 //! from which the decoder is generated at compile time. Every execution tier and every Rust
 //! tool decodes through it (ADR-0031), so no two components can disagree on an encoding. A
 //! word the table lacks is reported as unknown, never guessed. B1 scope: the forms the B1 test
-//! programs use; the interpreter follows (T-042).
+//! programs use.
+//!
+//! The Tier A interpreter ([`run`]) executes decoded forms with the reference semantics of the
+//! Arm specification and reads guest memory inline through the address space's host base.
 //!
 //! # Threads
 //! Decoding is a pure function of the instruction word: no allocation, locks or I/O, callable
-//! from any thread, including guest cores.
+//! from any thread, including guest cores. [`run`] executes on the calling thread (a guest
+//! core) and blocks only for as long as the guest instructions it runs; it does not allocate
+//! and performs no I/O.
 //!
 //! # References
 //! ADR-0004 · ADR-0005 · ADR-0030 · ADR-0031 · docs/04-rust-architecture.md §2
 
 mod decode;
+mod error;
 mod ffi;
+mod interp;
 
 pub use decode::{Insn, decode};
+pub use error::CpuError;
+pub use interp::{Exit, Run, State, run};

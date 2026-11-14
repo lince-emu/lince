@@ -21,6 +21,7 @@ fn main() {
         .std("c++20")
         .include("cpp/include")
         .file("cpp/src/decode.cpp")
+        .file("cpp/src/interpreter.cpp")
         .warnings(true)
         .warnings_into_errors(true);
     if std::env::var_os("CXX").is_none() {
