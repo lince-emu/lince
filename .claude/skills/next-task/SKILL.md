@@ -45,8 +45,8 @@ work in this session; do not spawn subagents unless a step below says so.
    and PoC-only diffs skip it.
 
 ## 5. Publish
-1. Set the row to `In review`; commit per `docs/conventions/commits.md` with footers
-   `Refs: T-xxx`, `ADR: NNNN`.
+1. Commit per `docs/conventions/commits.md` with footers `Refs: T-xxx`, `ADR: NNNN`. The row
+   stays `In progress` while the PR is open and becomes `Done` when it merges.
 2. `open-pr` skill. Never merge.
 3. In `loop` mode: back to step 0.
 

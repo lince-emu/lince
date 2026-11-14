@@ -2,7 +2,7 @@
 
 The task queue for humans and agents. The `next-task` skill reads this file.
 
-**Statuses:** `Ready` · `In progress` · `In review` · `Needs decision` · `Blocked` · `Done`
+**Statuses:** `Ready` · `In progress` · `Needs decision` · `Blocked` · `Done`
 **Types:** `Maintainer` (only the maintainer can do it) · `Research` · `Docs` · `PoC` · `Impl`
 
 Rules:
@@ -38,18 +38,18 @@ Rules:
 | T-026 | PoC-11: Rust↔C++ boundary (`cc` build, C header bindings, call cost, C++ checks in `xtask ci`) | PoC | Done | T-025 | 0030 |
 | T-036 | Study: what Rust and C++ should each own (refines ADR-0030) | Research | Done | T-026 | 0005, 0019, 0030, 0031 |
 | T-027 | Review the B1 ADRs for acceptance (0004, 0005 interpreter part, 0019 address-space part, 0024 SVC boundary, 0027 logging part) | Maintainer | Done | — | 0004, 0005, 0019, 0024, 0027 |
-| T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | In review | — | 0024 |
+| T-028 | Research: NRO format and the SVCs B1 uses (public sources) | Research | Done | — | 0024 |
 | T-029 | Test homebrew: build the B1 programs from team-written A64 assembly with LLVM, and an ELF→NRO tool | Impl | Ready | T-028 | 0001, 0002 |
-| T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | In review | T-027 | 0027 |
-| T-031 | `lince-mem`: flat guest address space with typed access | Impl | In review | T-027 | 0019 |
+| T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Done | T-027 | 0027 |
+| T-031 | `lince-mem`: flat guest address space with typed access | Impl | Done | T-027 | 0019 |
 | T-032 | `lince-loader`: load an NRO into guest memory | Impl | Ready | T-028, T-031 | 0024 |
 | T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Ready | T-027, T-029 | 0004, 0005, 0030 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Ready | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Ready | T-029–T-034 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
-| T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | In review | — | 0017, 0005 |
+| T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
-| T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | In review | — | 0005 |
+| T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
 
 ## Details
 
@@ -166,7 +166,7 @@ other projects (never from firmware files or leaked material), list the system d
 and applets Switch 2 titles use, and for each propose an original implementation, a freely
 licensed substitute, or a documented "unavailable" behavior. Extend
 `docs/10-firmware-independence.md` §3.
-- **In review:** [lince-emu/lince#9](https://github.com/lince-emu/lince/pull/9); open decision [D-009](decisions/D-009-shared-font-substitutes.md).
+- **Done:** [lince-emu/lince#9](https://github.com/lince-emu/lince/pull/9); open decision [D-009](decisions/D-009-shared-font-substitutes.md).
 
 ### T-017 / T-018
 Start after their dependencies; see PoC-2 and PoC-4 in `docs/06-poc-roadmap.md`.
