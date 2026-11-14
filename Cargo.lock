@@ -32,6 +32,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lince-loader"
+version = "0.0.0"
+dependencies = [
+ "lince-common",
+ "lince-mem",
+ "thiserror",
+]
+
+[[package]]
 name = "lince-mem"
 version = "0.0.0"
 dependencies = [

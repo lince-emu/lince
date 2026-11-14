@@ -1,0 +1,24 @@
+[package]
+name = "lince-loader-fuzz"
+description = "cargo-fuzz targets for lince-loader parsers (ADR-0028, DEV-52)"
+license = "GPL-3.0-or-later"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone: built only by `cargo fuzz`, never part of the main workspace.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4.10"
+lince-loader = { path = ".." }
+
+[[bin]]
+name = "nro_header"
+path = "fuzz_targets/nro_header.rs"
+test = false
+doc = false
+bench = false
