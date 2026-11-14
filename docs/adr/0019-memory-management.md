@@ -33,6 +33,12 @@ GPU-cache invalidation and read-back never serialize on one mutex (doc 01 E13).
 permissions, accessed through typed `GuestVa` reads and writes (QUAL-20) by software lookup.
 Fastmem, write tracking and the GPU page table come with the JIT and GPU phases.
 
+**B2 scope:** the B1 address space shared by the six guest core threads: typed accesses from
+any core, guest atomics and exclusives applied with host atomics at the ordering ADR-0004
+requires, and region changes (map, unmap, protect) that never leave another core reading a
+half-updated region map. How changes are made safe against concurrent accesses is not decided
+by this ADR yet (see T-047).
+
 **Keep native execution possible.** The guest address-space layout must not rule out native
 execution on ARM64 hosts later (ADR-0005 option 4): the guest space is reserved as one
 contiguous host range whose base address and guest-page-to-host-page mapping are explicit

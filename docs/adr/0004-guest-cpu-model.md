@@ -51,6 +51,11 @@ Option 2.
 **B1 scope:** the decoder table, the six-core model and the ordering rule above; the B1
 interpreter implements the instructions the B1 test programs use (backlog T-033).
 
+**B2 scope:** the memory-ordering rule above across several cores, including exclusive pairs
+emulated by compare-and-swap with one reservation per core, and the counter registers derived
+from the host monotonic clock. The deterministic clock mode, the full v8.0–v8.5 table and
+PAC/MTE stay out; the interpreter gains only what the B2 test program uses (T-050).
+
 ## Technical justification
 A single decode table removes divergence between execution tiers. Features are bounded by the
 real core, not open-ended.
