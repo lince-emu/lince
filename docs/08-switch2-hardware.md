@@ -54,6 +54,9 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
   (`docs/research/switch2-emulator-projects.md` P2, Q7).
 - Semantics, register layout and result codes of SVC `0x80` (`SetGpuMemoryAttribute`) and of
   the other `[S2]`-tagged SVCs `0x81`–`0x88` (`docs/research/nro-and-b1-svcs.md` S11, O5).
+- Which of the options the Arm ARM permits the Switch 2 cores take for CONSTRAINED
+  UNPREDICTABLE A64 encodings (writeback with Rn == Rt, load pair with Rt == Rt2); the Tier A
+  interpreter treats them as UNDEFINED.
 - Whether `QueryMemory` type values, memory attribute bits and kernel result codes are unchanged
   from Switch 1 (`docs/research/nro-and-b1-svcs.md` S2–S7, §4).
 

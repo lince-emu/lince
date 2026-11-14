@@ -53,6 +53,7 @@ void check_run() {
       .regions = &code,
       .region_count = 1,
       .reserved = 0,
+      .callbacks = {.context = nullptr, .read = nullptr, .write = nullptr},
   };
   lca_state state{};
   lca_exit out{};
@@ -64,6 +65,14 @@ void check_run() {
 
   check(lca_run(&state, &memory, kLimit, &out) == LCA_OK && out.reason == LCA_EXIT_FETCH_ABORT,
         "lca_run aborts when pc leaves the region");
+  constexpr uint32_t kLdrX0X1 = 0xf9400020; // ldr x0, [x1]
+  constexpr uint64_t kOutside = 0x1000;
+  std::memcpy(host.data(), &kLdrX0X1, sizeof kLdrX0X1);
+  state = lca_state{};
+  state.x[1] = kOutside;
+  check(lca_run(&state, &memory, kLimit, &out) == LCA_OK && out.reason == LCA_EXIT_DATA_ABORT &&
+            out.address == kOutside && out.detail == LCA_PERM_READ && state.pc == 0,
+        "a load outside the regions without callbacks is a data abort");
   check(lca_run(nullptr, &memory, 1, &out) == LCA_NULL_ARGUMENT, "lca_run rejects null state");
   check(lca_run(&state, nullptr, 1, &out) == LCA_NULL_ARGUMENT, "lca_run rejects null memory");
   check(lca_run(&state, &memory, 1, nullptr) == LCA_NULL_ARGUMENT, "lca_run rejects null exit");

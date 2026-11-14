@@ -56,15 +56,28 @@ typedef struct lca_region {
   uint32_t reserved;
 } lca_region;
 
+// The slow path for data accesses (ADR-0031): called for an access that no single listed
+// region holds with the needed permission. Each function copies all `size` bytes and returns
+// 0, or returns nonzero and copies nothing when any byte cannot be accessed (a data abort).
+// A null function pointer makes every such access a data abort. `context` is passed back
+// unchanged; the callbacks may not change the mapped regions.
+typedef struct lca_callbacks {
+  void *context;
+  int32_t (*read)(void *context, uint64_t va, uint8_t *out, uint64_t size);
+  int32_t (*write)(void *context, uint64_t va, const uint8_t *data, uint64_t size);
+} lca_callbacks;
+
 // Guest memory for one lca_run call (ADR-0031: accessed inline through the host base). Guest
 // byte `va` of a listed region is at host_base + va; host_size bounds every such address.
-// Addresses outside the regions, or without the needed permission, are never touched.
+// Addresses outside the regions, or without the needed permission, are never touched inline;
+// data accesses to them go through `callbacks`.
 typedef struct lca_memory {
   uint8_t *host_base;
   uint64_t host_size;
   const lca_region *regions;
   uint32_t region_count;
   uint32_t reserved;
+  lca_callbacks callbacks;
 } lca_memory;
 
 // General-purpose registers X0 to X30 in lca_state.
@@ -95,6 +108,10 @@ static const lca_exit_reason LCA_EXIT_UNIMPLEMENTED = 4;
 static const lca_exit_reason LCA_EXIT_FETCH_ABORT = 5;
 // pc is not a multiple of 4 (PC alignment fault): `address` is pc; nothing was fetched.
 static const lca_exit_reason LCA_EXIT_PC_MISALIGNED = 6;
+// A data access failed on both the inline and the slow path: `address` is the guest address
+// accessed, `detail` is LCA_PERM_READ or LCA_PERM_WRITE; pc is unchanged and the instruction
+// changed nothing.
+static const lca_exit_reason LCA_EXIT_DATA_ABORT = 7;
 
 typedef struct lca_exit {
   lca_exit_reason reason;

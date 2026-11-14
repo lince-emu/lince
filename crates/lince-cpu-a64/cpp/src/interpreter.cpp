@@ -58,6 +58,21 @@ constexpr Field kB40{.lsb = 19, .width = 5};
 constexpr Field kImmLo{.lsb = 29, .width = 2};
 constexpr Field kSh{.lsb = 22, .width = 1};
 constexpr Field kHw{.lsb = 21, .width = 2};
+constexpr Field kRm{.lsb = 16, .width = 5};
+constexpr Field kRt2{.lsb = 10, .width = 5};
+constexpr Field kImm6{.lsb = 10, .width = 6};
+constexpr Field kImm7{.lsb = 15, .width = 7};
+constexpr Field kImm9{.lsb = 12, .width = 9};
+constexpr Field kShift{.lsb = 22, .width = 2};
+constexpr Field kInvert{.lsb = 21, .width = 1}; // N of the logical (shifted register) forms
+constexpr Field kBitN{.lsb = 22, .width = 1};   // N of the bitmask immediate forms
+constexpr Field kImmr{.lsb = 16, .width = 6};
+constexpr Field kImms{.lsb = 10, .width = 6};
+constexpr Field kSize{.lsb = 30, .width = 2}; // log2 of the access size in bytes
+constexpr Field kLoad{.lsb = 22, .width = 1}; // L of the unsigned-offset forms
+constexpr Field kPreIndex{.lsb = 11, .width = 1};
+constexpr Field kLitOpc{.lsb = 30, .width = 1};  // LDR (literal): 0 is W, 1 is X
+constexpr Field kPairOpc{.lsb = 31, .width = 1}; // LDP/STP: 0 is W, 1 is X
 constexpr unsigned kImm12Shift = 12;
 constexpr unsigned kHwScale = 16;
 constexpr unsigned kB5Shift = 5;
@@ -86,11 +101,53 @@ enum class Width : uint8_t { W, X };
 
 constexpr Width width(uint32_t word) { return field(word, kSf) != 0 ? Width::X : Width::W; }
 
+// A data access that failed on both paths (LCA_EXIT_DATA_ABORT).
+struct Fault {
+  uint64_t address;
+  uint32_t access; // LCA_PERM_READ or LCA_PERM_WRITE
+};
+
 // Guest memory as one lca_run call sees it.
 class Memory {
 public:
   explicit Memory(const lca_memory &view)
-      : host_(view.host_base, view.host_size), regions_(view.regions, view.region_count) {}
+      : host_(view.host_base, view.host_size), regions_(view.regions, view.region_count),
+        callbacks_(view.callbacks) {}
+
+  // Inline accesses are plain copies: no single-copy atomicity or ordering, which only a
+  // single core running per lca_run call allows. Revisit when several cores share memory.
+  //
+  // Copies the guest bytes at `addr` into `out`: inline when one readable region holds them,
+  // else through the slow path. False (and the fault recorded) when neither can.
+  [[nodiscard]] bool read(uint64_t addr, std::span<uint8_t> out) {
+    if (const auto bytes = inline_bytes(addr, out.size(), LCA_PERM_READ)) {
+      std::memcpy(out.data(), bytes->data(), out.size());
+      return true;
+    }
+    if (callbacks_.read != nullptr &&
+        callbacks_.read(callbacks_.context, addr, out.data(), out.size()) == 0) {
+      return true;
+    }
+    fault_ = {.address = addr, .access = LCA_PERM_READ};
+    return false;
+  }
+
+  // Copies `data` to the guest bytes at `addr`, like `read`.
+  [[nodiscard]] bool write(uint64_t addr, std::span<const uint8_t> data) {
+    if (const auto bytes = inline_bytes(addr, data.size(), LCA_PERM_WRITE)) {
+      std::memcpy(bytes->data(), data.data(), data.size());
+      return true;
+    }
+    if (callbacks_.write != nullptr &&
+        callbacks_.write(callbacks_.context, addr, data.data(), data.size()) == 0) {
+      return true;
+    }
+    fault_ = {.address = addr, .access = LCA_PERM_WRITE};
+    return false;
+  }
+
+  // The last failed access.
+  [[nodiscard]] Fault fault() const { return fault_; }
 
   // The 32-bit word at `addr` if `addr` is in an executable region.
   [[nodiscard]] std::optional<uint32_t> fetch(uint64_t addr) const {
@@ -124,6 +181,8 @@ private:
 
   std::span<uint8_t> host_;
   std::span<const lca_region> regions_;
+  lca_callbacks callbacks_;
+  Fault fault_{};
 };
 
 // What one instruction did.
@@ -133,6 +192,7 @@ enum class Outcome : uint8_t {
   Svc,           // continue with pc + 4, then exit to Rust
   Undefined,     // reserved encoding: exit before executing it
   Unimplemented, // decoded but without semantics: exit before executing it
+  DataAbort,     // a data access failed: exit with the instruction not executed
 };
 
 // The core's registers while lca_run executes.
@@ -334,7 +394,252 @@ Outcome exec_pc_relative(Core &core, Insn insn, uint32_t word) {
   return Outcome::Next;
 }
 
-Outcome execute(Core &core, Insn insn, uint32_t word) {
+// The low `bits` bits set; `bits` is at most 64.
+constexpr uint64_t ones(unsigned bits) {
+  return bits >= kXBits ? ~uint64_t{0} : (uint64_t{1} << bits) - 1;
+}
+
+constexpr unsigned bits_of(Width w) { return w == Width::X ? kXBits : kWBits; }
+
+// `value` rotated right by `amount` within its low `bits` bits; amount < bits.
+constexpr uint64_t rotate_right(uint64_t value, unsigned amount, unsigned bits) {
+  if (amount == 0) {
+    return value & ones(bits);
+  }
+  return ((value >> amount) | (value << (bits - amount))) & ones(bits);
+}
+
+// DecodeBitMasks() of the Arm ARM: the masks a bitmask immediate or bitfield form encodes.
+struct BitMasks {
+  uint64_t wmask;
+  uint64_t tmask;
+};
+
+constexpr unsigned kImmsBits = 6;
+
+std::optional<BitMasks> decode_bit_masks(uint32_t word, bool immediate, Width w) {
+  const uint32_t imms = field(word, kImms);
+  const auto combined =
+      static_cast<uint32_t>((field(word, kBitN) << kImmsBits) | (~imms & ones(kImmsBits)));
+  if (combined < 2) {
+    return std::nullopt; // len < 1: reserved
+  }
+  const auto len = static_cast<unsigned>(std::bit_width(combined) - 1);
+  const unsigned esize = 1U << len;
+  const auto levels = static_cast<uint32_t>(ones(len));
+  if (esize > bits_of(w) || (immediate && (imms & levels) == levels)) {
+    return std::nullopt;
+  }
+  const uint32_t s = imms & levels;
+  const uint32_t r = field(word, kImmr) & levels;
+  const uint32_t d = (s - r) & levels;
+  const uint64_t welem = rotate_right(ones(s + 1), r, esize);
+  const uint64_t telem = ones(d + 1);
+  BitMasks masks{.wmask = 0, .tmask = 0};
+  for (unsigned at = 0; at < bits_of(w); at += esize) {
+    masks.wmask |= welem << at;
+    masks.tmask |= telem << at;
+  }
+  return masks;
+}
+
+// AND/ORR (immediate): Rn is the zero register, Rd may be SP.
+Outcome exec_logical_imm(Core &core, Insn insn, uint32_t word) {
+  const Width w = width(word);
+  const std::optional<BitMasks> masks = decode_bit_masks(word, true, w);
+  if (!masks) {
+    return Outcome::Undefined;
+  }
+  const uint64_t operand = core.xr(reg(word, kRn));
+  const uint64_t result = insn == Insn::AND_IMM ? operand & masks->wmask : operand | masks->wmask;
+  core.set_xs(reg(word, kRd), result, w);
+  return Outcome::Next;
+}
+
+// UBFM (LSL, LSR, UBFX and UBFIZ are aliases).
+Outcome exec_ubfm(Core &core, uint32_t word) {
+  const Width w = width(word);
+  const std::optional<BitMasks> masks = decode_bit_masks(word, false, w);
+  if (!masks) {
+    return Outcome::Undefined;
+  }
+  const uint64_t source = core.xr(reg(word, kRn)) & ones(bits_of(w));
+  const uint64_t bottom = rotate_right(source, field(word, kImmr), bits_of(w)) & masks->wmask;
+  core.set_xr(reg(word, kRd), bottom & masks->tmask, w);
+  return Outcome::Next;
+}
+
+// ShiftReg() of the Arm ARM: LSL, LSR, ASR or ROR by `amount` < the operand width.
+enum class Shift : uint8_t { LSL, LSR, ASR, ROR };
+
+uint64_t shift_register(uint64_t value, Shift type, unsigned amount, Width w) {
+  const unsigned bits = bits_of(w);
+  value &= ones(bits);
+  switch (type) {
+  case Shift::LSL:
+    return (value << amount) & ones(bits);
+  case Shift::LSR:
+    return value >> amount;
+  case Shift::ASR: {
+    const bool negative = (value >> (bits - 1)) != 0;
+    const uint64_t fill = negative ? ones(bits) & ~(ones(bits) >> amount) : 0;
+    return (value >> amount) | fill;
+  }
+  case Shift::ROR:
+    return rotate_right(value, amount, bits);
+  }
+  return value;
+}
+
+uint64_t shifted_rm(const Core &core, uint32_t word) {
+  return shift_register(core.xr(reg(word, kRm)), static_cast<Shift>(field(word, kShift)),
+                        field(word, kImm6), width(word));
+}
+
+// ADD, SUB and SUBS (shifted register): every register operand 31 is the zero register.
+Outcome exec_add_sub_reg(Core &core, Insn insn, uint32_t word) {
+  const Width w = width(word);
+  const uint64_t operand = shifted_rm(core, word);
+  const bool subtract = insn != Insn::ADD_REG;
+  const Sum sum =
+      add_with_carry(core.xr(reg(word, kRn)), subtract ? ~operand : operand, subtract, w);
+  if (insn == Insn::SUBS_REG) {
+    core.set_nzcv(sum.nzcv);
+  }
+  core.set_xr(reg(word, kRd), sum.value, w);
+  return Outcome::Next;
+}
+
+// ORR, ORN and EOR (shifted register).
+Outcome exec_logical_reg(Core &core, Insn insn, uint32_t word) {
+  uint64_t operand = shifted_rm(core, word);
+  if (field(word, kInvert) != 0) {
+    operand = ~operand;
+  }
+  const uint64_t rn = core.xr(reg(word, kRn));
+  const uint64_t result = insn == Insn::EOR_REG ? rn ^ operand : rn | operand;
+  core.set_xr(reg(word, kRd), result, width(word));
+  return Outcome::Next;
+}
+
+// One data access: `size` bytes at guest address `addr`.
+struct Access {
+  uint64_t addr;
+  std::size_t size;
+};
+
+// The zero-extended little-endian value of the access, or nullopt on a fault.
+std::optional<uint64_t> load(Memory &memory, Access access) {
+  std::array<uint8_t, sizeof(uint64_t)> bytes{};
+  if (!memory.read(access.addr, std::span(bytes).first(access.size))) {
+    return std::nullopt;
+  }
+  uint64_t value = 0;
+  std::memcpy(&value, bytes.data(), sizeof value);
+  return value;
+}
+
+// Stores the low `access.size` bytes of `value`; false on a fault.
+bool store(Memory &memory, Access access, uint64_t value) {
+  std::array<uint8_t, sizeof(uint64_t)> bytes{};
+  std::memcpy(bytes.data(), &value, sizeof value);
+  return memory.write(access.addr, std::span<const uint8_t>(bytes).first(access.size));
+}
+
+// The access of a load/store form at `addr`; its size field is log2 of the size in bytes.
+Access sized_access(uint32_t word, uint64_t addr) {
+  return {.addr = addr, .size = std::size_t{1} << field(word, kSize)};
+}
+
+// Loads the access into Rt (zero-extended) or stores the low bytes of Rt.
+Outcome transfer(Core &core, Memory &memory, Reg rt, Access access, bool is_load) {
+  if (!is_load) {
+    return store(memory, access, core.xr(rt)) ? Outcome::Next : Outcome::DataAbort;
+  }
+  const std::optional<uint64_t> value = load(memory, access);
+  if (!value) {
+    return Outcome::DataAbort;
+  }
+  core.set_xr(rt, *value, Width::X);
+  return Outcome::Next;
+}
+
+// LDR (literal): a W or X load from pc + imm19 * 4.
+Outcome exec_load_literal(Core &core, Memory &memory, uint32_t word) {
+  const uint64_t offset =
+      sign_extend<kImm19.width + kOffsetShift>(uint64_t{field(word, kImm19)} << kOffsetShift);
+  const std::size_t size = field(word, kLitOpc) != 0 ? sizeof(uint64_t) : sizeof(uint32_t);
+  const std::optional<uint64_t> value = load(memory, {.addr = core.pc() + offset, .size = size});
+  if (!value) {
+    return Outcome::DataAbort;
+  }
+  core.set_xr(reg(word, kRt), *value, Width::X);
+  return Outcome::Next;
+}
+
+// LDR/STR/LDRB/LDRH (unsigned offset): base plus imm12 scaled by the access size.
+Outcome exec_load_store_uimm(Core &core, Memory &memory, uint32_t word) {
+  const uint64_t offset = uint64_t{field(word, kImm12)} << field(word, kSize);
+  const uint64_t addr = core.xs(reg(word, kRn)) + offset;
+  return transfer(core, memory, reg(word, kRt), sized_access(word, addr), field(word, kLoad) != 0);
+}
+
+// STRB (pre-index) and LDRB (post-index): base plus signed imm9, written back after the access.
+Outcome exec_load_store_indexed(Core &core, Memory &memory, Insn insn, uint32_t word) {
+  const Reg rn = reg(word, kRn);
+  if (rn == reg(word, kRt) && rn != kZr) {
+    // CONSTRAINED UNPREDICTABLE writeback with Rn == Rt: UNDEFINED is one permitted choice.
+    // UNKNOWN: which choice the Switch 2 cores make (docs/08-switch2-hardware.md §4).
+    return Outcome::Undefined;
+  }
+  const uint64_t base = core.xs(rn);
+  const uint64_t updated = base + sign_extend<kImm9.width>(field(word, kImm9));
+  const uint64_t addr = field(word, kPreIndex) != 0 ? updated : base;
+  const Outcome outcome =
+      transfer(core, memory, reg(word, kRt), sized_access(word, addr), insn == Insn::LDRB_POST);
+  if (outcome == Outcome::Next) {
+    core.set_xs(rn, updated, Width::X);
+  }
+  return outcome;
+}
+
+// LDP/STP (signed offset): two W or X registers at base plus imm7 scaled, as one access, so a
+// fault changes nothing.
+Outcome exec_pair(Core &core, Memory &memory, Insn insn, uint32_t word) {
+  const bool x = field(word, kPairOpc) != 0;
+  const std::size_t size = x ? sizeof(uint64_t) : sizeof(uint32_t);
+  const unsigned scale = x ? 3 : 2;
+  const uint64_t addr =
+      core.xs(reg(word, kRn)) + (sign_extend<kImm7.width>(field(word, kImm7)) << scale);
+  const Reg rt = reg(word, kRt);
+  const Reg rt2 = reg(word, kRt2);
+  std::array<uint8_t, 2 * sizeof(uint64_t)> bytes{};
+  const std::span<uint8_t> pair = std::span(bytes).first(2 * size);
+  if (insn == Insn::STP_OFF) {
+    const uint64_t first = core.xr(rt);
+    const uint64_t second = core.xr(rt2);
+    std::memcpy(pair.data(), &first, size);
+    std::memcpy(pair.subspan(size).data(), &second, size);
+    return memory.write(addr, pair) ? Outcome::Next : Outcome::DataAbort;
+  }
+  if (rt == rt2) {
+    // CONSTRAINED UNPREDICTABLE load pair with Rt == Rt2: UNDEFINED is one permitted choice.
+    // UNKNOWN: which choice the Switch 2 cores make (docs/08-switch2-hardware.md §4).
+    return Outcome::Undefined;
+  }
+  if (!memory.read(addr, pair)) {
+    return Outcome::DataAbort;
+  }
+  uint64_t first = 0;
+  uint64_t second = 0;
+  std::memcpy(&first, pair.data(), size);
+  std::memcpy(&second, pair.subspan(size).data(), size);
+  core.set_xr(rt, first, Width::X);
+  core.set_xr(rt2, second, Width::X);
+  return Outcome::Next;
+}
+
+Outcome execute(Core &core, Memory &memory, Insn insn, uint32_t word) {
   switch (insn) {
   case Insn::UNKNOWN:
     return Outcome::Undefined;
@@ -362,6 +667,32 @@ Outcome execute(Core &core, Insn insn, uint32_t word) {
   case Insn::MOVZ:
   case Insn::MOVK:
     return exec_move_wide(core, insn, word);
+  case Insn::AND_IMM:
+  case Insn::ORR_IMM:
+    return exec_logical_imm(core, insn, word);
+  case Insn::UBFM:
+    return exec_ubfm(core, word);
+  case Insn::ADD_REG:
+  case Insn::SUB_REG:
+  case Insn::SUBS_REG:
+    return exec_add_sub_reg(core, insn, word);
+  case Insn::ORR_REG:
+  case Insn::ORN_REG:
+  case Insn::EOR_REG:
+    return exec_logical_reg(core, insn, word);
+  case Insn::LDR_LIT:
+    return exec_load_literal(core, memory, word);
+  case Insn::LDR_UIMM:
+  case Insn::STR_UIMM:
+  case Insn::LDRB_UIMM:
+  case Insn::LDRH_UIMM:
+    return exec_load_store_uimm(core, memory, word);
+  case Insn::STRB_PRE:
+  case Insn::LDRB_POST:
+    return exec_load_store_indexed(core, memory, insn, word);
+  case Insn::STP_OFF:
+  case Insn::LDP_OFF:
+    return exec_pair(core, memory, insn, word);
   default:
     return Outcome::Unimplemented;
   }
@@ -376,7 +707,7 @@ lca_exit exit_at(lca_exit_reason reason, uint64_t pc, uint64_t executed) {
   };
 }
 
-lca_exit run(Core &core, const Memory &memory, uint64_t limit) {
+lca_exit run(Core &core, Memory &memory, uint64_t limit) {
   uint64_t executed = 0;
   while (executed < limit) {
     const uint64_t pc = core.pc();
@@ -388,7 +719,7 @@ lca_exit run(Core &core, const Memory &memory, uint64_t limit) {
       return exit_at(LCA_EXIT_FETCH_ABORT, pc, executed);
     }
     const Insn insn = decode(*word);
-    switch (execute(core, insn, *word)) {
+    switch (execute(core, memory, insn, *word)) {
     case Outcome::Next:
       core.set_pc(pc + kInsnBytes);
       break;
@@ -406,6 +737,12 @@ lca_exit run(Core &core, const Memory &memory, uint64_t limit) {
       lca_exit unimplemented = exit_at(LCA_EXIT_UNIMPLEMENTED, pc, executed);
       unimplemented.detail = static_cast<uint32_t>(insn);
       return unimplemented;
+    }
+    case Outcome::DataAbort: {
+      const Fault fault = memory.fault();
+      lca_exit abort = exit_at(LCA_EXIT_DATA_ABORT, fault.address, executed);
+      abort.detail = fault.access;
+      return abort;
     }
     }
     ++executed;
@@ -425,7 +762,7 @@ lca_status lca_run(lca_state *state, const lca_memory *memory, uint64_t limit,
     return LCA_NULL_ARGUMENT;
   }
   lince::a64::Core core(*state);
-  const lince::a64::Memory view(*memory);
+  lince::a64::Memory view(*memory);
   *out = lince::a64::run(core, view, limit);
   core.store(*state);
   return LCA_OK;

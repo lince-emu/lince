@@ -9,7 +9,7 @@
 //! comparison ADR-0004 allows on ARM hosts is not wired yet; these tests run on every host.
 
 use lince_common::GuestVa;
-use lince_cpu_a64::{Exit, Run, State, decode, run};
+use lince_cpu_a64::{Exit, Run, State, run};
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
 
 const CODE: u64 = 0x1_0000;
@@ -280,7 +280,7 @@ fn movz_and_movk_place_sixteen_bits() {
 }
 
 #[test]
-fn run_stops_before_an_undefined_or_unimplemented_word() {
+fn run_stops_before_an_undefined_word() {
     let (result, after) = step(0x0000_0000, &State::default()); // udf #0
     assert_eq!(
         result.exit,
@@ -289,17 +289,6 @@ fn run_stops_before_an_undefined_or_unimplemented_word() {
         }
     );
     assert_eq!((result.executed, after.pc), (0, CODE));
-
-    let orr = 0xaa02_0020; // orr x0, x1, x2: decoded, not interpreted yet
-    let (result, _) = step(orr, &State::default());
-    let insn = decode(orr).unwrap();
-    assert_eq!(
-        result.exit,
-        Exit::Unimplemented {
-            pc: GuestVa::new(CODE),
-            insn
-        }
-    );
 }
 
 #[test]
@@ -363,5 +352,123 @@ fn run_counts_instructions_up_to_the_limit() {
             exit: Exit::Limit,
             executed: 5
         }
+    );
+}
+
+/// Runs `word` from `state` and returns X`n` after it.
+fn x_after(word: u32, state: &State, n: usize) -> u64 {
+    let (result, after) = step(word, state);
+    assert_eq!(result.exit, Exit::Limit, "{word:#010x}");
+    after.x[n]
+}
+
+#[test]
+fn logical_immediates_decode_their_bitmask() {
+    let x9 = with_x(&[(9, 0xf0)]);
+    assert_eq!(x_after(0x927e_0d2a, &x9, 10), 0x30, "and x10, x9, #0x3c");
+    let x10 = with_x(&[(10, 0x30)]);
+    assert_eq!(x_after(0xb240_0d4b, &x10, 11), 0x3f, "orr x11, x10, #0xf");
+    let all_ones = with_x(&[(0, u64::MAX)]);
+    assert_eq!(
+        x_after(0x3208_9fe0, &all_ones, 0),
+        0xff00_ff00,
+        "mov w0, #0xff00ff00 (orr w0, wzr) clears the upper half"
+    );
+
+    let (_, after) = step(0x927c_ec3f, &with_x(&[(1, 0x1234_5678_9abc_def7)]));
+    assert_eq!(
+        after.sp, 0x1234_5678_9abc_def0,
+        "and sp, x1, #~0xf writes SP"
+    );
+}
+
+#[test]
+fn reserved_bitmask_immediates_are_undefined() {
+    // and x0, x1 with N=0 and imms=0b111111 (no element size), then N=1 and imms all ones.
+    for word in [0x9200_fc20, 0x9240_fc20] {
+        let (result, _) = step(word, &State::default());
+        assert_eq!(
+            result.exit,
+            Exit::Undefined {
+                pc: GuestVa::new(CODE)
+            },
+            "{word:#010x}"
+        );
+    }
+}
+
+#[test]
+fn ubfm_aliases_shift_and_extract() {
+    let x12 = with_x(&[(12, 0xf000_0000_0000_00cf)]);
+    assert_eq!(x_after(0xd37c_ed8d, &x12, 13), 0xcf0, "lsl x13, x12, #4");
+    let x13 = with_x(&[(13, 0x8000_0000_0000_0cf0)]);
+    assert_eq!(
+        x_after(0xd348_fdae, &x13, 14),
+        0x0080_0000_0000_000c,
+        "lsr x14, x13, #8"
+    );
+    let x1 = with_x(&[(1, 0x1_8000_0000)]);
+    assert_eq!(x_after(0x531f_7c20, &x1, 0), 1, "lsr w0, w1, #31");
+    let x1 = with_x(&[(1, 0xabcd)]);
+    assert_eq!(x_after(0xd348_2c20, &x1, 0), 0xb, "ubfx x0, x1, #8, #4");
+}
+
+#[test]
+fn add_and_sub_shifted_register() {
+    let x6 = with_x(&[(6, 23)]);
+    assert_eq!(x_after(0x8b06_08c7, &x6, 7), 115, "add x7, x6, x6, lsl #2");
+    let operands = with_x(&[(5, 123), (4, 100)]);
+    assert_eq!(x_after(0xcb04_00a6, &operands, 6), 23, "sub x6, x5, x4");
+    let operands = with_x(&[(5, 0), (4, 1)]);
+    assert_eq!(x_after(0xcb04_00a6, &operands, 6), u64::MAX, "sub wraps");
+
+    let operands = with_x(&[(1, 0x1000_0000), (2, 0x8000_0000)]);
+    assert_eq!(
+        x_after(0x0b82_1020, &operands, 0),
+        0x0800_0000,
+        "add w0, w1, w2, asr #4 shifts in the sign of w2"
+    );
+    let operands = with_x(&[(1, 0x1000), (2, 1 << 63)]);
+    assert_eq!(
+        x_after(0x8b82_1020, &operands, 0),
+        0xf800_0000_0000_1000,
+        "add x0, x1, x2, asr #4 shifts in the sign of x2"
+    );
+    let operands = with_x(&[(1, 10), (2, 1 << 63)]);
+    assert_eq!(
+        x_after(0xcb42_fc20, &operands, 0),
+        9,
+        "sub x0, x1, x2, lsr #63"
+    );
+}
+
+#[test]
+fn subs_register_sets_the_flags_at_its_width() {
+    let subs = 0x6b02_0020; // subs w0, w1, w2
+    let (_, after) = step(subs, &with_x(&[(1, 0xffff_ffff_0000_0001), (2, 2)]));
+    assert_eq!((after.x[0], after.nzcv), (0xffff_ffff, N), "1 - 2 borrows");
+    let (_, after) = step(subs, &with_x(&[(1, 5), (2, 5)]));
+    assert_eq!((after.x[0], after.nzcv), (0, Z | C), "5 - 5");
+}
+
+#[test]
+fn orr_orn_and_eor_shifted_register() {
+    let x15 = with_x(&[(15, 0)]);
+    assert_eq!(
+        x_after(0x2a3f_03ef, &x15, 15),
+        0xffff_ffff,
+        "mvn w15, wzr (orn) clears the upper half"
+    );
+    let operands = with_x(&[(11, 0x3f), (9, 0xf0)]);
+    assert_eq!(
+        x_after(0xca09_016c, &operands, 12),
+        0xcf,
+        "eor x12, x11, x9"
+    );
+    let operands = with_x(&[(1, 1), (2, 0xff)]);
+    assert_eq!(
+        x_after(0xaac2_2020, &operands, 0),
+        0xff00_0000_0000_0001,
+        "orr x0, x1, x2, ror #8"
     );
 }
