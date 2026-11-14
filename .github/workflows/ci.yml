@@ -56,6 +56,10 @@ jobs:
           else
             cargo xtask ci
           fi
+      # ADR-0030: the checked-in Rust bindings of each [c++] crate match its C header.
+      - name: lince-cpu-a64 bindings check
+        shell: bash
+        run: cargo run --locked -p lince-cpu-a64 --features regen --bin regen_bindings -- --check
       # PoC-11 lives outside the workspace; its Rust tests and the check that the checked-in
       # bindings match the C header run here (T-026).
       - name: PoC-11 tests and bindings check

@@ -43,9 +43,11 @@ Rules:
 | T-030 | `lince-trace`: log facade for named stubs (no ledger yet) | Impl | Done | T-027 | 0027 |
 | T-031 | `lince-mem`: flat guest address space with typed access | Impl | Done | T-027 | 0019 |
 | T-032 | `lince-loader`: load an NRO into guest memory | Impl | Done | T-028, T-031 | 0024 |
-| T-033 | `lince-cpu-a64` `[c++]`: decoder and interpreter for the B1 instructions, with differential tests | Impl | Ready | T-027, T-029 | 0004, 0005, 0030 |
+| T-033 | `lince-cpu-a64` `[c++]`: crate, A64 description table and decoder for the B1 instructions | Impl | In progress | T-027, T-029 | 0004, 0030, 0031 |
+| T-042 | `lince-cpu-a64`: Tier A interpreter for the B1 instructions, with differential tests | Impl | Blocked | T-033 | 0004, 0005, 0019, 0031 |
+| T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Blocked | T-042 | 0005 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | In progress | T-027, T-028 | 0024 |
-| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Ready | T-029–T-034 | 0001 |
+| T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Blocked | T-029–T-034, T-042 | 0001 |
 | T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Blocked | T-039 | 0005 |
@@ -304,20 +306,36 @@ fields once at the boundary (PAT-03).
 - **Acceptance:** loads the T-029 NROs; a corrupt or truncated file is an error, never a panic;
   fuzz target for the header parser (ADR-0028).
 
-### T-033 — `lince-cpu-a64` decoder and interpreter
-The first `[c++]` crate (ADR-0030 layout validated by PoC-11): decoder and interpreter for
-the instructions the T-029 programs use. The decoder is generated from one instruction
-description table (ADR-0004), the only A64 decoder in Lince: the interpreter now and the JIT
-tiers later share it, and Rust tools decode through the C API (ADR-0031). An encoding the
-table lacks is reported as unknown, never guessed. Guest memory is accessed inline through the
-base pointer Rust provides; the callback table is the slow path only (ADR-0031). Tests run with
-ADR-0004's deterministic clock. Instruction semantics come from Arm's public specification
-(LEGAL-11).
+### T-033 — `lince-cpu-a64` crate and decoder
+The first `[c++]` crate (ADR-0030 layout validated by PoC-11). The decoder is generated from
+one instruction description table (ADR-0004), the only A64 decoder in Lince: the interpreter
+now and the JIT tiers later share it, and Rust tools decode through the C API (ADR-0031). An
+encoding the table lacks is reported as unknown, never guessed. Split from the original T-033
+into T-033 (decoder), T-042 (interpreter) and T-043 (benchmark), maintainer decision
+2026-11-14. Table format (same decision): `cpp/src/insns.inc`, one X-macro entry per
+instruction form with bit-pattern strings, turned into mask/value lines at compile time; a
+static check rejects malformed or overlapping patterns.
+- **Acceptance:** every distinct instruction of the B1 programs decodes to its form, and
+  reserved field values that a bit pattern can exclude decode as unknown (tests through the
+  Rust API); the checked-in bindings match the header; `cargo xtask ci` C++ checks pass.
+
+### T-042 — `lince-cpu-a64` Tier A interpreter
+The interpreter for the forms T-033 decodes (ADR-0005 Tier A, the reference semantics).
+Guest memory (maintainer decision 2026-11-14): `lince-mem` gives the host base pointer and a
+snapshot of the mapped regions (base, size, permission); the interpreter accesses memory
+inline when an address falls in a region with the needed permission, and through the Rust
+callback table otherwise (the slow path, ADR-0031). Tests run with ADR-0004's deterministic
+clock. Instruction semantics come from Arm's public specification (LEGAL-11).
 - **Acceptance:** differential tests of every implemented instruction against expected values
-  derived from the specification (and against the host CPU on ARM hosts where available);
-  `cargo xtask ci` C++ checks pass; a benchmark records interpreter throughput (ns per guest
-  instruction per instruction group) on the B1 programs, the baseline for how long code may
-  stay in Tier A before Tier B publishes (ADR-0005).
+  derived from the specification (and against the host CPU on ARM hosts where available); the
+  B1 programs run to their exit SVC and print "ok"; `cargo xtask ci` C++ checks pass.
+
+### T-043 — Interpreter throughput benchmark
+A benchmark records interpreter throughput (ns per guest instruction per instruction group)
+on the B1 programs, the baseline for how long code may stay in Tier A before Tier B publishes
+(ADR-0005). No new dependency without approval.
+- **Acceptance:** `cargo xtask bench` (or the crate's bench target) prints the per-group
+  numbers; the measured baseline is recorded with the machine it ran on.
 
 ### T-034 — `lince-kernel` SVC dispatch
 Dispatch the SVCs from T-028 (memory, exit, `OutputDebugString`) through a table indexed by
