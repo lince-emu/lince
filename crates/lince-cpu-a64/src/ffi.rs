@@ -24,6 +24,8 @@ use crate::error::CpuError;
 use crate::interp::State;
 
 pub(crate) use bindings::lca_exit as RawExit;
+/// Registers in `lca_state::x`; the header's constant always fits in `usize`.
+pub(crate) const GPR_COUNT: usize = bindings::LCA_GPR_COUNT as usize;
 pub(crate) const EXIT_SVC: u32 = LCA_EXIT_SVC;
 pub(crate) const EXIT_LIMIT: u32 = LCA_EXIT_LIMIT;
 pub(crate) const EXIT_UNDEFINED: u32 = LCA_EXIT_UNDEFINED;

@@ -8,13 +8,13 @@ use lince_mem::AddressSpace;
 
 use crate::decode::Insn;
 use crate::error::CpuError;
-use crate::ffi::{self, RawExit};
+use crate::ffi::{self, GPR_COUNT, RawExit};
 
 /// The architectural state of one guest core.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct State {
     /// General-purpose registers X0 to X30.
-    pub x: [u64; 31],
+    pub x: [u64; GPR_COUNT],
     /// The stack pointer.
     pub sp: u64,
     /// The program counter.

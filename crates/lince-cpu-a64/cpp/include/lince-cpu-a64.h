@@ -67,10 +67,13 @@ typedef struct lca_memory {
   uint32_t reserved;
 } lca_memory;
 
+// General-purpose registers X0 to X30 in lca_state.
+#define LCA_GPR_COUNT 31
+
 // The architectural state of one guest core. Register 31 is SP or the zero register depending
 // on the instruction, so it is not in `x`. `nzcv` holds the flags in bits 31..28.
 typedef struct lca_state {
-  uint64_t x[31];
+  uint64_t x[LCA_GPR_COUNT];
   uint64_t sp;
   uint64_t pc;
   uint32_t nzcv;
