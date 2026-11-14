@@ -1,7 +1,7 @@
 # ADR-0004: Guest CPU architecture model
 
-- **Status:** Partially accepted. **B1 scope** accepted (maintainer, 2026-11-14); the rest
-  stays Proposed.
+- **Status:** Partially accepted. **B1 scope** and **B2 scope** accepted (maintainer,
+  2026-11-14); the rest stays Proposed.
 - **Date:** 2026-11-13
 - **Related:** doc 08 §1, ADR-0005, ADR-0019
 
