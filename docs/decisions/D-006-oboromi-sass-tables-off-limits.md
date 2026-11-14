@@ -2,7 +2,7 @@
 
 - **Raised by:** T-015 research session · **Date:** 2026-11-13
 - **Blocks:** T-018 (PoC-4 SASS decoder)
-- **Status:** Open
+- **Status:** Answered (option A, 2026-11-14, maintainer in chat)
 
 ## Question
 oboromi (github.com/0xNikilite/oboromi @ `c97664a8460e`) generates its Ampere SASS decoder
@@ -30,3 +30,8 @@ and did not open the PDF; keeping it that way costs nothing now.
 Add oboromi's SASS tables and generated decoder to the list of forbidden sources in
 `docs/conventions/legal-rules.md` (or an ADR-0029-style note) once answered; T-018 can proceed
 under option A without further changes.
+
+## Answer
+Option A. oboromi's SASS tables, its `docs/sm86.pdf`, the decoder generated from them and
+anything derived from them are off-limits (LEGAL-16). T-018 relies on the T-014 corpus and
+the public sources D-011 allows.

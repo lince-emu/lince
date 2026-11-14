@@ -30,6 +30,7 @@ maintainer — do not decide alone.
 | LEGAL-13 | Reverse-engineering notes describe behavior (formats, protocols, semantics); they never reproduce disassembly listings or substantial portions of proprietary code. |
 | LEGAL-14 | Vendor tools (e.g. the NVIDIA CUDA toolkit, `nvdisasm`) are used only as their licenses permit, and only on programs the team wrote and compiled itself. |
 | LEGAL-15 | Output of NVIDIA's SDK (`nvcc`, `ptxas` and the code they generate) is never disassembled or reverse-engineered for Lince work: the CUDA EULA forbids doing so to translate it to a non-NVIDIA platform. SASS used in tests is written with the team's own assembler, from encodings in public sources (LEGAL-11). See [D-010](../decisions/D-010-cuda-eula-sass-corpus.md). |
+| LEGAL-16 | **Sources of unknown provenance are off-limits.** Never consult or use oboromi's SASS tables (`scripts/sm_86_instructions.txt`, `scripts/sm_86_latencies.txt`), its `docs/sm86.pdf`, the decoder generated from them, or anything derived from them. See [D-006](../decisions/D-006-oboromi-sass-tables-off-limits.md). |
 
 ## C. Code from other projects
 
