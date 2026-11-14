@@ -59,6 +59,12 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
   interpreter treats them as UNDEFINED.
 - Whether `QueryMemory` type values, memory attribute bits and kernel result codes are unchanged
   from Switch 1 (`docs/research/nro-and-b1-svcs.md` S2–S7, §4).
+- Whether the thread, synchronization, event, handle and IPC SVCs keep their Switch 1 numbers,
+  registers and result codes, and whether the CMIF and TIPC message layouts are unchanged
+  (`docs/research/b2-svcs-and-ipc.md` §4).
+- The `ServiceSpace` values taken by `sm:` commands 2 and 3, and the `hid`, `time` and
+  `fsp-srv` command ids beyond those tagged for Switch 2 (`docs/research/b2-svcs-and-ipc.md`
+  S1, S3–S5).
 
 ## 5. Implications for Lince
 

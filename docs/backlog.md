@@ -57,8 +57,8 @@ Rules:
 | T-045 | Break B2 into tasks; record the D-006 answer | Docs | Done | T-035 | 0017, 0024 |
 | T-046 | Mark the **B2 scope** in ADR-0004, 0017, 0019 and 0024 | Docs | Done | T-045 | 0004, 0017, 0019, 0024 |
 | T-047 | Review the B2 ADRs for acceptance (B2 scope of 0004, 0017, 0019, 0024) | Maintainer | Done | T-046 | 0004, 0017, 0019, 0024 |
-| T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Ready | — | 0024 |
-| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Blocked | T-048 | 0001, 0002 |
+| T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Done | — | 0024 |
+| T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Ready | T-048 | 0001, 0002 |
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Blocked | T-047, T-049 | 0004, 0005, 0031 |
 | T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-047, T-048 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
@@ -458,6 +458,7 @@ reaches `sm:` and the commands B2's program calls on `sm:`, `set:`, `fs`, `time`
 Mark what is Switch 1 knowledge and what is known on Switch 2 (doc 08).
 - **Acceptance:** `docs/research/b2-svcs-and-ipc.md` with per-field sources and evidence
   levels; UNKNOWN items listed in doc 08.
+- **PR:** https://github.com/lince-emu/lince/pull/52
 
 ### T-049 — B2 test program
 Extend the T-029 programs: one NRO starts threads on several cores, synchronizes them
