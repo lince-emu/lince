@@ -475,6 +475,7 @@ loads/stores with a per-core exclusive monitor, barriers, and the system registe
 and the counter. Differential tests per instruction, as in T-042.
 - **Acceptance:** each new instruction tested; two cores contending on an exclusive pair
   never both succeed.
+- **PR:** https://github.com/lince-emu/lince/pull/56
 
 ### T-051 — Guest threads
 One host thread per guest core (ADR-0017), a simple per-core scheduler with guest priorities,
