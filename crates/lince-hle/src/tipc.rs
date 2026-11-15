@@ -52,7 +52,7 @@ pub fn read_reply<'a>(msg: &Message<'a>) -> Result<(u32, &'a [u8])> {
     let raw = msg.raw();
     let result = raw
         .first_chunk::<4>()
-        .ok_or(IpcError::UnalignedRaw { len: raw.len() })?;
+        .ok_or(IpcError::TooShort { len: raw.len() })?;
     Ok((u32::from_le_bytes(*result), &raw[4..]))
 }
 
@@ -106,6 +106,14 @@ mod tests {
         let (result, payload) = read_reply(&msg).unwrap();
         assert_eq!(result, 0x415);
         assert_eq!(payload, [7, 0, 0, 0], "padded to a word");
+    }
+
+    #[test]
+    fn a_reply_without_a_result_word_is_too_short() {
+        let mut buf = [0; MESSAGE_SIZE];
+        crate::hipc::write(&mut buf, &Parts::default()).unwrap();
+        let msg = Message::parse(&buf).unwrap();
+        assert_eq!(read_reply(&msg), Err(IpcError::TooShort { len: 0 }));
     }
 
     #[test]

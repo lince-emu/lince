@@ -26,6 +26,12 @@ pub enum IpcError {
         /// Its length in bytes.
         len: usize,
     },
+    /// The raw data is shorter than the header it must start with.
+    #[error("raw data of {len} bytes is too short for its header")]
+    TooShort {
+        /// Its length in bytes.
+        len: usize,
+    },
     /// The raw data has no CMIF header with the expected signature.
     #[error("the raw data has no CMIF header with signature {expected:#010x}")]
     BadCmifHeader {

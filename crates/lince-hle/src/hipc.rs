@@ -30,11 +30,14 @@ const RAW_WORDS_MAX: usize = 0x3FF;
 const RECEIVE_LIST_INLINE: u32 = 1;
 /// Receive-list counts from this value up mean `count - 2` entries (C1).
 const RECEIVE_LIST_FIRST_ENTRY: u32 = 2;
+/// Most receive-list entries: the 4-bit count minus [`RECEIVE_LIST_FIRST_ENTRY`].
+const RECEIVE_ENTRIES_MAX: usize = COUNT_MAX - 2;
 
 /// A pointer (X) descriptor.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Pointer {
-    /// Which receive-list entry the data is copied to (4 bits).
+    /// Which receive-list entry the data is copied to (4 bits; word 0 bits 4-5 are reserved,
+    /// C10).
     pub index: u8,
     /// Guest address (39 bits).
     pub address: u64,
@@ -272,6 +275,9 @@ fn check(parts: &Parts<'_>) -> Result<()> {
     }
     match parts.receive_list {
         ReceiveList::Entries([]) => overflow("receive list"),
+        ReceiveList::Entries(entries) if entries.len() > RECEIVE_ENTRIES_MAX => {
+            overflow("receive list")
+        }
         ReceiveList::Entries(entries) if entries.iter().any(|e| e.address >= ADDRESS_LIMIT) => {
             overflow("receive list")
         }
@@ -375,6 +381,8 @@ impl<'a> Message<'a> {
     }
 
     /// Whether pointer data goes inline after the raw data instead of to receive-list entries.
+    /// The inline area is not part of the parsed layout: its size comes from the pointer
+    /// descriptors and the caller bounds it (UNKNOWN beyond C10).
     pub fn receive_list_inline(&self) -> bool {
         self.receive_list == RECEIVE_LIST_INLINE
     }
@@ -638,6 +646,28 @@ mod tests {
             0x40 | 0x80 << 16,                   // address 32-38, size
         ];
         assert_eq!(words(&buf, expected.len()), expected);
+    }
+
+    #[test]
+    fn the_receive_list_holds_at_most_13_entries() {
+        let entries = [ReceiveEntry::default(); 14];
+        let mut buf = [0; MESSAGE_SIZE];
+        let parts = Parts {
+            receive_list: ReceiveList::Entries(&entries[..13]),
+            ..Parts::default()
+        };
+        write(&mut buf, &parts).unwrap();
+        assert_eq!(Message::parse(&buf).unwrap().receive_entries().len(), 13);
+        let parts = Parts {
+            receive_list: ReceiveList::Entries(&entries),
+            ..Parts::default()
+        };
+        assert_eq!(
+            write(&mut buf, &parts),
+            Err(IpcError::FieldOverflow {
+                field: "receive list"
+            })
+        );
     }
 
     #[test]
