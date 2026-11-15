@@ -10,7 +10,7 @@ use lince_common::GuestVa;
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission};
 
 use crate::kernel::{Entry, HEAP_BASE, Handler, Kernel, Outcome, Regs};
-use crate::{event_svc, thread_svc};
+use crate::{event_svc, thread_svc, wait_svc};
 
 /// An SVC number: the immediate of the `SVC` instruction.
 pub type SvcNumber = u8;
@@ -84,6 +84,11 @@ const fn build_table() -> [Option<Entry>; 256] {
     table[0x12] = Some(entry("ClearEvent", event_svc::clear_event));
     table[0x16] = Some(entry("CloseHandle", event_svc::close_handle));
     table[0x17] = Some(entry("ResetSignal", event_svc::reset_signal));
+    table[0x18] = Some(entry("WaitSynchronization", wait_svc::wait_synchronization));
+    table[0x19] = Some(entry(
+        "CancelSynchronization",
+        wait_svc::cancel_synchronization,
+    ));
     table[BREAK as usize] = Some(entry(BREAK_NAME, break_));
     table[0x45] = Some(entry("CreateEvent", event_svc::create_event));
     table[OUTPUT_DEBUG_STRING as usize] = Some(entry("OutputDebugString", output_debug_string));
