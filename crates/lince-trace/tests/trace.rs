@@ -186,3 +186,35 @@ fn plain_records_past_capacity_are_counted_as_dropped() {
     let drained = trace.drain();
     assert_eq!((drained.records.len(), drained.dropped), (2, 1));
 }
+
+#[test]
+fn the_coverage_list_holds_each_unknown_svc_and_command_once_in_order() {
+    let mut trace = Trace::new(16);
+    let set = trace.name("set").unwrap();
+    let stub = trace.name("svcBreak").unwrap();
+    let mut core0 = trace.recorder(ThreadRole::GuestCore);
+    let mut core1 = trace.recorder(ThreadRole::GuestCore);
+
+    core0.once(EventKind::UnknownSvc, 0x7F);
+    core0.unknown_command(set, 5);
+    core0.stub(stub);
+    core1.once(EventKind::UnknownSvc, 0x7F);
+    core1.once(EventKind::UnknownSvc, 0x2F);
+
+    let drained = trace.drain();
+    let list: Vec<String> = trace
+        .unimplemented(&drained)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(list, ["SVC 0x2f", "SVC 0x7f", "set command 5"]);
+}
+
+#[test]
+fn a_run_without_unknown_calls_has_an_empty_coverage_list() {
+    let mut trace = Trace::new(16);
+    let stub = trace.name("svcBreak").unwrap();
+    trace.recorder(ThreadRole::GuestCore).stub(stub);
+    let drained = trace.drain();
+    assert_eq!(trace.unimplemented(&drained), []);
+}

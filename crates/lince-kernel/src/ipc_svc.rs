@@ -441,6 +441,31 @@ mod tests {
     }
 
     #[test]
+    fn in_coverage_mode_unknown_calls_return_an_error_and_are_all_listed() {
+        let mut f = Fixture::new();
+        f.kernel.set_keep_going(true);
+        let not_implemented = u64::from(crate::NOT_IMPLEMENTED);
+        assert_eq!(f.svc(0x7F, 0, 0).unwrap()[0], not_implemented);
+        let session = f.connect(b"echo ")[1];
+        f.mem.write_bytes(TLS_BASE, &[9]).unwrap();
+        assert_eq!(f.svc(SEND, session, 0).unwrap()[0], not_implemented);
+        f.mem.write_bytes(TLS_BASE, &[1]).unwrap();
+        assert_eq!(
+            f.svc(SEND, session, 0).unwrap()[0],
+            0,
+            "the session still works"
+        );
+        let drained = f.trace.drain();
+        let list: Vec<_> = f
+            .trace
+            .unimplemented(&drained)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(list, ["SVC 0x7f", "echo command 9"]);
+    }
+
+    #[test]
     fn unknown_names_bad_handles_and_closed_sessions_return_errors() {
         let mut f = Fixture::new();
         assert_eq!(f.connect(b"nope\0")[0], 0xF201);

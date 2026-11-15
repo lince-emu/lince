@@ -63,15 +63,15 @@ Rules:
 | T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Done | T-048, T-059 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Done | T-051, T-061 | 0024 |
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Done | T-052 | 0024 |
-| T-054 | `lince-hle`: `set:`, `fsp-srv`, `time` and `hid` stubs that log | Impl | In progress | T-053, T-057 | 0024 |
-| T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Ready | T-053 | 0024, 0027 |
+| T-054 | `lince-hle`: `set:`, `fsp-srv`, `time` and `hid` stubs that log | Impl | Done | T-053, T-057 | 0024 |
+| T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | In progress | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Done | T-047 | 0017, 0024 |
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
 | T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Done | T-051 | 0017, 0024, 0032 |
-| T-062 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Blocked | T-054 | 0017, 0024 |
+| T-062 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Ready | T-054 | 0017, 0024 |
 
 ## Details
 
@@ -522,7 +522,9 @@ reply in `lince-kernel`'s `SendSyncRequest`.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the
-list at exit (doc 07 B2 exit criterion), through `lince-trace`.
+list at exit (doc 07 B2 exit criterion), through `lince-trace`. Opt-in (maintainer,
+2026-11-15): with `lince run --coverage` an unknown SVC or command returns an error to the
+guest and the run continues; without it the run still stops at the first one.
 - **Acceptance:** a test program calling an unimplemented SVC and command shows both in the
   list; a clean run prints an empty list.
 

@@ -58,7 +58,7 @@ pub use ipc_svc::{
     IPC_MESSAGE_SIZE, IpcMessage, PortFactory, SessionObject, Sessions, UnknownCommand,
 };
 pub use kernel::{DEFAULT_QUANTUM, Flow, HEAP_BASE, Kernel, Regs};
-pub use svc::{ResultCode, SvcNumber, svc_name};
+pub use svc::{NOT_IMPLEMENTED, ResultCode, SvcNumber, svc_name};
 pub use thread::{
     CORE_COUNT, CURRENT_THREAD, DEFAULT_SLICED_PRIORITIES, LOWEST_PRIORITY, TLS_BASE, TLS_SIZE,
     ThreadParams,

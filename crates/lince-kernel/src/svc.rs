@@ -24,6 +24,10 @@ const INVALID_ADDRESS: ResultCode = 0xCC01;
 pub(crate) const OUT_OF_RESOURCE: ResultCode = 0xD001;
 const INVALID_STATE: ResultCode = 0xD401;
 const INVALID_PERMISSION: ResultCode = 0xD801;
+/// What an unknown SVC or IPC command returns in coverage mode ([`Kernel::set_keep_going`]).
+// GUESS: kernel module 1, description 33 ("not implemented"); the research notes give no code
+// for this case, and a real console ends the process instead.
+pub const NOT_IMPLEMENTED: ResultCode = 0x4201;
 
 const SET_HEAP_SIZE: SvcNumber = 0x01;
 const SET_MEMORY_PERMISSION: SvcNumber = 0x02;

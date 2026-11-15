@@ -5,6 +5,9 @@
 
 use std::process::{Command, Output};
 
+use lince_app::{Options, Report};
+use lince_trace::Unimplemented;
+
 fn homebrew(name: &str) -> String {
     format!("{}/../../tests/homebrew/{name}", env!("CARGO_MANIFEST_DIR"))
 }
@@ -28,7 +31,7 @@ fn run_prints_ok_for_every_self_checking_program() {
     for name in ["alu.nro", "branch.nro", "memory.nro"] {
         let mut out = Vec::new();
         let file = std::fs::read(homebrew(name)).expect("read the NRO");
-        lince_app::run_nro(&file, &mut out).expect(name);
+        lince_app::run_nro(&file, &mut out, Options::default()).expect(name);
         assert_eq!(out, b"ok", "{name}");
     }
 }
@@ -36,7 +39,8 @@ fn run_prints_ok_for_every_self_checking_program() {
 #[test]
 fn a_file_that_is_not_an_nro_fails_without_output() {
     let mut out = Vec::new();
-    let error = lince_app::run_nro(b"not an nro", &mut out).expect_err("load must fail");
+    let error = lince_app::run_nro(b"not an nro", &mut out, Options::default())
+        .expect_err("load must fail");
     assert!(matches!(error, lince_app::AppError::Loader(_)), "{error:?}");
     assert_eq!(out, b"");
 }
@@ -55,4 +59,40 @@ fn wrong_arguments_print_the_usage() {
         assert_eq!(output.status.code(), Some(2), "{args:?}");
         assert!(String::from_utf8_lossy(&output.stderr).starts_with("usage: lince run"));
     }
+}
+
+#[test]
+fn coverage_of_a_clean_run_is_an_empty_list() {
+    let output = lince(&["run", "--coverage", &homebrew("hello.nro")]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "hello");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "coverage: 0 unimplemented calls\n"
+    );
+}
+
+#[test]
+fn the_coverage_list_names_each_call_and_warns_about_dropped_events() {
+    let report = Report {
+        unimplemented: vec![
+            Unimplemented::Svc(0x7F),
+            Unimplemented::Command {
+                object: "set",
+                command: 5,
+            },
+        ],
+        dropped: 2,
+    };
+    let mut out = Vec::new();
+    lince_app::write_coverage(&mut out, &report).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&out),
+        concat!(
+            "coverage: 2 unimplemented calls\n",
+            "  SVC 0x7f\n",
+            "  set command 5\n",
+            "coverage: 2 trace events dropped; the list may be incomplete\n",
+        )
+    );
 }

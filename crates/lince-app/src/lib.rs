@@ -7,7 +7,8 @@
 //! B1 scope (doc 07): [`run_nro`] loads a homebrew NRO into a fresh address space, runs it on
 //! the Tier A interpreter and dispatches its SVCs to the kernel until it exits. The guest's
 //! `OutputDebugString` text goes to a host writer. With no `lince-core` yet, this crate wires
-//! the subsystems together itself.
+//! the subsystems together itself. In coverage mode ([`Options::coverage`], T-055) unknown
+//! SVCs and IPC commands do not stop the run; [`Report`] lists them at exit.
 //!
 //! # Threads
 //! The guest runs on the calling thread, which is its single guest core. Writing the debug
@@ -23,7 +24,7 @@ use lince_cpu_a64::{CpuError, Exit, State, run};
 use lince_kernel::{Flow, Kernel, KernelError, Regs};
 use lince_loader::{LoaderError, load_nro};
 use lince_mem::{AddressSpace, MemError, SpaceConfig};
-use lince_trace::Trace;
+use lince_trace::{Trace, Unimplemented};
 use thiserror::Error;
 
 /// Where the NRO is loaded; away from the kernel's heap base.
@@ -65,13 +66,51 @@ pub enum AppError {
     Output(#[from] std::io::Error),
 }
 
+/// How [`run_nro`] runs a program.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Options {
+    /// Coverage mode: an unknown SVC or IPC command returns an error to the guest instead of
+    /// stopping the run ([`Kernel::set_keep_going`]).
+    pub coverage: bool,
+}
+
+/// What a run that reached its exit reports.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Report {
+    /// Every unknown SVC and IPC command the run reached, each once.
+    pub unimplemented: Vec<Unimplemented>,
+    /// Trace events lost because a buffer was full; when non-zero the list may be incomplete.
+    pub dropped: u64,
+}
+
+/// Writes the coverage list in `report`: a count line, then one line per call.
+pub fn write_coverage(out: &mut impl Write, report: &Report) -> std::io::Result<()> {
+    writeln!(
+        out,
+        "coverage: {} unimplemented calls",
+        report.unimplemented.len()
+    )?;
+    for call in &report.unimplemented {
+        writeln!(out, "  {call}")?;
+    }
+    if report.dropped > 0 {
+        writeln!(
+            out,
+            "coverage: {} trace events dropped; the list may be incomplete",
+            report.dropped
+        )?;
+    }
+    Ok(())
+}
+
 /// Loads `file` as an NRO, runs it until it calls `ExitProcess` and writes everything it
 /// prints with `OutputDebugString` to `out`.
-pub fn run_nro(file: &[u8], out: &mut impl Write) -> Result<(), AppError> {
+pub fn run_nro(file: &[u8], out: &mut impl Write, options: Options) -> Result<Report, AppError> {
     let mut mem = AddressSpace::new(SpaceConfig::for_host())?;
     let nro = load_nro(&mut mem, LOAD_BASE, file)?;
     let mut trace = Trace::new(TRACE_CAPACITY);
     let mut kernel = Kernel::new(&mut trace)?;
+    kernel.set_keep_going(options.coverage);
     let mut state = State {
         pc: nro.entry.get(),
         ..State::default()
@@ -103,5 +142,9 @@ pub fn run_nro(file: &[u8], out: &mut impl Write) -> Result<(), AppError> {
         }
     }
     out.flush()?;
-    Ok(())
+    let drained = trace.drain();
+    Ok(Report {
+        unimplemented: trace.unimplemented(&drained),
+        dropped: drained.dropped,
+    })
 }

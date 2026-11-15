@@ -9,7 +9,8 @@
 //! unknown SVC — recorded once per name into per-thread buffers that a non-critical thread
 //! drains. Records use the ledger's event shape, so the ledger promoted from PoC-7 later reads
 //! the same data. B2 scope adds plain records ([`Recorder::record`]) for the guest scheduler's
-//! `KernelLockHeld` and `PreemptLatency` events, in the same bounded buffers.
+//! `KernelLockHeld` and `PreemptLatency` events, in the same bounded buffers, and
+//! [`Trace::unimplemented`], the coverage list of unknown SVCs and IPC commands (T-055).
 //!
 //! # Threads
 //! [`Recorder`] runs on any thread, render-critical ones included: it never blocks, allocates
@@ -19,10 +20,12 @@
 //! docs/04-rust-architecture.md §2, §8 · ADR-0027 · docs/conventions/patterns.md PAT-07
 #![forbid(unsafe_code)]
 
+mod coverage;
 mod error;
 mod event;
 mod trace;
 
+pub use coverage::Unimplemented;
 pub use error::{Result, TraceError};
 pub use event::{Event, EventKind, ThreadRole};
 pub use trace::{Drained, NameId, Record, Recorder, Trace};
