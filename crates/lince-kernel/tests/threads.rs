@@ -609,13 +609,17 @@ fn a_sliced_pair_alternates_on_every_tick() {
     let top = b.here();
     b.str(10, 9, 0).b_back(top);
     let mut main = Asm::default();
-    main.spawn(function(1), DATA, 59, 1)
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, 59, 1)
         .spawn(function(2), DATA, 59, 1)
+        .mov(10, 1)
+        .str(10, 9, 8)
         .svc(EXIT_THREAD);
     let mut turns = Vec::new();
 
     let (_, result) = run_ticked(&[&main, &a, &b], |mem, ticker| {
-        let mut ok = wait_for(ticker, || data(mem, 0) == 0xA);
+        // Both threads exist before the first tick, or it would rotate a lone thread.
+        let mut ok = wait_for(ticker, || data(mem, 8) == 1 && data(mem, 0) == 0xA);
         turns.push(data(mem, 0));
         for _ in 0..4 {
             let before = data(mem, 0);
