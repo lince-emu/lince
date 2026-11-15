@@ -22,8 +22,8 @@ const PROJECT_DIR_VAR: &str = "CLAUDE_PROJECT_DIR";
 /// Files passed to one run of the invariant script; keeps command lines short on Windows.
 const INVARIANT_BATCH: usize = 200;
 
-/// Runs fmt, commit-message, SPDX, license, invariant, C++, test-program build, clippy, test
-/// and cargo-deny checks.
+/// Runs fmt, commit-message, SPDX, license, invariant, C++, test-program build, clippy, test,
+/// loom-model and cargo-deny checks.
 pub(crate) fn run(root: &Path, range: &commits::Range) -> Result<(), XtaskError> {
     process::run_step(
         "rustfmt",
@@ -50,6 +50,7 @@ pub(crate) fn run(root: &Path, range: &commits::Range) -> Result<(), XtaskError>
         "tests",
         &mut process::command(root, CARGO, &["test", "--workspace", "--locked"]),
     )?;
+    loom_models(root)?;
     cargo_deny(root)?;
     eprintln!("xtask ci: all checks passed");
     Ok(())
@@ -64,6 +65,43 @@ fn invariants(root: &Path, files: &[String]) -> Result<(), XtaskError> {
         let mut command = process::command(root, &bash, &args);
         command.env(PROJECT_DIR_VAR, root);
         process::run_step("invariant check", &mut command)?;
+    }
+    Ok(())
+}
+
+/// Lints and runs the loom models (the tests whose path contains `loom`, built with
+/// `--cfg loom`) in their own target directory, so the regular build stays cached. Release
+/// builds keep loom fast; `debug_assert!`s are off during the models.
+fn loom_models(root: &Path) -> Result<(), XtaskError> {
+    let clippy = [
+        "clippy",
+        "--package",
+        "lince-kernel",
+        "--lib",
+        "--tests",
+        "--release",
+        "--locked",
+        "--",
+        "-D",
+        "warnings",
+    ];
+    let test = [
+        "test",
+        "--package",
+        "lince-kernel",
+        "--lib",
+        "--release",
+        "--locked",
+        "loom",
+    ];
+    for (step, args) in [("loom clippy", &clippy[..]), ("loom models", &test[..])] {
+        let mut command = process::command(root, CARGO, args);
+        command
+            // RUSTFLAGS is ignored while CARGO_ENCODED_RUSTFLAGS is set.
+            .env_remove("CARGO_ENCODED_RUSTFLAGS")
+            .env("RUSTFLAGS", "--cfg loom")
+            .env("CARGO_TARGET_DIR", root.join("target").join("loom"));
+        process::run_step(step, &mut command)?;
     }
     Ok(())
 }

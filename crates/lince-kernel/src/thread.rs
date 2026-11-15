@@ -141,9 +141,11 @@ impl Threads {
         self.sliced = sliced;
     }
 
-    /// Whether the selection may have changed since the last call.
-    pub(crate) fn take_changed(&mut self) -> bool {
+    /// The reselection pass (ADR-0032 §4): `None` if nothing changed since the last pass,
+    /// otherwise, per core, whether it runs a thread other than the one it should run.
+    pub(crate) fn switch_requests(&mut self) -> Option<[bool; CORE_COUNT]> {
         std::mem::take(&mut self.changed)
+            .then(|| std::array::from_fn(|core| self.needs_switch(core)))
     }
 
     /// Creates a thread in the `Created` state, with its TLS block mapped and zeroed, and
@@ -158,6 +160,13 @@ impl Threads {
             mem.map(tls, GUEST_PAGE_SIZE, Permission::READ | Permission::WRITE)
                 .ok()?;
         }
+        self.insert(tls, params)
+    }
+
+    /// Adds a thread in the `Created` state whose TLS block at `tls` is already mapped, and
+    /// returns its handle.
+    pub(crate) fn insert(&mut self, tls: GuestVa, params: ThreadParams) -> Option<u32> {
+        let index = self.list.len();
         let handle = FIRST_HANDLE.checked_add(u32::try_from(index).ok()?)?;
         let mut state = State {
             pc: params.entry.get(),
