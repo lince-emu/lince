@@ -9,6 +9,7 @@ use lince_trace::{EventKind, NameId, Recorder, ThreadRole, Trace};
 
 use crate::error::{KernelError, Result};
 use crate::svc::{self, SvcNumber};
+use crate::thread::{CORE_COUNT, LOWEST_PRIORITY, ThreadParams, Threads};
 
 /// Guest registers `X0`–`X7`: SVC arguments on entry, results on return.
 pub type Regs = [u64; 8];
@@ -41,8 +42,17 @@ pub(crate) enum Outcome {
     Exit,
     /// The guest aborted through `Break` with this reason.
     Break(u64),
+    /// The SVC changed the calling thread's status or core; its core must pick again.
+    Reschedule,
     /// The SVC is reserved, or was called with arguments this build has no behavior for.
     Unsupported,
+}
+
+/// The thread that made the SVC being dispatched, and its core.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Current {
+    pub(crate) index: usize,
+    pub(crate) core: usize,
 }
 
 pub(crate) type Handler = fn(&mut Kernel, &AddressSpace, &mut Regs) -> Outcome;
@@ -61,6 +71,10 @@ pub struct Kernel {
     pub(crate) attribute_stub: NameId,
     pub(crate) heap_chunks: Vec<u64>,
     pub(crate) debug_output: Vec<u8>,
+    pub(crate) threads: Threads,
+    /// Set by a core thread while it dispatches; `None` on the single-thread B1 path, where
+    /// the thread SVCs are unsupported.
+    pub(crate) current: Option<Current>,
 }
 
 impl Kernel {
@@ -73,6 +87,8 @@ impl Kernel {
             attribute_stub: trace.name(svc::ATTRIBUTE_NAME)?,
             heap_chunks: Vec::new(),
             debug_output: Vec::new(),
+            threads: Threads::default(),
+            current: None,
         })
     }
 
@@ -87,6 +103,23 @@ impl Kernel {
         number: SvcNumber,
         regs: &mut Regs,
     ) -> Result<Flow> {
+        Ok(match self.run_svc(mem, number, regs)? {
+            Outcome::Exit => Flow::Exit,
+            Outcome::Break(reason) => Flow::Break { reason },
+            // `run_svc` turns `Unsupported` into an error. Only a thread SVC reschedules, and
+            // without a current thread those are unsupported.
+            Outcome::Resume | Outcome::Reschedule | Outcome::Unsupported => Flow::Continue,
+        })
+    }
+
+    /// Runs SVC `number` and returns what the handler decided; `Unsupported` comes back as
+    /// [`KernelError::Unimplemented`].
+    pub(crate) fn run_svc(
+        &mut self,
+        mem: &AddressSpace,
+        number: SvcNumber,
+        regs: &mut Regs,
+    ) -> Result<Outcome> {
         let Some(entry) = svc::TABLE.get(usize::from(number)).copied().flatten() else {
             self.recorder.once(EventKind::UnknownSvc, u64::from(number));
             return Err(KernelError::UnknownSvc {
@@ -94,14 +127,31 @@ impl Kernel {
             });
         };
         match (entry.handler)(self, mem, regs) {
-            Outcome::Resume => Ok(Flow::Continue),
-            Outcome::Exit => Ok(Flow::Exit),
-            Outcome::Break(reason) => Ok(Flow::Break { reason }),
             Outcome::Unsupported => Err(KernelError::Unimplemented {
                 number: u32::from(number),
                 name: entry.name,
             }),
+            outcome @ (Outcome::Resume
+            | Outcome::Exit
+            | Outcome::Break(_)
+            | Outcome::Reschedule) => Ok(outcome),
         }
+    }
+
+    /// Creates and starts a thread from the host, such as the main thread, and returns its
+    /// handle. Call before [`run_cores`](crate::run_cores).
+    pub fn spawn_thread(&mut self, mem: &AddressSpace, params: ThreadParams) -> Result<u32> {
+        let bad = KernelError::BadThread {
+            priority: params.priority,
+            core: params.core,
+        };
+        if params.priority > LOWEST_PRIORITY || params.core >= CORE_COUNT {
+            return Err(bad);
+        }
+        let handle = self.threads.create(mem, params).ok_or(bad)?;
+        let index = self.threads.index(handle).ok_or(bad)?;
+        self.threads.make_ready(index);
+        Ok(handle)
     }
 
     /// Takes the bytes the guest wrote with `OutputDebugString` since the last call.
