@@ -73,6 +73,7 @@ Result codes are printed as 16-bit values; arithmetic shows `0xE401` = module 1,
 | C7 | Domain in-header (0x10): kind u8 (1 invoke, 2 close), object count u8, raw size u16, target object id u32, token at `+0xC`; CMIF message follows, then the in-object ids (u32 each). Out-header: object count u32 then 12 reserved bytes. | Yes, but B2 may skip domains (ADR-0024 decides, GUESS) |
 | C8 | Control commands (message type 3 or 7): 0 ConvertCurrentObjectToDomain, 1 CopyFromCurrentDomain, 2 CloneCurrentObject, 3 QueryPointerBufferSize (u16 out), 4 CloneCurrentObjectEx. Close of a session is message type 2, not a numbered command. | Yes |
 | C9 | Buffer attribute bits (HIPC map alias, pointer, fixed size, auto-select, non-secure, non-device) and native-handle attribute (copy, move). | Yes |
+| C10 | Re-read 2026-11-15 (HIPC page, revision 14205, DOC). Word 1 bits 10-13 `ReceiveListCount`: 0 none, 1 one inline buffer after the raw data, 2 one entry, N >= 3 means N-2 entries. Bits 20-30 `ReceiveListOffset`: unit and meaning not on the page. Special header at 0x8; PID at 0xC; copy handles follow. Pointer word 0: index 0-3, address bits 36-38 at 6-8, bits 32-35 at 12-15, size 16-31. Map word 2: attribute 0-1, address bits 36-38 at 2-4, size bits 32-35 at 24-27, address bits 32-35 at 28-31. Receive-list word 1: address bits 32-38 at 0-6, size 16-31. Message types: 1 InvokeMethod, 2 Release, 3 InvokeManagerMethod, 6 Invoke2Method, 7 Invoke2ManagerMethod. | Yes (T-053 `lince-hle::hipc`) |
 
 ### 3.3 TIPC
 
@@ -81,6 +82,7 @@ Result codes are printed as 16-bit values; arithmetic shows `0xE401` = module 1,
 | T1 | Simpler than CMIF; no domains, so one object per session. Used only by `sm:` (12.0.0+) and `pgl`. | DOC, HIPC page | Yes |
 | T2 | Request id is in the low 16 bits of header word 0; the raw data holds the payload directly. | DOC | Yes |
 | T3 | Command numbers on `sm:` change at 12.0.0; the summary said "reduced by 16", the direction is unclear. RECALL: the TIPC request type is 16 plus the command id, and the reply carries the result in its first raw word. | RECALL, unverified | Open (O1) |
+| T4 | Re-read 2026-11-15: the sm: page says only "[12.0.0+] ... the command numbers are subtracted by 16"; neither page gives the request type formula, the reply layout or a TIPC close type. `lince-hle::tipc` keeps the T3 RECALL as a GUESS in two constants. | DOC + GUESS | Open (O1) |
 
 ### 3.4 Services (names are 8 characters, zero-padded, packed into a u64)
 

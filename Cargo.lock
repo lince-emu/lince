@@ -170,6 +170,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lince-hle"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "lince-kernel"
 version = "0.0.0"
 dependencies = [
