@@ -26,6 +26,13 @@ pub(crate) struct Reservation {
     len: usize,
 }
 
+// SAFETY: a `Reservation` owns a range of host address space, not Rust data. Its methods take
+// `&self` and only make OS calls on that range, which the OS serializes; the users of the
+// memory behind it synchronize their accesses (`AddressSpace`'s region lock).
+unsafe impl Send for Reservation {}
+// SAFETY: as for `Send`.
+unsafe impl Sync for Reservation {}
+
 impl Reservation {
     /// Reserves `len` bytes without committing memory. `len` must be a multiple of the host
     /// page size.
@@ -41,7 +48,7 @@ impl Reservation {
 
     /// Makes `[offset, offset + len)` readable, writable and backed by memory. The range must
     /// be host-page aligned.
-    pub(crate) fn commit(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub(crate) fn commit(&self, offset: usize, len: usize) -> io::Result<()> {
         let start = self.range(offset, len)?;
         // SAFETY: `range` checked that the range lies inside this live reservation.
         unsafe { imp::commit(start, len) }
@@ -49,7 +56,7 @@ impl Reservation {
 
     /// Makes `[offset, offset + len)` inaccessible again and lets the host reclaim it. The
     /// range must be host-page aligned.
-    pub(crate) fn decommit(&mut self, offset: usize, len: usize) -> io::Result<()> {
+    pub(crate) fn decommit(&self, offset: usize, len: usize) -> io::Result<()> {
         let start = self.range(offset, len)?;
         // SAFETY: `range` checked that the range lies inside this live reservation.
         unsafe { imp::decommit(start, len) }

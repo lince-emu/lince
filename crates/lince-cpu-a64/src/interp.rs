@@ -95,7 +95,7 @@ pub struct Run {
 
 /// Runs the core in `state` over `memory` until an exit or until `limit` instructions
 /// completed. Guest memory is accessed inline through `memory`'s host base (ADR-0031).
-pub fn run(state: &mut State, memory: &mut AddressSpace, limit: u64) -> Result<Run, CpuError> {
+pub fn run(state: &mut State, memory: &AddressSpace, limit: u64) -> Result<Run, CpuError> {
     let raw = ffi::run(state, memory, limit)?;
     Ok(Run {
         exit: exit_from(raw, state.pc)?,

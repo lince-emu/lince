@@ -21,7 +21,7 @@ use bindings::{
     lca_exclusive, lca_exit, lca_insn, lca_memory, lca_region, lca_state,
 };
 use lince_common::GuestVa;
-use lince_mem::{AddressSpace, Permission};
+use lince_mem::{AddressSpace, Permission, SpaceView};
 
 use crate::error::CpuError;
 use crate::interp::{Exclusive, State};
@@ -77,13 +77,12 @@ unsafe extern "C" fn slow_read(context: *mut c_void, va: u64, out: *mut u8, size
     let Ok(size) = usize::try_from(size) else {
         return 1;
     };
-    // SAFETY: `context` is the `AddressSpace` that `run` borrows mutably for the whole
-    // `lca_run` call and does not use while C++ runs; C++ calls this only during that call,
-    // never concurrently, and touches no guest memory until it returns. `out` holds `size`
-    // writable bytes that C++ owns and does not otherwise access during the call.
+    // SAFETY: `context` is the `SpaceView` that `run` holds for the whole `lca_run` call; C++
+    // calls this only during that call, on the same thread. `out` holds `size` writable bytes
+    // that C++ owns and does not otherwise access during the call.
     let (memory, buf) = unsafe {
         (
-            &*context.cast::<AddressSpace>(),
+            &*context.cast::<SpaceView<'_>>(),
             std::slice::from_raw_parts_mut(out, size),
         )
     };
@@ -96,13 +95,11 @@ unsafe extern "C" fn slow_write(context: *mut c_void, va: u64, data: *const u8, 
     let Ok(size) = usize::try_from(size) else {
         return 1;
     };
-    // SAFETY: as in `slow_read`; the mutable borrow of the space is the one `run` holds, and
-    // `data` holds `size` readable bytes that C++ does not change during the call. This holds
-    // only while one core runs per space; multi-core execution needs a shared-access write
-    // path in `lince-mem` instead of `&mut AddressSpace` here.
+    // SAFETY: as in `slow_read`; `data` holds `size` readable bytes that C++ does not change
+    // during the call.
     let (memory, data) = unsafe {
         (
-            &mut *context.cast::<AddressSpace>(),
+            &*context.cast::<SpaceView<'_>>(),
             std::slice::from_raw_parts(data, size),
         )
     };
@@ -119,10 +116,8 @@ unsafe extern "C" fn compare_exchange(
     desired: u64,
     stored: *mut u32,
 ) -> i32 {
-    // SAFETY: as in `slow_write`: `context` is the space `run` borrows mutably for the whole
-    // call, and C++ does not touch guest memory while this runs. `stored` points to a u32 that
-    // C++ owns for the call.
-    let (memory, stored) = unsafe { (&mut *context.cast::<AddressSpace>(), &mut *stored) };
+    // SAFETY: as in `slow_read`. `stored` points to a u32 that C++ owns for the call.
+    let (memory, stored) = unsafe { (&*context.cast::<SpaceView<'_>>(), &mut *stored) };
     let writable = memory.query(GuestVa::new(va)).is_some_and(|span| {
         span.permission
             .is_some_and(|p| p.contains(Permission::WRITE))
@@ -142,9 +137,9 @@ unsafe extern "C" fn compare_exchange(
     // SAFETY: the bytes [va, va + size) lie in one region mapped writable, committed at
     // `host_base + va` (the `AddressSpace::host_base` contract), and `va` is a multiple of
     // `size`; the reservation is page-aligned (`AddressSpace` reserves it with the host's
-    // page allocator), so the pointer is aligned for the atomic type. One core runs per
-    // `AddressSpace` borrow until ADR-0019's shared address space lands, so no plain access
-    // races with this atomic one.
+    // page allocator), so the pointer is aligned for the atomic type. The view keeps the region
+    // mapped during the exchange. Other cores reach these bytes with atomics from Rust and
+    // with plain accesses from C++ (ADR-0019 B2 scope).
     let exchanged = unsafe {
         let host = memory.host_base().as_ptr().add(offset);
         match size {
@@ -198,9 +193,11 @@ fn exclusive_from(raw: lca_exclusive) -> Option<Exclusive> {
 /// Runs `state` over `memory` through `lca_run`; `state` is updated in place.
 pub(crate) fn run(
     state: &mut State,
-    memory: &mut AddressSpace,
+    memory: &AddressSpace,
     limit: u64,
 ) -> Result<lca_exit, CpuError> {
+    // Held until `lca_run` returns: no region is mapped, unmapped or reprotected meanwhile.
+    let memory = memory.view();
     // A fixed array, not a Vec: `run` is called in a loop on a guest core, which must not
     // allocate in steady state.
     let empty = lca_region {
@@ -225,9 +222,9 @@ pub(crate) fn run(
     }
     let host_base = memory.host_base().as_ptr();
     let host_size = memory.size();
-    // From here until `lca_run` returns, the space is reached only through this pointer (by
-    // the slow-path callbacks) and through `host_base`.
-    let context: *mut AddressSpace = memory;
+    // From here until `lca_run` returns, this thread reaches the space only through this
+    // pointer (by the slow-path callbacks) and through `host_base`.
+    let context: *const SpaceView<'_> = &raw const memory;
     let view = lca_memory {
         host_base,
         host_size,
@@ -236,7 +233,7 @@ pub(crate) fn run(
         region_count: u32::try_from(count).unwrap_or(0),
         reserved: 0,
         callbacks: lca_callbacks {
-            context: context.cast(),
+            context: context.cast_mut().cast(),
             read: Some(slow_read),
             write: Some(slow_write),
             compare_exchange: Some(compare_exchange),
@@ -258,13 +255,14 @@ pub(crate) fn run(
         executed: 0,
     };
     // SAFETY: `raw`, `view`, `regions` and `exit` live until the call returns, and the header
-    // only borrows them for the call (ARCH-53). `host_base` is the reservation of `memory`,
-    // which this function borrows mutably for the whole call, so nothing else changes its
-    // mappings or reads or writes it meanwhile. The first `region_count` entries of `regions`
-    // list exactly the mapped regions, each committed at `host_base + base` for as long as it
-    // stays mapped (the `AddressSpace::host_base` contract), and C++ accesses no other address
-    // inline: every other data access goes through the callbacks, which do not change the
-    // mappings. `context` stays valid for the call because `memory` is borrowed for all of it.
+    // only borrows them for the call (ARCH-53). `host_base` is the reservation of `memory`, a
+    // view held for the whole call, so no thread changes its mappings meanwhile; other cores
+    // may read and write the same guest bytes (ADR-0019 B2 scope). The first `region_count`
+    // entries of `regions` list exactly the mapped regions, each committed at
+    // `host_base + base` while the view lives (the `SpaceView::host_base` contract), and C++
+    // accesses no other address inline: every other data access goes through the callbacks,
+    // which take no lock and do not change the mappings. `context` points to that view, which
+    // lives until after the call.
     let status = unsafe { bindings::lca_run(&raw mut raw, &raw const view, limit, &raw mut exit) };
     match status {
         LCA_OK => {}

@@ -45,7 +45,7 @@ pub(crate) enum Outcome {
     Unsupported,
 }
 
-pub(crate) type Handler = fn(&mut Kernel, &mut AddressSpace, &mut Regs) -> Outcome;
+pub(crate) type Handler = fn(&mut Kernel, &AddressSpace, &mut Regs) -> Outcome;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Entry {
@@ -83,7 +83,7 @@ impl Kernel {
     /// Both are recorded once, by number or by name.
     pub fn dispatch(
         &mut self,
-        mem: &mut AddressSpace,
+        mem: &AddressSpace,
         number: SvcNumber,
         regs: &mut Regs,
     ) -> Result<Flow> {

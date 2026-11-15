@@ -17,6 +17,7 @@ publish = false
 thiserror = "2.0.21"                 # error enums in library crates (DEV-20, PAT-01)
 rustix = { version = "1.1.6", features = ["mm", "param"] }   # unix host memory (lince-mem, doc 04 §8)
 windows-sys = { version = "0.61.2", features = ["Win32_System_Memory", "Win32_System_SystemInformation"] }   # windows host memory (lince-mem)
+parking_lot = "0.13.0"               # locks (doc 04 §6); the region map of lince-mem
 
 # docs/conventions/lints.md — every crate opts in with `[lints] workspace = true`.
 [workspace.lints.rust]

@@ -31,7 +31,7 @@ const CLREX: u32 = 0xd503_3f5f;
 /// `words` at `CODE` (read-execute), a zeroed read-write page at `DATA` and a read-only page at
 /// `READ_ONLY`.
 fn space_with(words: &[u32]) -> AddressSpace {
-    let mut mem = AddressSpace::new(SpaceConfig::for_host()).expect("space");
+    let mem = AddressSpace::new(SpaceConfig::for_host()).expect("space");
     mem.map(GuestVa::new(CODE), GUEST_PAGE_SIZE, RW)
         .expect("map code");
     for (i, word) in (0u64..).zip(words) {
@@ -276,7 +276,7 @@ fn two_cores_contending_on_an_exclusive_pair_never_both_succeed() {
             continue;
         }
         interleavings += 1;
-        let mut mem = space_with(&program);
+        let mem = space_with(&program);
         let mut cores = [with_x(&[(1, DATA)]), with_x(&[(1, DATA)])];
 
         // The slot of each core's load-exclusive and store-exclusive.
@@ -289,7 +289,7 @@ fn two_cores_contending_on_an_exclusive_pair_never_both_succeed() {
                 8 => stored_at[which] = slot,
                 _ => {}
             }
-            let result = run(&mut cores[which], &mut mem, 1).expect("run");
+            let result = run(&mut cores[which], &mem, 1).expect("run");
             assert_eq!(result.exit, Exit::Limit);
         }
 
@@ -308,6 +308,47 @@ fn two_cores_contending_on_an_exclusive_pair_never_both_succeed() {
         );
     }
     assert_eq!(interleavings, 20);
+}
+
+/// Runs `core` over `mem` in slices of `slice` instructions until it calls `SVC #0`.
+fn run_to_svc(core: &mut State, mem: &AddressSpace, slice: u64) {
+    let mut exit = Exit::Limit;
+    while exit == Exit::Limit {
+        exit = run(core, mem, slice).expect("run").exit;
+    }
+    assert_eq!(exit, Exit::Svc { number: 0 });
+}
+
+/// Two host threads share one address space and each increments one word `ROUNDS` times with
+/// an `ldxr; add; stlxr` retry loop through [`run`], as two guest cores would (ADR-0004,
+/// ADR-0019 B2 scope): the word ends at twice `ROUNDS`, so no update is lost.
+#[test]
+fn two_threads_contending_on_an_exclusive_pair_lose_no_update() {
+    const ROUNDS: u64 = 50_000;
+    const SLICE: u64 = 1000;
+    let program = [
+        LDXR_W0_X1,
+        ADD_W0_W0_1,
+        STLXR_W2_W0_X1,
+        0x35ff_ffa2, // cbnz w2, <ldxr>: retry when the store-exclusive failed
+        0xd100_0463, // sub x3, x3, #1
+        0xb5ff_ff63, // cbnz x3, <ldxr>
+        0xd400_0001, // svc #0
+    ];
+    let mem = space_with(&program);
+    let start = std::sync::Barrier::new(2);
+
+    std::thread::scope(|scope| {
+        for _ in 0..2 {
+            scope.spawn(|| {
+                let mut core = with_x(&[(1, DATA), (3, ROUNDS)]);
+                start.wait();
+                run_to_svc(&mut core, &mem, SLICE);
+            });
+        }
+    });
+
+    assert_eq!(u64::from(u32_at(&mem, DATA)), 2 * ROUNDS);
 }
 
 #[test]
