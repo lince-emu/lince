@@ -6,16 +6,19 @@
 //!
 //! Encodings follow the A64 base instruction formats of the Arm Architecture Reference Manual.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use lince_common::GuestVa;
 use lince_kernel::{
-    CURRENT_THREAD, Finish, Kernel, KernelError, Regs, RunError, TLS_BASE, TLS_SIZE, ThreadParams,
-    Ticker, run_cores, run_cores_with,
+    CURRENT_THREAD, Finish, IPC_MESSAGE_SIZE, IpcMessage, Kernel, KernelError, Regs, RunError,
+    SessionObject, Sessions, TLS_BASE, TLS_SIZE, ThreadParams, Ticker, UnknownCommand, run_cores,
+    run_cores_with,
 };
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
-use lince_trace::{EventKind, ThreadRole, Trace};
+use lince_trace::{EventKind, NameId, ThreadRole, Trace};
 
 const CODE: u64 = 0x1_0000;
 const DATA: u64 = 0x4_0000;
@@ -1234,4 +1237,153 @@ fn a_timed_out_condition_variable_wait_returns_without_the_mutex() {
     assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
     assert_eq!((data(&mem, 0), data(&mem, 8)), (TIMED_OUT, 0));
     assert!(start.elapsed() >= TIMEOUT);
+}
+
+/// Defers every request to the service-I/O thread, where the work waits until `release` is
+/// set, then replies with `0x5A` in the first word.
+struct Deferring {
+    name: NameId,
+    release: Arc<AtomicBool>,
+}
+
+impl SessionObject for Deferring {
+    fn name(&self) -> &'static str {
+        "deferring"
+    }
+
+    fn trace_name(&self) -> NameId {
+        self.name
+    }
+
+    fn handle_request(
+        &mut self,
+        sessions: &mut dyn Sessions,
+        _: &mut IpcMessage,
+    ) -> Result<(), UnknownCommand> {
+        let release = Arc::clone(&self.release);
+        let work = Box::new(move || {
+            while !release.load(Ordering::Acquire) {
+                thread::yield_now();
+            }
+            let mut reply = [0; IPC_MESSAGE_SIZE];
+            reply[0] = 0x5A;
+            reply
+        });
+        if sessions.defer("deferring", work) {
+            Ok(())
+        } else {
+            Err(UnknownCommand { command: 0 })
+        }
+    }
+}
+
+const CONNECT_TO_NAMED_PORT: u16 = 0x1F;
+const SEND_SYNC_REQUEST: u16 = 0x21;
+/// Where the guest finds the port name.
+const PORT_NAME_AT: u64 = 0x200;
+
+/// A kernel with the `deferring` port and a service-I/O thread, a space holding `functions`
+/// and the port name, and the main thread.
+fn deferring_setup(functions: &[&Asm], release: &Arc<AtomicBool>) -> (Kernel, AddressSpace) {
+    let mem = space_with(functions);
+    mem.write_bytes(GuestVa::new(DATA + PORT_NAME_AT), b"deferring\0")
+        .expect("test setup");
+    let mut trace = Trace::new(64);
+    let mut kernel = Kernel::new(&mut trace).expect("test setup");
+    let name = trace.name("deferring").expect("test setup");
+    let release = Arc::clone(release);
+    kernel.register_named_port(
+        "deferring",
+        Box::new(move || {
+            Box::new(Deferring {
+                name,
+                release: Arc::clone(&release),
+            })
+        }),
+    );
+    kernel.start_service_io(4).expect("test setup");
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+    (kernel, mem)
+}
+
+/// The main thread: connects to `deferring`, sends one request and stores `W0` at `+0x10`
+/// and the reply's first word at `+0x18`, then exits the process. `+0x10` holds `0xFFFF`
+/// until the reply arrives.
+fn deferring_client(worker: Option<u64>) -> Asm {
+    let mut main = Asm::default();
+    main.mov_reg(9, 0).mov(13, 0xFFFF).str(13, 9, 0x10);
+    if let Some(entry) = worker {
+        main.spawn(entry, DATA, PRIORITY, 1);
+    }
+    main.mov(1, DATA + PORT_NAME_AT)
+        .svc(CONNECT_TO_NAMED_PORT)
+        .mov_reg(0, 1)
+        .svc(SEND_SYNC_REQUEST)
+        .str(0, 9, 0x10)
+        .mrs_tpidrro(11)
+        .ldr_w(12, 11, 0)
+        .str(12, 9, 0x18)
+        .svc(EXIT_PROCESS);
+    main
+}
+
+/// T-063: while a guest thread waits for a reply built on the service-I/O thread, another
+/// guest thread keeps running; the reply then reaches the waiter through the kernel.
+#[test]
+fn a_deferred_reply_wakes_its_thread_while_others_keep_running() {
+    let mut counter = Asm::default();
+    counter.mov_reg(9, 0).mov(10, 0);
+    let top = counter.here();
+    counter.add_imm(10, 10, 1).str(10, 9, 8).b_back(top);
+    let release = Arc::new(AtomicBool::new(false));
+    let (mut kernel, mem) =
+        deferring_setup(&[&deferring_client(Some(function(1))), &counter], &release);
+
+    let result = run_cores_with(&mut kernel, &mem, |ticker| {
+        let blocked = wait_for(ticker, || data(&mem, 8) > 0);
+        let before = data(&mem, 8);
+        let ran = wait_for(ticker, || data(&mem, 8) > before + 10_000);
+        assert!(
+            blocked && ran,
+            "the counter thread ran while the request waited"
+        );
+        assert_eq!(data(&mem, 0x10), 0xFFFF, "no reply yet");
+        release.store(true, Ordering::Release);
+        assert!(
+            wait_for(ticker, || {
+                ticker.tick();
+                ticker.is_finished()
+            }),
+            "the reply reached the main thread"
+        );
+    });
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!((data(&mem, 0x10), data(&mem, 0x18)), (0, 0x5A));
+    kernel
+        .shutdown_service_io()
+        .expect("started")
+        .expect("joined");
+}
+
+/// Under [`run_cores`] the kernel timer delivers the reply as soon as the work is done.
+#[test]
+fn the_kernel_timer_delivers_a_deferred_reply() {
+    let release = Arc::new(AtomicBool::new(true));
+    let (mut kernel, mem) = deferring_setup(&[&deferring_client(None)], &release);
+
+    let result = run_cores(&mut kernel, &mem);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!((data(&mem, 0x10), data(&mem, 0x18)), (0, 0x5A));
+    assert_eq!(
+        kernel
+            .shutdown_service_io()
+            .expect("started")
+            .expect("joined")
+            .completed,
+        1
+    );
 }

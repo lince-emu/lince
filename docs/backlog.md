@@ -71,8 +71,8 @@ Rules:
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
 | T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Done | T-051 | 0017, 0024, 0032 |
-| T-062 | Research: `fsp-srv` IFileSystem and IFile parameters and the path buffer (public sources) | Research | In progress | T-054 | 0024 |
-| T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | Ready | T-057 | 0017, 0024 |
+| T-062 | Research: `fsp-srv` IFileSystem and IFile parameters and the path buffer (public sources) | Research | Done | T-054 | 0024 |
+| T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | In progress | T-057 | 0017, 0024 |
 | T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Blocked | T-062, T-063 | 0017, 0024 |
 
 ## Details

@@ -7,16 +7,20 @@
 //! The server end of every session is host code, a [`SessionObject`] (ADR-0024, research
 //! V19): `SendSyncRequest` hands it the calling thread's message buffer, under the kernel lock,
 //! and copies the reply back. An object may open more sessions, such as `sm:` handing out a
-//! service, through [`Sessions`]; the handle it gets is already in the client's table.
+//! service, through [`Sessions`]; the handle it gets is already in the client's table. An
+//! object that must block or do host I/O defers its reply instead ([`Sessions::defer`],
+//! `deferred`): the calling thread waits and the reply arrives later.
 
 use lince_common::GuestVa;
 use lince_mem::AddressSpace;
 use lince_trace::NameId;
 
+use crate::deferred::DeferredWork;
 use crate::event_svc::INVALID_HANDLE;
 use crate::handle::Object;
 use crate::kernel::{Kernel, Outcome, Regs};
 use crate::svc::{OUT_OF_RESOURCE, ResultCode, SUCCESS, done};
+use crate::thread::WaitKind;
 
 /// Size of the IPC message buffer at the start of a thread's TLS block.
 pub const IPC_MESSAGE_SIZE: usize = 0x100;
@@ -31,7 +35,7 @@ pub type PortFactory = Box<dyn Fn() -> Box<dyn SessionObject> + Send>;
 
 /// The port name pointer is not readable (V10's invalid-address code).
 // GUESS: the note lists no result for ConnectToNamedPort (V16).
-const INVALID_POINTER: ResultCode = 0xE601;
+pub(crate) const INVALID_POINTER: ResultCode = 0xE601;
 /// No port has that name.
 // GUESS: the note lists no result for an unknown name (V16); module 1, description 121.
 const NOT_FOUND: ResultCode = 0xF201;
@@ -58,6 +62,14 @@ pub trait Sessions {
 
     /// Records that the stub `name` ran, the first time only (ADR-0024: stubs log by name).
     fn log_stub(&mut self, name: NameId);
+
+    /// Answers this request later: `work` runs on the service-I/O thread, where it may block
+    /// and do host I/O, and returns the reply message; meanwhile the calling guest thread
+    /// waits (ADR-0024 B2 scope). `name` labels the request in diagnostics. An object that
+    /// defers writes no reply now and returns `Ok`. `false`, and `work` is dropped unrun, when
+    /// no service-I/O thread runs ([`Kernel::start_service_io`]), the caller is not a guest
+    /// thread, or the request was already deferred; the object then replies now itself.
+    fn defer(&mut self, name: &'static str, work: DeferredWork) -> bool;
 }
 
 /// The server end of a session: host code that answers the requests a program sends.
@@ -102,6 +114,13 @@ impl Sessions for Kernel {
 
     fn log_stub(&mut self, name: NameId) {
         Kernel::log_stub(self, name);
+    }
+
+    fn defer(&mut self, name: &'static str, work: DeferredWork) -> bool {
+        let Some(current) = self.current else {
+            return false;
+        };
+        self.defer_reply(current.index, name, work)
     }
 }
 
@@ -169,6 +188,7 @@ pub(crate) fn send_sync_request(
     kernel.running_session = Some(session);
     let handled = object.handle_request(kernel, &mut message);
     kernel.running_session = None;
+    let deferred = kernel.deferred.taken.take();
     let (name, trace_name) = (object.name(), object.trace_name());
     kernel.sessions[session] = Some(object);
     if let Err(unknown) = handled {
@@ -178,6 +198,15 @@ pub(crate) fn send_sync_request(
             object: name,
             command: unknown.command,
         };
+    }
+    if let Some(ticket) = deferred {
+        // The reply comes later through `deliver_replies`; the sessions the object opened are
+        // the guest's once that reply names them.
+        kernel.opened_during_request.clear();
+        kernel
+            .threads
+            .begin_wait(current.index, &WaitKind::Reply { ticket }, None);
+        return Outcome::Reschedule;
     }
     // The TLS block was just read, so only a concurrent unmap fails here.
     if mem.write_bytes(tls, &message).is_err() {

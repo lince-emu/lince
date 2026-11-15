@@ -3,7 +3,7 @@
 
 //! Test doubles shared by the service tests.
 
-use lince_kernel::{SessionObject, Sessions};
+use lince_kernel::{DeferredWork, SessionObject, Sessions};
 use lince_trace::NameId;
 
 /// Keeps the objects it opens and the stub names logged; each handle is 0xFF plus the number
@@ -26,5 +26,9 @@ impl Sessions for FakeSessions {
 
     fn log_stub(&mut self, name: NameId) {
         self.stubs.push(name);
+    }
+
+    fn defer(&mut self, _: &'static str, _: DeferredWork) -> bool {
+        false
     }
 }

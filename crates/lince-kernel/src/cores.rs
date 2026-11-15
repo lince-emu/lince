@@ -14,7 +14,8 @@
 //!
 //! Time comes from the kernel timer role thread of `lince-sched` (ADR-0032 §3): every quantum
 //! it rotates the sliced priorities, and between quanta it fires when a sleeper is due, so a
-//! sleeper wakes on time even while its core runs another thread.
+//! sleeper wakes on time even while its core runs another thread. The timer also fires when
+//! the service-I/O thread finishes a deferred reply, which it delivers (T-063).
 //!
 //! Each core thread records how long it holds the kernel lock (`KernelLockHeld`) and, when it
 //! switches threads after a reschedule request, how long the switch took (`PreemptLatency`),
@@ -22,6 +23,7 @@
 
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -53,8 +55,10 @@ struct Shared<'k> {
     /// Per core: "reschedule requested" (ADR-0032 §2). Set and cleared under the lock.
     interrupt: [AtomicBool; CORE_COUNT],
     /// Runs only for [`run_cores`]; under [`run_cores_with`] wakeup requests go unheard and
-    /// the driver keeps time.
-    timer: Timer,
+    /// the driver keeps time. Shared with the kernel's deferred-reply inbox for the run.
+    timer: Arc<Timer>,
+    /// Guest memory, for the deferred replies a fire delivers to TLS.
+    mem: &'k AddressSpace,
 }
 
 struct Locked<'k> {
@@ -137,6 +141,8 @@ impl<'k> Shared<'k> {
         if locked.result.is_some() {
             return;
         }
+        let mem = self.mem;
+        locked.kernel.deliver_replies(mem);
         let threads = &mut locked.kernel.threads;
         threads.wake_due(Instant::now());
         if fire == Fire::Quantum {
@@ -215,7 +221,8 @@ pub fn run_cores(kernel: &mut Kernel, mem: &AddressSpace) -> Result<Finish, RunE
 
 /// Like [`run_cores`], but quanta end only when `driver` calls [`Ticker::tick`]. `driver` runs
 /// on the calling thread while the cores run. When it returns or panics, the process stops
-/// ([`Finish::Stopped`]) unless it already finished, so this always returns.
+/// ([`Finish::Stopped`]) unless it already finished, so this always returns. With no timer
+/// thread, deferred IPC replies (T-063) are delivered only by a tick.
 ///
 /// # Errors
 /// As [`run_cores`].
@@ -249,8 +256,11 @@ fn run_on_cores(
         }),
         changed: Condvar::new(),
         interrupt: std::array::from_fn(|_| AtomicBool::new(false)),
-        timer: Timer::new(),
+        timer: Arc::new(Timer::new()),
+        mem,
     };
+    let inbox = Arc::clone(&shared.lock().kernel.deferred.inbox);
+    inbox.set_waker(Some(Arc::clone(&shared.timer)));
     thread::scope(|scope| {
         let mut lent = ledgers.iter_mut();
         for core in 0..CORE_COUNT {
@@ -277,6 +287,7 @@ fn run_on_cores(
         }
         driver(&Ticker { shared: &shared });
     });
+    inbox.set_waker(None);
     let locked = shared.kernel.into_inner();
     locked.kernel.current = None;
     locked.kernel.core_ledgers = ledgers;

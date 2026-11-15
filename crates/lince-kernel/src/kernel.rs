@@ -9,6 +9,7 @@ use lince_common::GuestVa;
 use lince_mem::AddressSpace;
 use lince_trace::{EventKind, NameId, Recorder, ThreadRole, Trace};
 
+use crate::deferred::Deferred;
 use crate::error::{KernelError, Result};
 use crate::handle::{Handles, Object};
 use crate::ipc_svc::{PortFactory, SessionObject};
@@ -106,6 +107,8 @@ pub struct Kernel {
     pub(crate) core_ledgers: Vec<Recorder>,
     /// Coverage mode (T-055): see [`Kernel::set_keep_going`].
     keep_going: bool,
+    /// Deferred replies and the service-I/O thread that builds them (T-063).
+    pub(crate) deferred: Deferred,
 }
 
 impl Kernel {
@@ -131,6 +134,7 @@ impl Kernel {
                 .map(|_| trace.recorder(ThreadRole::GuestCore))
                 .collect(),
             keep_going: false,
+            deferred: Deferred::default(),
         })
     }
 
