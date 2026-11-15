@@ -12,7 +12,7 @@ use lince_trace::{EventKind, NameId, Recorder, ThreadRole, Trace};
 use crate::error::{KernelError, Result};
 use crate::handle::{Handles, Object};
 use crate::ipc_svc::{PortFactory, SessionObject};
-use crate::svc::{self, SvcNumber};
+use crate::svc::{self, NOT_IMPLEMENTED, SvcNumber};
 use crate::thread::{CORE_COUNT, LOWEST_PRIORITY, ThreadParams, Threads};
 
 /// Guest registers `X0`–`X7`: SVC arguments on entry, results on return.
@@ -104,6 +104,8 @@ pub struct Kernel {
     /// One recorder per guest core thread, for the scheduler's ledger events (ADR-0027 B2
     /// scope); [`run_cores`](crate::run_cores) lends core `n` the `n`th.
     pub(crate) core_ledgers: Vec<Recorder>,
+    /// Coverage mode (T-055): see [`Kernel::set_keep_going`].
+    keep_going: bool,
 }
 
 impl Kernel {
@@ -128,6 +130,7 @@ impl Kernel {
             core_ledgers: (0..CORE_COUNT)
                 .map(|_| trace.recorder(ThreadRole::GuestCore))
                 .collect(),
+            keep_going: false,
         })
     }
 
@@ -164,6 +167,10 @@ impl Kernel {
     ) -> Result<Outcome> {
         let Some(entry) = svc::TABLE.get(usize::from(number)).copied().flatten() else {
             self.recorder.once(EventKind::UnknownSvc, u64::from(number));
+            if self.keep_going {
+                regs[0] = u64::from(NOT_IMPLEMENTED);
+                return Ok(Outcome::Resume);
+            }
             return Err(KernelError::UnknownSvc {
                 number: u32::from(number),
             });
@@ -173,6 +180,10 @@ impl Kernel {
                 number: u32::from(number),
                 name: entry.name,
             }),
+            Outcome::UnknownCommand { .. } if self.keep_going => {
+                regs[0] = u64::from(NOT_IMPLEMENTED);
+                Ok(Outcome::Resume)
+            }
             Outcome::UnknownCommand { object, command } => {
                 Err(KernelError::UnknownCommand { object, command })
             }
@@ -213,6 +224,14 @@ impl Kernel {
     /// [`DEFAULT_QUANTUM`]). Call before it.
     pub fn set_quantum(&mut self, quantum: Duration) {
         self.quantum = quantum;
+    }
+
+    /// Coverage mode (T-055): when on, an unknown SVC or IPC command is still recorded once,
+    /// but instead of stopping the guest it returns [`NOT_IMPLEMENTED`] in `W0` and the guest
+    /// continues, so one run reaches every unimplemented call. Off by default. Call before the
+    /// guest runs.
+    pub fn set_keep_going(&mut self, on: bool) {
+        self.keep_going = on;
     }
 
     /// Makes `name` a port programs can connect to; each connection gets a new object from
