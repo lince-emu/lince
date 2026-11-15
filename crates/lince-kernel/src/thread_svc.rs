@@ -97,9 +97,9 @@ pub(crate) fn exit_thread(kernel: &mut Kernel, _: &AddressSpace, _: &mut Regs) -
     Outcome::Reschedule
 }
 
-/// `X0` nanoseconds, no result. 0, -1 and -2 are the three kinds of yield; with one core per
-/// thread and no migration they all send the thread to the back of its core's ready queue,
-/// which happens when the core puts it back.
+/// `X0` nanoseconds, no result. 0, -1 and -2 are the three kinds of yield; with no migration
+/// they all send the thread to the back of its priority's queue (ADR-0032 §5 documents the
+/// deviation for -1 and -2).
 // GUESS: other negative values are treated as a yield too.
 pub(crate) fn sleep_thread(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Regs) -> Outcome {
     let Some(current) = kernel.current else {
@@ -113,6 +113,9 @@ pub(crate) fn sleep_thread(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Reg
         kernel
             .threads
             .set_status(current.index, Status::Sleeping { until });
+    } else {
+        // The core still holds the state; it puts it back under this same lock hold.
+        kernel.threads.make_ready(current.index);
     }
     Outcome::Reschedule
 }
@@ -130,8 +133,8 @@ pub(crate) fn get_thread_priority(
     done(regs, SUCCESS)
 }
 
-/// `W0` handle, `W1` priority (0 to 0x3F); out `W0`. The new priority applies the next time
-/// the thread's core picks.
+/// `W0` handle, `W1` priority (0 to 0x3F); out `W0`. The kernel reselects after the SVC, so
+/// the new priority applies at the affected core's next safe point.
 pub(crate) fn set_thread_priority(
     kernel: &mut Kernel,
     _: &AddressSpace,
@@ -164,8 +167,9 @@ pub(crate) fn get_thread_core_mask(
     done(regs, SUCCESS)
 }
 
-/// `W0` handle, `W1` ideal core, `X2` affinity mask; out `W0`. The thread moves to the new
-/// ideal core once it leaves its current one; a thread that moves itself leaves at once.
+/// `W0` handle, `W1` ideal core, `X2` affinity mask; out `W0`. A running thread leaves its
+/// old core at that core's next safe point and runs on the new one only after (ADR-0032 §4);
+/// a thread that moves itself leaves at once.
 // UNKNOWN: the special core ids (research O3); only an explicit core inside the mask is
 // supported.
 pub(crate) fn set_thread_core_mask(

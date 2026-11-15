@@ -4,9 +4,11 @@
 //! Guest threads and the simple per-core scheduler (ADR-0017 and ADR-0024 B2 scope).
 //!
 //! Every thread belongs to one core, its ideal core, and runs only there: there is no
-//! migration. A core runs the ready thread with the lowest priority value (0 is the highest
-//! priority, research V4); threads of equal priority take turns in the order they became
-//! ready.
+//! migration (ADR-0032 §5). A core runs the runnable thread with the lowest priority value
+//! (0 is the highest priority, research V4); among equal priorities, the one at the front of
+//! the queue. A thread that is preempted keeps its place; one that becomes ready or yields
+//! goes to the back. Only each core's sliced priority rotates, once per quantum (ADR-0032 §1);
+//! every other thread runs until it blocks, yields or a better thread becomes runnable.
 
 use std::time::Instant;
 
@@ -40,6 +42,13 @@ const MAX_THREADS: usize = 256;
 // GUESS: handle values are opaque to the guest. T-052 replaces this with the handle table.
 const FIRST_HANDLE: u32 = 0x1_0000;
 
+/// The priority each core time slices, if any (ADR-0032 §1): 59 on cores 0 to 4 and 63 on
+/// core 5.
+// GUESS: the Switch 1 rule for its last core extended to six cores; not measured on NX2
+// (doc 08 §4).
+pub const DEFAULT_SLICED_PRIORITIES: [Option<u32>; CORE_COUNT] =
+    [Some(59), Some(59), Some(59), Some(59), Some(59), Some(63)];
+
 /// The pseudo-handle naming the calling thread.
 // GUESS: the Switch 1 value; not in docs/research.
 pub const CURRENT_THREAD: u32 = 0xFFFF_8000;
@@ -63,10 +72,10 @@ pub struct ThreadParams {
 pub(crate) enum Status {
     /// Created, not started.
     Created,
-    /// Waiting for its core; `seq` orders threads of equal priority.
-    Ready { seq: u64 },
-    /// On its core; the core holds its state.
-    Running,
+    /// Waiting for its core.
+    Ready,
+    /// On `core`, which holds its state.
+    Running { core: usize },
     /// Ready again at `until`.
     Sleeping { until: Instant },
     /// Exited; it never runs again.
@@ -79,16 +88,29 @@ pub(crate) struct Thread {
     pub(crate) priority: u32,
     pub(crate) core: usize,
     pub(crate) mask: u64,
+    /// Its place in the queue of its priority on its core: lower runs first.
+    seq: u64,
 }
 
 /// Every thread of the process, indexed by handle.
-#[derive(Default)]
 pub(crate) struct Threads {
     list: Vec<Thread>,
     next_seq: u64,
-    /// Set when a thread became ready or changed status, core or priority, so parked cores
-    /// must look again.
+    /// Set when a thread became ready or changed status, core or priority, so the kernel must
+    /// reselect.
     changed: bool,
+    sliced: [Option<u32>; CORE_COUNT],
+}
+
+impl Default for Threads {
+    fn default() -> Self {
+        Self {
+            list: Vec::new(),
+            next_seq: 0,
+            changed: false,
+            sliced: DEFAULT_SLICED_PRIORITIES,
+        }
+    }
 }
 
 impl Threads {
@@ -115,7 +137,11 @@ impl Threads {
         self.list[index].status = status;
     }
 
-    /// Whether a parked core may have work since the last call.
+    pub(crate) fn set_sliced(&mut self, sliced: [Option<u32>; CORE_COUNT]) {
+        self.sliced = sliced;
+    }
+
+    /// Whether the selection may have changed since the last call.
     pub(crate) fn take_changed(&mut self) -> bool {
         std::mem::take(&mut self.changed)
     }
@@ -146,43 +172,84 @@ impl Threads {
             priority: params.priority,
             core: params.core,
             mask: 1 << params.core,
+            seq: 0,
         });
         Some(handle)
     }
 
-    /// Puts thread `index` at the back of its core's ready queue.
+    /// Puts thread `index` at the back of its priority's queue, ready.
     pub(crate) fn make_ready(&mut self, index: usize) {
-        self.list[index].status = Status::Ready { seq: self.next_seq };
+        let thread = &mut self.list[index];
+        thread.status = Status::Ready;
+        thread.seq = self.next_seq;
         self.next_seq += 1;
         self.changed = true;
     }
 
-    /// Wakes the sleepers of `core` whose time has come, then takes the next thread for
-    /// `core` out of the ready queue, marks it running and returns its index and state.
-    pub(crate) fn pick(&mut self, core: usize, now: Instant) -> Option<(usize, State)> {
+    /// Makes ready every sleeper whose time has come.
+    pub(crate) fn wake_due(&mut self, now: Instant) {
         for index in 0..self.list.len() {
-            let thread = &self.list[index];
-            if thread.core == core
-                && matches!(thread.status, Status::Sleeping { until } if until <= now)
-            {
+            if matches!(self.list[index].status, Status::Sleeping { until } if until <= now) {
                 self.make_ready(index);
             }
         }
-        let index = self
-            .list
+    }
+
+    /// Sends the front thread of `core`'s sliced priority, running or not, to the back of its
+    /// queue (one quantum ended).
+    pub(crate) fn rotate(&mut self, core: usize) {
+        let Some(priority) = self.sliced[core] else {
+            return;
+        };
+        let front = self
+            .runnable(core)
+            .filter(|(_, thread)| thread.priority == priority)
+            .min_by_key(|(index, thread)| (thread.seq, *index))
+            .map(|(index, _)| index);
+        if let Some(index) = front {
+            self.list[index].seq = self.next_seq;
+            self.next_seq += 1;
+            self.changed = true;
+        }
+    }
+
+    /// The ready and running threads whose core is `core`.
+    fn runnable(&self, core: usize) -> impl Iterator<Item = (usize, &Thread)> {
+        self.list.iter().enumerate().filter(move |(_, thread)| {
+            thread.core == core && matches!(thread.status, Status::Ready | Status::Running { .. })
+        })
+    }
+
+    /// The thread `core` should run: the best runnable thread whose core is `core`. It may
+    /// still be running on another core, which gives it back at its next safe point.
+    fn select(&self, core: usize) -> Option<usize> {
+        self.runnable(core)
+            .min_by_key(|(index, thread)| (thread.priority, thread.seq, *index))
+            .map(|(index, _)| index)
+    }
+
+    /// The thread running on `core`.
+    fn running_on(&self, core: usize) -> Option<usize> {
+        self.list
             .iter()
-            .enumerate()
-            .filter(|(_, thread)| thread.core == core)
-            .filter_map(|(index, thread)| match thread.status {
-                Status::Ready { seq } => Some((thread.priority, seq, index)),
-                Status::Created | Status::Running | Status::Sleeping { .. } | Status::Exited => {
-                    None
-                }
-            })
-            .min()?
-            .2;
+            .position(|thread| thread.status == Status::Running { core })
+    }
+
+    /// Whether `core` runs a thread other than the one it should run.
+    pub(crate) fn needs_switch(&self, core: usize) -> bool {
+        self.running_on(core)
+            .is_some_and(|running| self.select(core) != Some(running))
+    }
+
+    /// Takes the thread `core` should run, if it is ready: marks it running on `core` and
+    /// returns its index and state.
+    pub(crate) fn take(&mut self, core: usize) -> Option<(usize, State)> {
+        let index = self.select(core)?;
         let thread = &mut self.list[index];
-        thread.status = Status::Running;
+        if thread.status != Status::Ready {
+            return None;
+        }
+        thread.status = Status::Running { core };
         Some((index, std::mem::take(&mut thread.state)))
     }
 
@@ -193,17 +260,26 @@ impl Threads {
             .filter(|thread| thread.core == core)
             .filter_map(|thread| match thread.status {
                 Status::Sleeping { until } => Some(until),
-                Status::Created | Status::Ready { .. } | Status::Running | Status::Exited => None,
+                Status::Created | Status::Ready | Status::Running { .. } | Status::Exited => None,
             })
             .min()
     }
 
-    /// Gives back the state of running thread `index` after it left its core. A thread whose
-    /// SVC did not change its status goes to the back of the ready queue.
+    /// The earliest time any sleeper wakes.
+    pub(crate) fn next_wake_any(&self) -> Option<Instant> {
+        (0..CORE_COUNT)
+            .filter_map(|core| self.next_wake(core))
+            .min()
+    }
+
+    /// Gives back the state of thread `index` after it left its core. A thread whose SVC did
+    /// not change its status is ready again and keeps its place in the queue.
     pub(crate) fn put_back(&mut self, index: usize, state: State) {
-        self.list[index].state = state;
-        if self.list[index].status == Status::Running {
-            self.make_ready(index);
+        let thread = &mut self.list[index];
+        thread.state = state;
+        if matches!(thread.status, Status::Running { .. }) {
+            thread.status = Status::Ready;
+            self.changed = true;
         }
     }
 

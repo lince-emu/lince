@@ -137,6 +137,7 @@ fn run_to_exit(state: &mut State, mem: &mut AddressSpace) -> BenchResult<CopyRun
             }
             other @ (Exit::Svc { .. }
             | Exit::Limit
+            | Exit::Interrupted
             | Exit::Undefined { .. }
             | Exit::Unimplemented { .. }
             | Exit::FetchAbort { .. }

@@ -49,6 +49,7 @@ fn run_program(name: &str) -> Vec<String> {
             } => return printed,
             other @ (Exit::Svc { .. }
             | Exit::Limit
+            | Exit::Interrupted
             | Exit::Undefined { .. }
             | Exit::Unimplemented { .. }
             | Exit::FetchAbort { .. }

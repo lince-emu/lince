@@ -119,6 +119,11 @@ public:
       : host_(view.host_base, view.host_size), regions_(view.regions, view.region_count),
         callbacks_(view.callbacks) {}
 
+  // Whether the caller asked for the core back (lca_callbacks::interrupted).
+  [[nodiscard]] bool interrupted() const {
+    return callbacks_.interrupted != nullptr && callbacks_.interrupted(callbacks_.context) != 0;
+  }
+
   // Inline accesses are plain copies: no single-copy atomicity or ordering, which only a
   // single core running per lca_run call allows. Revisit when several cores share memory.
   //

@@ -125,3 +125,44 @@ fn a_full_duplicate_set_counts_new_names_as_dropped() {
     assert_eq!(drained.records, []);
     assert_eq!(drained.dropped, 1);
 }
+
+#[test]
+fn plain_records_keep_every_event_in_order() {
+    let mut trace = Trace::new(8);
+    let mut recorder = trace.recorder(ThreadRole::GuestCore);
+    for ns in [30, 10, 30] {
+        assert!(recorder.record(EventKind::KernelLockHeld, ns));
+    }
+    assert!(recorder.record(EventKind::PreemptLatency, 5));
+
+    let drained = trace.drain();
+
+    let events: Vec<_> = drained
+        .records
+        .iter()
+        .map(|record| (record.role, record.event.kind, record.event.arg))
+        .collect();
+    assert_eq!(
+        events,
+        [
+            (ThreadRole::GuestCore, EventKind::KernelLockHeld, 30),
+            (ThreadRole::GuestCore, EventKind::KernelLockHeld, 10),
+            (ThreadRole::GuestCore, EventKind::KernelLockHeld, 30),
+            (ThreadRole::GuestCore, EventKind::PreemptLatency, 5),
+        ]
+    );
+    assert_eq!(drained.dropped, 0);
+}
+
+#[test]
+fn plain_records_past_capacity_are_counted_as_dropped() {
+    let mut trace = Trace::new(2);
+    let mut recorder = trace.recorder(ThreadRole::GuestCore);
+    let accepted: Vec<_> = (0..3)
+        .map(|ns| recorder.record(EventKind::KernelLockHeld, ns))
+        .collect();
+
+    assert_eq!(accepted, [true, true, false]);
+    let drained = trace.drain();
+    assert_eq!((drained.records.len(), drained.dropped), (2, 1));
+}

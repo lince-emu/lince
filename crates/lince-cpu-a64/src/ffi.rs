@@ -12,13 +12,14 @@ mod bindings;
 
 use std::ffi::c_void;
 use std::num::NonZeroU16;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 use bindings::{
-    LCA_EXIT_DATA_ABORT, LCA_EXIT_FETCH_ABORT, LCA_EXIT_LIMIT, LCA_EXIT_PC_MISALIGNED,
-    LCA_EXIT_SVC, LCA_EXIT_UNDEFINED, LCA_EXIT_UNIMPLEMENTED, LCA_INSN_NAME_MAX, LCA_INSN_UNKNOWN,
-    LCA_NULL_ARGUMENT, LCA_OK, LCA_PERM_EXECUTE, LCA_PERM_READ, LCA_PERM_WRITE, lca_callbacks,
-    lca_exclusive, lca_exit, lca_insn, lca_memory, lca_region, lca_state,
+    LCA_EXIT_DATA_ABORT, LCA_EXIT_FETCH_ABORT, LCA_EXIT_INTERRUPTED, LCA_EXIT_LIMIT,
+    LCA_EXIT_PC_MISALIGNED, LCA_EXIT_SVC, LCA_EXIT_UNDEFINED, LCA_EXIT_UNIMPLEMENTED,
+    LCA_INSN_NAME_MAX, LCA_INSN_UNKNOWN, LCA_NULL_ARGUMENT, LCA_OK, LCA_PERM_EXECUTE,
+    LCA_PERM_READ, LCA_PERM_WRITE, lca_callbacks, lca_exclusive, lca_exit, lca_insn, lca_memory,
+    lca_region, lca_state,
 };
 use lince_common::GuestVa;
 use lince_mem::{AddressSpace, Permission, SpaceView};
@@ -36,6 +37,7 @@ pub(crate) const EXIT_UNIMPLEMENTED: u32 = LCA_EXIT_UNIMPLEMENTED;
 pub(crate) const EXIT_FETCH_ABORT: u32 = LCA_EXIT_FETCH_ABORT;
 pub(crate) const EXIT_PC_MISALIGNED: u32 = LCA_EXIT_PC_MISALIGNED;
 pub(crate) const EXIT_DATA_ABORT: u32 = LCA_EXIT_DATA_ABORT;
+pub(crate) const EXIT_INTERRUPTED: u32 = LCA_EXIT_INTERRUPTED;
 /// The `detail` of a data abort on a write.
 pub(crate) const ACCESS_WRITE: u32 = LCA_PERM_WRITE;
 
@@ -71,18 +73,36 @@ pub(crate) fn insn_name(insn: lca_insn) -> String {
 /// bss, stack); the kernel's region count grows with later milestones.
 pub(crate) const MAX_REGIONS: usize = 64;
 
+/// What the callbacks of one `lca_run` call reach through `lca_callbacks::context`.
+struct Context<'v, 'a> {
+    memory: SpaceView<'v>,
+    interrupt: Option<&'a AtomicBool>,
+}
+
+/// The safe-point poll (`lca_callbacks::interrupted`): nonzero once the caller's flag is set.
+unsafe extern "C" fn interrupted(context: *mut c_void) -> i32 {
+    // SAFETY: `context` is the `Context` that `run` holds for the whole `lca_run` call; C++
+    // calls this only during that call, on the same thread.
+    let context = unsafe { &*context.cast::<Context<'_, '_>>() };
+    i32::from(
+        context
+            .interrupt
+            .is_some_and(|flag| flag.load(Ordering::Acquire)),
+    )
+}
+
 /// The slow-path read (`lca_callbacks::read`): `lince-mem` checks that every byte is mapped
 /// and readable.
 unsafe extern "C" fn slow_read(context: *mut c_void, va: u64, out: *mut u8, size: u64) -> i32 {
     let Ok(size) = usize::try_from(size) else {
         return 1;
     };
-    // SAFETY: `context` is the `SpaceView` that `run` holds for the whole `lca_run` call; C++
+    // SAFETY: `context` is the `Context` (and its `SpaceView`) that `run` holds for the whole `lca_run` call; C++
     // calls this only during that call, on the same thread. `out` holds `size` writable bytes
     // that C++ owns and does not otherwise access during the call.
     let (memory, buf) = unsafe {
         (
-            &*context.cast::<SpaceView<'_>>(),
+            &(*context.cast::<Context<'_, '_>>()).memory,
             std::slice::from_raw_parts_mut(out, size),
         )
     };
@@ -99,7 +119,7 @@ unsafe extern "C" fn slow_write(context: *mut c_void, va: u64, data: *const u8, 
     // during the call.
     let (memory, data) = unsafe {
         (
-            &*context.cast::<SpaceView<'_>>(),
+            &(*context.cast::<Context<'_, '_>>()).memory,
             std::slice::from_raw_parts(data, size),
         )
     };
@@ -117,7 +137,7 @@ unsafe extern "C" fn compare_exchange(
     stored: *mut u32,
 ) -> i32 {
     // SAFETY: as in `slow_read`. `stored` points to a u32 that C++ owns for the call.
-    let (memory, stored) = unsafe { (&*context.cast::<SpaceView<'_>>(), &mut *stored) };
+    let (memory, stored) = unsafe { (&(*context.cast::<Context<'_, '_>>()).memory, &mut *stored) };
     let writable = memory.query(GuestVa::new(va)).is_some_and(|span| {
         span.permission
             .is_some_and(|p| p.contains(Permission::WRITE))
@@ -195,6 +215,7 @@ pub(crate) fn run(
     state: &mut State,
     memory: &AddressSpace,
     limit: u64,
+    interrupt: Option<&AtomicBool>,
 ) -> Result<lca_exit, CpuError> {
     // Held until `lca_run` returns: no region is mapped, unmapped or reprotected meanwhile.
     let memory = memory.view();
@@ -224,7 +245,8 @@ pub(crate) fn run(
     let host_size = memory.size();
     // From here until `lca_run` returns, this thread reaches the space only through this
     // pointer (by the slow-path callbacks) and through `host_base`.
-    let context: *const SpaceView<'_> = &raw const memory;
+    let context = Context { memory, interrupt };
+    let context: *const Context<'_, '_> = &raw const context;
     let view = lca_memory {
         host_base,
         host_size,
@@ -237,6 +259,7 @@ pub(crate) fn run(
             read: Some(slow_read),
             write: Some(slow_write),
             compare_exchange: Some(compare_exchange),
+            interrupted: Some(interrupted),
         },
     };
     let mut raw = lca_state {
@@ -261,8 +284,8 @@ pub(crate) fn run(
     // entries of `regions` list exactly the mapped regions, each committed at
     // `host_base + base` while the view lives (the `SpaceView::host_base` contract), and C++
     // accesses no other address inline: every other data access goes through the callbacks,
-    // which take no lock and do not change the mappings. `context` points to that view, which
-    // lives until after the call.
+    // which take no lock and do not change the mappings. `context` points to the `Context` that
+    // holds that view and the borrowed flag; both live until after the call.
     let status = unsafe { bindings::lca_run(&raw mut raw, &raw const view, limit, &raw mut exit) };
     match status {
         LCA_OK => {}

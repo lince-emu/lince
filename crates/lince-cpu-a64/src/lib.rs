@@ -19,7 +19,8 @@
 //! Decoding is a pure function of the instruction word: no allocation, locks or I/O, callable
 //! from any thread, including guest cores. [`run`] executes on the calling thread (a guest
 //! core) and blocks only for as long as the guest instructions it runs; it does not allocate
-//! and performs no I/O.
+//! and performs no I/O. [`run_interruptible`] also returns at the first safe point after
+//! another thread sets its flag, so the kernel can take the core back (ADR-0032).
 //!
 //! # References
 //! ADR-0004 · ADR-0005 · ADR-0030 · ADR-0031 · docs/04-rust-architecture.md §2
@@ -31,4 +32,4 @@ mod interp;
 
 pub use decode::{Insn, decode};
 pub use error::CpuError;
-pub use interp::{Exclusive, Exit, Run, State, run};
+pub use interp::{Exclusive, Exit, Run, State, run, run_interruptible};

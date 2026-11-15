@@ -11,8 +11,10 @@
 //! docs/research/nro-and-b1-svcs.md (Switch 1 knowledge; Switch 2 values are UNKNOWN).
 //!
 //! B2 scope adds guest threads (T-051): [`run_cores`] runs them on six host core threads with
-//! a simple per-core priority scheduler, and the thread SVCs create, start, end, put to sleep,
+//! a per-core priority scheduler, and the thread SVCs create, start, end, put to sleep,
 //! reprioritize and move them. Each thread has a TLS block that `TPIDRRO_EL0` points to.
+//! Preemption follows ADR-0032: only each core's sliced priority rotates, and a selection
+//! change interrupts the affected core at its next block boundary.
 //!
 //! # Threads
 //! Dispatch runs on the guest core that executed the `SVC` instruction, under the kernel lock.
@@ -32,8 +34,11 @@ mod svc;
 mod thread;
 mod thread_svc;
 
-pub use cores::{Finish, run_cores};
+pub use cores::{Finish, Ticker, run_cores, run_cores_with};
 pub use error::{KernelError, Result, RunError};
-pub use kernel::{Flow, HEAP_BASE, Kernel, Regs};
+pub use kernel::{DEFAULT_QUANTUM, Flow, HEAP_BASE, Kernel, Regs};
 pub use svc::{ResultCode, SvcNumber, svc_name};
-pub use thread::{CORE_COUNT, CURRENT_THREAD, LOWEST_PRIORITY, TLS_BASE, TLS_SIZE, ThreadParams};
+pub use thread::{
+    CORE_COUNT, CURRENT_THREAD, DEFAULT_SLICED_PRIORITIES, LOWEST_PRIORITY, TLS_BASE, TLS_SIZE,
+    ThreadParams,
+};

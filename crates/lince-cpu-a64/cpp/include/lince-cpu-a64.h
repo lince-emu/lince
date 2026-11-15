@@ -67,12 +67,18 @@ typedef struct lca_region {
 // replaces the `size` bytes at `va` with `desired` if they equal `expected`, sets `*stored` to 1
 // if it did and 0 if not, and returns 0; it returns nonzero and changes nothing when the bytes
 // are not mapped writable.
+//
+// `interrupted` is polled at every safe point: before the first instruction and after every
+// instruction that set pc (a taken branch, the end of a block). It returns nonzero when the
+// caller wants the core back, and lca_run then exits with LCA_EXIT_INTERRUPTED. A null
+// function pointer means the call is never interrupted (ADR-0032 §2).
 typedef struct lca_callbacks {
   void *context;
   int32_t (*read)(void *context, uint64_t va, uint8_t *out, uint64_t size);
   int32_t (*write)(void *context, uint64_t va, const uint8_t *data, uint64_t size);
   int32_t (*compare_exchange)(void *context, uint64_t va, uint64_t size, uint64_t expected,
                               uint64_t desired, uint32_t *stored);
+  int32_t (*interrupted)(void *context);
 } lca_callbacks;
 
 // Guest memory for one lca_run call (ADR-0031: accessed inline through the host base). Guest
@@ -132,6 +138,8 @@ static const lca_exit_reason LCA_EXIT_PC_MISALIGNED = 6;
 // aligned to its size: `address` is the guest address accessed, `detail` is LCA_PERM_READ or
 // LCA_PERM_WRITE; pc is unchanged and the instruction changed nothing.
 static const lca_exit_reason LCA_EXIT_DATA_ABORT = 7;
+// `interrupted` returned nonzero at a safe point: pc is the next instruction to run.
+static const lca_exit_reason LCA_EXIT_INTERRUPTED = 8;
 
 typedef struct lca_exit {
   lca_exit_reason reason;
