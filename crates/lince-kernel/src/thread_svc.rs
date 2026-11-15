@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use lince_common::GuestVa;
 use lince_mem::AddressSpace;
 
+use crate::handle::Object;
 use crate::kernel::{Kernel, Outcome, Regs};
 use crate::svc::{OUT_OF_RESOURCE, SUCCESS, done};
 use crate::thread::{CORE_COUNT, CURRENT_THREAD, LOWEST_PRIORITY, Status, ThreadParams};
@@ -34,9 +35,11 @@ fn w(reg: u64) -> u32 {
 fn resolve(kernel: &Kernel, handle: u32) -> Option<usize> {
     let current = kernel.current?;
     if handle == CURRENT_THREAD {
-        Some(current.index)
-    } else {
-        kernel.threads.index(handle)
+        return Some(current.index);
+    }
+    match kernel.handles.get(handle)? {
+        Object::Thread(index) => Some(index),
+        Object::ReadableEvent(_) | Object::WritableEvent(_) => None,
     }
 }
 
@@ -67,8 +70,16 @@ pub(crate) fn create_thread(kernel: &mut Kernel, mem: &AddressSpace, regs: &mut 
         priority,
         core,
     };
-    // GUESS: running out of TLS space is a resource limit; the code is Switch 1's generic one.
-    let Some(handle) = kernel.threads.create(mem, params) else {
+    // GUESS: running out of threads, TLS space or handles is a resource limit; the code is
+    // Switch 1's generic one. The handle is checked first, so no thread is left without one.
+    if !kernel.handles.has_room() {
+        return done(regs, OUT_OF_RESOURCE);
+    }
+    let Some(handle) = kernel
+        .threads
+        .create(mem, params)
+        .and_then(|index| kernel.handles.open(Object::Thread(index)))
+    else {
         return done(regs, OUT_OF_RESOURCE);
     };
     regs[1] = u64::from(handle);

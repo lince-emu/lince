@@ -13,6 +13,8 @@
 //! B2 scope adds guest threads (T-051): [`run_cores`] runs them on six host core threads with
 //! a per-core priority scheduler, and the thread SVCs create, start, end, put to sleep,
 //! reprioritize and move them. Each thread has a TLS block that `TPIDRRO_EL0` points to.
+//! A per-process handle table names threads and events (T-052); events are created, signaled,
+//! cleared and reset through their SVCs, and `CloseHandle` closes any handle.
 //! Preemption follows ADR-0032: only each core's sliced priority rotates, and a selection
 //! change interrupts the affected core at its next block boundary.
 //!
@@ -20,8 +22,9 @@
 //! Dispatch runs on the guest core that executed the `SVC` instruction, under the kernel lock.
 //! [`run_cores`] owns the six core threads (ADR-0017 B2 scope) and joins them before it
 //! returns; the crate creates no other thread.
-//! It allocates only for the debug-output buffer and the heap bookkeeping, performs no I/O and
-//! records unknown SVCs with the non-blocking `lince-trace` recorder.
+//! It allocates only for the debug-output buffer, the heap bookkeeping and the bounded thread,
+//! handle and event tables, performs no I/O and records unknown SVCs with the non-blocking
+//! `lince-trace` recorder.
 //!
 //! # References
 //! ADR-0024 · ADR-0027 · docs/research/nro-and-b1-svcs.md · docs/conventions/patterns.md PAT-01
@@ -29,6 +32,8 @@
 
 mod cores;
 mod error;
+mod event_svc;
+mod handle;
 #[cfg(all(test, loom))]
 mod handoff_loom;
 mod kernel;

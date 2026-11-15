@@ -10,7 +10,7 @@ use lince_common::GuestVa;
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission};
 
 use crate::kernel::{Entry, HEAP_BASE, Handler, Kernel, Outcome, Regs};
-use crate::thread_svc;
+use crate::{event_svc, thread_svc};
 
 /// An SVC number: the immediate of the `SVC` instruction.
 pub type SvcNumber = u8;
@@ -80,7 +80,12 @@ const fn build_table() -> [Option<Entry>; 256] {
         "GetCurrentProcessorNumber",
         thread_svc::get_current_processor_number,
     ));
+    table[0x11] = Some(entry("SignalEvent", event_svc::signal_event));
+    table[0x12] = Some(entry("ClearEvent", event_svc::clear_event));
+    table[0x16] = Some(entry("CloseHandle", event_svc::close_handle));
+    table[0x17] = Some(entry("ResetSignal", event_svc::reset_signal));
     table[BREAK as usize] = Some(entry(BREAK_NAME, break_));
+    table[0x45] = Some(entry("CreateEvent", event_svc::create_event));
     table[OUTPUT_DEBUG_STRING as usize] = Some(entry("OutputDebugString", output_debug_string));
     // 0x80..=0x8F are reserved for Switch 2 (ADR-0024); only 0x80 has a name so far.
     table[SET_GPU_MEMORY_ATTRIBUTE as usize] =

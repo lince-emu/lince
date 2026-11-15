@@ -10,6 +10,7 @@ use lince_mem::AddressSpace;
 use lince_trace::{EventKind, NameId, Recorder, ThreadRole, Trace};
 
 use crate::error::{KernelError, Result};
+use crate::handle::{Handles, Object};
 use crate::svc::{self, SvcNumber};
 use crate::thread::{CORE_COUNT, LOWEST_PRIORITY, ThreadParams, Threads};
 
@@ -78,6 +79,9 @@ pub struct Kernel {
     pub(crate) heap_chunks: Vec<u64>,
     pub(crate) debug_output: Vec<u8>,
     pub(crate) threads: Threads,
+    pub(crate) handles: Handles,
+    /// Whether each event is signaled, by event index; events are never freed (B2).
+    pub(crate) events: Vec<bool>,
     /// Set by a core thread while it dispatches; `None` on the single-thread B1 path, where
     /// the thread SVCs are unsupported.
     pub(crate) current: Option<Current>,
@@ -99,6 +103,8 @@ impl Kernel {
             heap_chunks: Vec::new(),
             debug_output: Vec::new(),
             threads: Threads::default(),
+            handles: Handles::default(),
+            events: Vec::new(),
             current: None,
             quantum: DEFAULT_QUANTUM,
             core_ledgers: (0..CORE_COUNT)
@@ -163,8 +169,11 @@ impl Kernel {
         if params.priority > LOWEST_PRIORITY || params.core >= CORE_COUNT {
             return Err(bad);
         }
-        let handle = self.threads.create(mem, params).ok_or(bad)?;
-        let index = self.threads.index(handle).ok_or(bad)?;
+        if !self.handles.has_room() {
+            return Err(bad);
+        }
+        let index = self.threads.create(mem, params).ok_or(bad)?;
+        let handle = self.handles.open(Object::Thread(index)).ok_or(bad)?;
         self.threads.make_ready(index);
         Ok(handle)
     }

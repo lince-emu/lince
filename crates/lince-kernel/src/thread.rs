@@ -34,13 +34,9 @@ pub const TLS_SIZE: u64 = 0x200;
 /// Most threads a process may create over its life, so a guest cannot grow host memory
 /// without bound.
 // GUESS: Horizon's limit comes from the process's resource limit, which B2 does not model.
-// Known B2 limitation: exited threads keep their entry and TLS block (their handles stay
-// valid until T-052's CloseHandle), so the limit counts creations, not live threads.
+// Known B2 limitation: exited threads keep their entry and TLS block, so the limit counts
+// creations, not live threads.
 const MAX_THREADS: usize = 256;
-
-/// The handle value of the first thread; later threads count up from it.
-// GUESS: handle values are opaque to the guest. T-052 replaces this with the handle table.
-const FIRST_HANDLE: u32 = 0x1_0000;
 
 /// The priority each core time slices, if any (ADR-0032 §1): 59 on cores 0 to 4 and 63 on
 /// core 5.
@@ -114,11 +110,6 @@ impl Default for Threads {
 }
 
 impl Threads {
-    pub(crate) fn index(&self, handle: u32) -> Option<usize> {
-        let index = usize::try_from(handle.checked_sub(FIRST_HANDLE)?).ok()?;
-        (index < self.list.len()).then_some(index)
-    }
-
     pub(crate) fn thread(&self, index: usize) -> &Thread {
         &self.list[index]
     }
@@ -149,8 +140,8 @@ impl Threads {
     }
 
     /// Creates a thread in the `Created` state, with its TLS block mapped and zeroed, and
-    /// returns its handle; `None` past the thread limit or if the TLS block cannot be mapped.
-    pub(crate) fn create(&mut self, mem: &AddressSpace, params: ThreadParams) -> Option<u32> {
+    /// returns its index; `None` past the thread limit or if the TLS block cannot be mapped.
+    pub(crate) fn create(&mut self, mem: &AddressSpace, params: ThreadParams) -> Option<usize> {
         if self.list.len() >= MAX_THREADS {
             return None;
         }
@@ -160,14 +151,13 @@ impl Threads {
             mem.map(tls, GUEST_PAGE_SIZE, Permission::READ | Permission::WRITE)
                 .ok()?;
         }
-        self.insert(tls, params)
+        Some(self.insert(tls, params))
     }
 
     /// Adds a thread in the `Created` state whose TLS block at `tls` is already mapped, and
-    /// returns its handle.
-    pub(crate) fn insert(&mut self, tls: GuestVa, params: ThreadParams) -> Option<u32> {
+    /// returns its index.
+    pub(crate) fn insert(&mut self, tls: GuestVa, params: ThreadParams) -> usize {
         let index = self.list.len();
-        let handle = FIRST_HANDLE.checked_add(u32::try_from(index).ok()?)?;
         let mut state = State {
             pc: params.entry.get(),
             sp: params.stack_top,
@@ -183,7 +173,7 @@ impl Threads {
             mask: 1 << params.core,
             seq: 0,
         });
-        Some(handle)
+        index
     }
 
     /// Puts thread `index` at the back of its priority's queue, ready.
