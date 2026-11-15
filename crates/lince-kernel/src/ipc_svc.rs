@@ -91,6 +91,9 @@ impl Sessions for Kernel {
         } else {
             self.sessions[index] = Some(object);
         }
+        if self.running_session.is_some() {
+            self.opened_during_request.push(handle);
+        }
         Some(handle)
     }
 }
@@ -162,23 +165,38 @@ pub(crate) fn send_sync_request(
     let (name, trace_name) = (object.name(), object.trace_name());
     kernel.sessions[session] = Some(object);
     if let Err(unknown) = handled {
+        close_opened(kernel);
         kernel.log_unknown_command(trace_name, unknown.command);
         return Outcome::UnknownCommand {
             object: name,
             command: unknown.command,
         };
     }
-    // Known B2 limitation: if the reply cannot be written (the TLS block was just read, so only
-    // a concurrent unmap fails here), sessions the object opened stay open without the guest
-    // learning their handles.
+    // The TLS block was just read, so only a concurrent unmap fails here.
     if mem.write_bytes(tls, &message).is_err() {
+        close_opened(kernel);
         return done(regs, INVALID_POINTER);
     }
+    kernel.opened_during_request.clear();
     done(regs, SUCCESS)
+}
+
+/// Closes the sessions the object opened during a request whose reply the guest never got,
+/// so no handle or session slot is left behind that the guest cannot name.
+fn close_opened(kernel: &mut Kernel) {
+    let mut opened = std::mem::take(&mut kernel.opened_during_request);
+    for handle in opened.drain(..) {
+        if let Some(Object::Session(index)) = kernel.handles.close(handle) {
+            kernel.sessions[index] = None;
+        }
+    }
+    kernel.opened_during_request = opened;
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use lince_common::GuestVa;
     use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
     use lince_trace::{NameId, Trace};
@@ -229,10 +247,41 @@ mod tests {
         }
     }
 
+    /// Opens an echo session, then fails: with `unmap`, its reply cannot be written back
+    /// because it unmaps the caller's TLS; without, it reports an unknown command.
+    struct Opener {
+        name: NameId,
+        mem: Arc<AddressSpace>,
+        unmap: bool,
+    }
+
+    impl SessionObject for Opener {
+        fn name(&self) -> &'static str {
+            "opener"
+        }
+
+        fn trace_name(&self) -> NameId {
+            self.name
+        }
+
+        fn handle_request(
+            &mut self,
+            sessions: &mut dyn Sessions,
+            _: &mut IpcMessage,
+        ) -> Result<(), UnknownCommand> {
+            sessions.open_session(Box::new(Echo(self.name, 1)));
+            if !self.unmap {
+                return Err(UnknownCommand { command: 0 });
+            }
+            self.mem.unmap(TLS_BASE, GUEST_PAGE_SIZE).unwrap();
+            Ok(())
+        }
+    }
+
     struct Fixture {
         trace: Trace,
         kernel: Kernel,
-        mem: AddressSpace,
+        mem: Arc<AddressSpace>,
     }
 
     impl Fixture {
@@ -241,7 +290,7 @@ mod tests {
             let mut kernel = Kernel::new(&mut trace).unwrap();
             let echo = trace.name("echo").unwrap();
             kernel.register_named_port("echo", Box::new(move || Box::new(Echo(echo, 1))));
-            let mem = AddressSpace::new(SpaceConfig::for_host()).unwrap();
+            let mem = Arc::new(AddressSpace::new(SpaceConfig::for_host()).unwrap());
             mem.map(
                 GuestVa::new(NAME_AT),
                 GUEST_PAGE_SIZE,
@@ -324,6 +373,41 @@ mod tests {
             "closing one keeps the other"
         );
         assert_eq!(f.message()[0], 12);
+    }
+
+    fn live_sessions(f: &Fixture) -> usize {
+        f.kernel.sessions.iter().filter(|s| s.is_some()).count()
+    }
+
+    #[test]
+    fn sessions_opened_by_a_request_that_fails_are_closed_again() {
+        for unmap in [false, true] {
+            let mut f = Fixture::new();
+            let (name, mem) = (f.trace.name("opener").unwrap(), Arc::clone(&f.mem));
+            f.kernel.register_named_port(
+                "opener",
+                Box::new(move || {
+                    Box::new(Opener {
+                        name,
+                        mem: Arc::clone(&mem),
+                        unmap,
+                    })
+                }),
+            );
+            let session = f.connect(b"opener\0")[1];
+            let result = f.svc(SEND, session, 0);
+            if unmap {
+                assert_eq!(result.unwrap()[0], 0xE601, "the reply could not be written");
+            } else {
+                assert!(matches!(result, Err(KernelError::UnknownCommand { .. })));
+            }
+            assert_eq!(
+                live_sessions(&f),
+                1,
+                "only the opener's own session is left"
+            );
+            assert_eq!(f.kernel.opened_during_request, [0u32; 0]);
+        }
     }
 
     #[test]

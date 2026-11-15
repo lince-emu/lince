@@ -90,6 +90,10 @@ pub struct Kernel {
     /// The session whose object is handling a request; its slot is empty while the object runs
     /// but stays reserved, so a session the object opens never lands in it.
     pub(crate) running_session: Option<usize>,
+    /// Handles of the sessions the running object opened during its request; closed again if
+    /// the request fails, since the guest never learns them. Kept between requests so its
+    /// capacity is reused.
+    pub(crate) opened_during_request: Vec<u32>,
     /// Named ports a program connects to with `ConnectToNamedPort`.
     pub(crate) named_ports: Vec<(&'static str, PortFactory)>,
     /// Set by a core thread while it dispatches; `None` on the single-thread B1 path, where
@@ -117,6 +121,7 @@ impl Kernel {
             events: Vec::new(),
             sessions: Vec::new(),
             running_session: None,
+            opened_during_request: Vec::new(),
             named_ports: Vec::new(),
             current: None,
             quantum: DEFAULT_QUANTUM,
