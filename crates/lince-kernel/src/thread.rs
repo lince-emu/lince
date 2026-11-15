@@ -265,6 +265,13 @@ impl Threads {
             .min()
     }
 
+    /// The earliest time any sleeper wakes.
+    pub(crate) fn next_wake_any(&self) -> Option<Instant> {
+        (0..CORE_COUNT)
+            .filter_map(|core| self.next_wake(core))
+            .min()
+    }
+
     /// Gives back the state of thread `index` after it left its core. A thread whose SVC did
     /// not change its status is ready again and keeps its place in the queue.
     pub(crate) fn put_back(&mut self, index: usize, state: State) {

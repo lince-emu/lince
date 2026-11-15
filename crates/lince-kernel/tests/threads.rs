@@ -609,13 +609,17 @@ fn a_sliced_pair_alternates_on_every_tick() {
     let top = b.here();
     b.str(10, 9, 0).b_back(top);
     let mut main = Asm::default();
-    main.spawn(function(1), DATA, 59, 1)
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, 59, 1)
         .spawn(function(2), DATA, 59, 1)
+        .mov(10, 1)
+        .str(10, 9, 8)
         .svc(EXIT_THREAD);
     let mut turns = Vec::new();
 
     let (_, result) = run_ticked(&[&main, &a, &b], |mem, ticker| {
-        let mut ok = wait_for(ticker, || data(mem, 0) == 0xA);
+        // Both threads exist before the first tick, or it would rotate a lone thread.
+        let mut ok = wait_for(ticker, || data(mem, 8) == 1 && data(mem, 0) == 0xA);
         turns.push(data(mem, 0));
         for _ in 0..4 {
             let before = data(mem, 0);
@@ -709,4 +713,67 @@ fn run_cores_with_stops_the_process_when_its_driver_returns() {
     let (_, result) = run_ticked(&[&main], |_, _| {});
 
     assert_eq!(result.expect("test setup"), Finish::Stopped);
+}
+
+/// With the kernel timer keeping time, a priority-10 sleeper wakes on time on a core that a
+/// priority-44 spinner keeps busy. The quantum is far longer than the sleep, so only the
+/// timer's wakeup fire can end it.
+#[test]
+fn the_timer_wakes_a_sleeper_on_a_busy_core() {
+    const SLEEP: Duration = Duration::from_millis(30);
+    let mut spinner = Asm::default();
+    spinner.mov(10, 1).str(10, 0, 8).spin();
+    let mut sleeper = Asm::default();
+    sleeper
+        .mov_reg(9, 0)
+        .mov(0, u64::try_from(SLEEP.as_nanos()).expect("test setup"))
+        .svc(SLEEP_THREAD)
+        .mov(10, 1)
+        .str(10, 9, 16)
+        .svc(EXIT_PROCESS);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, PRIORITY, 1)
+        .wait_for(9, 8, 1)
+        .spawn(function(2), DATA, 10, 1)
+        .svc(EXIT_THREAD);
+
+    let mem = space_with(&[&main, &spinner, &sleeper]);
+    let mut kernel = kernel();
+    kernel.set_quantum(PATIENCE * 4);
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+
+    let start = Instant::now();
+    let result = run_cores(&mut kernel, &mem);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!(data(&mem, 16), 1);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed >= SLEEP && elapsed < PATIENCE,
+        "woke after {elapsed:?}"
+    );
+}
+
+/// With the kernel timer keeping time, two priority-59 spinners on core 1 both run: the
+/// second only gets the core when a quantum rotates the first out. The main thread exits once
+/// both have marked their word.
+#[test]
+fn the_timer_rotates_a_sliced_pair() {
+    let mut marker = Asm::default();
+    marker.mov(10, 1).str(10, 0, 0).spin();
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, 59, 1)
+        .spawn(function(1), DATA + 8, 59, 1)
+        .wait_for(9, 0, 1)
+        .wait_for(9, 8, 1)
+        .svc(EXIT_PROCESS);
+
+    let (mem, result) = run(&[&main, &marker]);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!((data(&mem, 0), data(&mem, 8)), (1, 1), "both took turns");
 }

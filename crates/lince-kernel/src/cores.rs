@@ -11,24 +11,23 @@
 //! interrupt flag set, which `run_interruptible` sees at the next block boundary, and parked
 //! cores wake to look again. A thread's state is either in the table or held by the one core
 //! it runs on, and moves between the two only under the lock.
+//!
+//! Time comes from the kernel timer role thread of `lince-sched` (ADR-0032 §3): every quantum
+//! it rotates the sliced priorities, and between quanta it fires when a sleeper is due, so a
+//! sleeper wakes on time even while its core runs another thread.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use lince_cpu_a64::{Exit, State, run_interruptible};
 use lince_mem::AddressSpace;
+use lince_sched::{Fire, Timer};
 use parking_lot::{Condvar, Mutex, MutexGuard};
 
 use crate::error::{KernelError, RunError};
 use crate::kernel::{Current, Kernel, Outcome, Regs};
 use crate::thread::CORE_COUNT;
-
-/// Instructions in one quantum when [`run_cores`] keeps time itself: each core rotates its
-/// sliced priority and wakes due sleepers after its thread ran this many, SVCs included.
-// GUESS: a stand-in for ADR-0032's 10 ms timer (T-061 step 3), short enough that sleepers
-// wake promptly in tests.
-const SLICE: u64 = 10_000;
 
 /// Why the process stopped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,8 +45,9 @@ struct Shared<'k> {
     changed: Condvar,
     /// Per core: "reschedule requested" (ADR-0032 §2). Set and cleared under the lock.
     interrupt: [AtomicBool; CORE_COUNT],
-    /// Instructions per quantum, or `None` when a [`Ticker`] keeps time.
-    slice: Option<u64>,
+    /// Runs only for [`run_cores`]; under [`run_cores_with`] wakeup requests go unheard and
+    /// the driver keeps time.
+    timer: Timer,
 }
 
 struct Locked<'k> {
@@ -66,7 +66,30 @@ impl<'k> Shared<'k> {
         for flag in &self.interrupt {
             flag.store(true, Ordering::Release);
         }
+        self.timer.stop();
         self.changed.notify_all();
+    }
+
+    /// One fire of the timer, or one [`Ticker::tick`]: wakes the due sleepers, rotates the
+    /// sliced priorities at a quantum end, and reselects.
+    fn fire(&self, fire: Fire) {
+        let mut locked = self.lock();
+        if locked.result.is_some() {
+            return;
+        }
+        let threads = &mut locked.kernel.threads;
+        threads.wake_due(Instant::now());
+        if fire == Fire::Quantum {
+            for core in 0..CORE_COUNT {
+                threads.rotate(core);
+            }
+        }
+        // A fire consumes the timer's pending wakeup; re-arm it for the next sleeper even when
+        // this fire changed nothing.
+        if let Some(at) = threads.next_wake_any() {
+            self.timer.wake_at(at);
+        }
+        self.reselect(&mut locked);
     }
 
     /// The reselection pass: interrupts every core that runs the wrong thread and wakes the
@@ -81,6 +104,9 @@ impl<'k> Shared<'k> {
                 flag.store(true, Ordering::Release);
             }
         }
+        if let Some(at) = threads.next_wake_any() {
+            self.timer.wake_at(at);
+        }
         self.changed.notify_all();
     }
 }
@@ -94,16 +120,7 @@ impl Ticker<'_, '_> {
     /// Ends a quantum: rotates every core's sliced priority, wakes the sleepers whose time has
     /// come and reselects.
     pub fn tick(&self) {
-        let mut locked = self.shared.lock();
-        if locked.result.is_some() {
-            return;
-        }
-        let threads = &mut locked.kernel.threads;
-        threads.wake_due(Instant::now());
-        for core in 0..CORE_COUNT {
-            threads.rotate(core);
-        }
-        self.shared.reselect(&mut locked);
+        self.shared.fire(Fire::Quantum);
     }
 
     /// Stops the process: every core leaves its thread at its next safe point and
@@ -120,14 +137,15 @@ impl Ticker<'_, '_> {
 }
 
 /// Runs the started threads of `kernel` on six host core threads until the process exits,
-/// the last thread exits, or a core stops on an error. Each core keeps time by counting
-/// instructions. Every core thread has been joined when it returns.
+/// the last thread exits, or a core stops on an error. The kernel timer role thread keeps
+/// time. Every core thread and the timer thread have been joined when it returns.
 ///
 /// # Errors
 /// The first error a core hit: a guest fault, a `Break`, an SVC the kernel rejected, an
-/// interpreter failure, or a core thread that could not be created.
+/// interpreter failure, or a core or timer thread that could not be created.
 pub fn run_cores(kernel: &mut Kernel, mem: &AddressSpace) -> Result<Finish, RunError> {
-    run_on_cores(kernel, mem, Some(SLICE), |_| {})
+    let quantum = kernel.quantum;
+    run_on_cores(kernel, mem, Some(quantum), |_| {})
 }
 
 /// Like [`run_cores`], but quanta end only when `driver` calls [`Ticker::tick`]. `driver` runs
@@ -150,7 +168,7 @@ pub fn run_cores_with(
 fn run_on_cores(
     kernel: &mut Kernel,
     mem: &AddressSpace,
-    slice: Option<u64>,
+    quantum: Option<Duration>,
     driver: impl FnOnce(&Ticker<'_, '_>),
 ) -> Result<Finish, RunError> {
     if kernel.threads.all_exited() {
@@ -163,7 +181,7 @@ fn run_on_cores(
         }),
         changed: Condvar::new(),
         interrupt: std::array::from_fn(|_| AtomicBool::new(false)),
-        slice,
+        timer: Timer::new(),
     };
     thread::scope(|scope| {
         for core in 0..CORE_COUNT {
@@ -174,6 +192,17 @@ fn run_on_cores(
             if let Err(source) = spawned {
                 let mut locked = shared.lock();
                 shared.finish(&mut locked, Err(RunError::Spawn { core, source }));
+            }
+        }
+        if let Some(quantum) = quantum {
+            let shared = &shared;
+            let spawned = shared.timer.spawn(scope, quantum, move |fire| {
+                let _panic = TimerPanicGuard(shared);
+                shared.fire(fire);
+            });
+            if let Err(source) = spawned {
+                let mut locked = shared.lock();
+                shared.finish(&mut locked, Err(RunError::Timer(source)));
             }
         }
         driver(&Ticker { shared: &shared });
@@ -211,6 +240,19 @@ impl Drop for StopOnDrop<'_, '_> {
     fn drop(&mut self) {
         let mut locked = self.0.lock();
         self.0.finish(&mut locked, Ok(Finish::Stopped));
+    }
+}
+
+/// Stops the process when the timer callback panics, so the cores stop instead of running
+/// on with no one keeping time.
+struct TimerPanicGuard<'s, 'k>(&'s Shared<'k>);
+
+impl Drop for TimerPanicGuard<'_, '_> {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            let mut locked = self.0.lock();
+            self.0.finish(&mut locked, Err(RunError::TimerPanicked));
+        }
     }
 }
 
@@ -268,15 +310,9 @@ struct OnCore<'s, 'k, 'm> {
 /// goes back into the table under the same lock hold that decided it leaves the core, so no
 /// other core can take it while this core still holds the state.
 fn run_thread(on: &OnCore<'_, '_, '_>, mut state: State) {
-    // The instructions left in this quantum, kept across SVCs, when the cores keep time.
-    let mut left = on.shared.slice;
     let (mut locked, finished) = loop {
-        match step(on, &mut state, left.unwrap_or(u64::MAX)) {
-            Step::SafePoint {
-                mut locked,
-                executed,
-            } => {
-                count_quantum(on, &mut locked, &mut left, executed);
+        match step(on, &mut state) {
+            Step::SafePoint(mut locked) => {
                 on.shared.reselect(&mut locked);
                 // Under the lock, after the pass: a request made before this point is answered
                 // by the check below, and a later one sets the flag again.
@@ -298,34 +334,10 @@ fn run_thread(on: &OnCore<'_, '_, '_>, mut state: State) {
     }
 }
 
-/// Counts `executed` against the quantum when the cores keep time; at its end, wakes the due
-/// sleepers and rotates the core's sliced priority.
-fn count_quantum(
-    on: &OnCore<'_, '_, '_>,
-    locked: &mut Locked<'_>,
-    left: &mut Option<u64>,
-    executed: u64,
-) {
-    let (Some(left), Some(slice)) = (left, on.shared.slice) else {
-        return;
-    };
-    *left = left.saturating_sub(executed);
-    if *left == 0 {
-        let threads = &mut locked.kernel.threads;
-        threads.wake_due(Instant::now());
-        threads.rotate(on.core);
-        *left = slice;
-    }
-}
-
 /// What one interpreter call and its SVC, if any, decided. Both variants hold the lock.
 enum Step<'g, 'k> {
-    /// A safe point where the thread may keep its core: an SVC that resumes, the instruction
-    /// limit, or an interrupt; `executed` instructions ran since the last one.
-    SafePoint {
-        locked: MutexGuard<'g, Locked<'k>>,
-        executed: u64,
-    },
+    /// A safe point where the thread may keep its core: an SVC that resumes, or an interrupt.
+    SafePoint(MutexGuard<'g, Locked<'k>>),
     /// The thread leaves its core; `finished` says how the process ended, if it did.
     Leave {
         locked: MutexGuard<'g, Locked<'k>>,
@@ -333,23 +345,20 @@ enum Step<'g, 'k> {
     },
 }
 
-fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State, limit: u64) -> Step<'s, 'k> {
+fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State) -> Step<'s, 'k> {
     let leave = |finished| Step::Leave {
         locked: on.shared.lock(),
         finished,
     };
-    let result = match run_interruptible(state, on.mem, limit, &on.shared.interrupt[on.core]) {
+    // No instruction limit: the core comes back only at an SVC or when interrupted.
+    let interrupt = &on.shared.interrupt[on.core];
+    let result = match run_interruptible(state, on.mem, u64::MAX, interrupt) {
         Ok(result) => result,
         Err(error) => return leave(Some(Err(RunError::Cpu(error)))),
     };
     let number = match result.exit {
         Exit::Svc { number } => number,
-        Exit::Interrupted | Exit::Limit => {
-            return Step::SafePoint {
-                locked: on.shared.lock(),
-                executed: result.executed,
-            };
-        }
+        Exit::Interrupted | Exit::Limit => return Step::SafePoint(on.shared.lock()),
         exit @ (Exit::Undefined { .. }
         | Exit::Unimplemented { .. }
         | Exit::FetchAbort { .. }
@@ -378,12 +387,7 @@ fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State, limit: u64) -> Step<
     locked.kernel.current = None;
     state.x[..args].copy_from_slice(&regs);
     let finished = match outcome {
-        Ok(Outcome::Resume) => {
-            return Step::SafePoint {
-                locked,
-                executed: result.executed,
-            };
-        }
+        Ok(Outcome::Resume) => return Step::SafePoint(locked),
         Ok(Outcome::Reschedule) => None,
         Ok(Outcome::Exit) => Some(Ok(Finish::ExitProcess)),
         Ok(Outcome::Break(reason)) => Some(Err(RunError::Break { reason })),

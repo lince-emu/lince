@@ -36,7 +36,7 @@ mod thread_svc;
 
 pub use cores::{Finish, Ticker, run_cores, run_cores_with};
 pub use error::{KernelError, Result, RunError};
-pub use kernel::{Flow, HEAP_BASE, Kernel, Regs};
+pub use kernel::{DEFAULT_QUANTUM, Flow, HEAP_BASE, Kernel, Regs};
 pub use svc::{ResultCode, SvcNumber, svc_name};
 pub use thread::{
     CORE_COUNT, CURRENT_THREAD, DEFAULT_SLICED_PRIORITIES, LOWEST_PRIORITY, TLS_BASE, TLS_SIZE,
