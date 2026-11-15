@@ -3,6 +3,8 @@
 
 //! The Tier A interpreter (ADR-0005) through the C++ `lca_run`.
 
+use std::sync::atomic::AtomicBool;
+
 use lince_common::GuestVa;
 use lince_mem::AddressSpace;
 
@@ -40,7 +42,8 @@ pub struct Exclusive {
     pub size: u8,
 }
 
-/// Why [`run`] returned. Except for `Svc` and `Limit`, the instruction at `pc` did not run.
+/// Why [`run`] returned. Except for `Svc`, `Limit` and `Interrupted`, the instruction at `pc`
+/// did not run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Exit {
     /// An SVC completed; `pc` is already past it.
@@ -50,6 +53,9 @@ pub enum Exit {
     },
     /// The instruction limit was reached.
     Limit,
+    /// The interrupt flag of [`run_interruptible`] was set at a safe point; `pc` is the next
+    /// instruction to run.
+    Interrupted,
     /// The word at `pc` is unallocated or reserved.
     Undefined {
         /// Its address.
@@ -96,7 +102,28 @@ pub struct Run {
 /// Runs the core in `state` over `memory` until an exit or until `limit` instructions
 /// completed. Guest memory is accessed inline through `memory`'s host base (ADR-0031).
 pub fn run(state: &mut State, memory: &AddressSpace, limit: u64) -> Result<Run, CpuError> {
-    let raw = ffi::run(state, memory, limit)?;
+    run_with(state, memory, limit, None)
+}
+
+/// Like [`run`], but also returns [`Exit::Interrupted`] at the first safe point where
+/// `interrupt` is set: on entry, and after every instruction that set `pc` (the end of a
+/// block, ADR-0032 §2). It reads the flag and never clears it; the caller does.
+pub fn run_interruptible(
+    state: &mut State,
+    memory: &AddressSpace,
+    limit: u64,
+    interrupt: &AtomicBool,
+) -> Result<Run, CpuError> {
+    run_with(state, memory, limit, Some(interrupt))
+}
+
+fn run_with(
+    state: &mut State,
+    memory: &AddressSpace,
+    limit: u64,
+    interrupt: Option<&AtomicBool>,
+) -> Result<Run, CpuError> {
+    let raw = ffi::run(state, memory, limit, interrupt)?;
     Ok(Run {
         exit: exit_from(raw, state.pc)?,
         executed: raw.executed,
@@ -115,6 +142,7 @@ fn exit_from(raw: RawExit, pc_after: u64) -> Result<Exit, CpuError> {
             number: u16::try_from(raw.detail).map_err(|_| unknown)?,
         },
         ffi::EXIT_LIMIT => Exit::Limit,
+        ffi::EXIT_INTERRUPTED => Exit::Interrupted,
         ffi::EXIT_UNDEFINED => Exit::Undefined { pc: address },
         ffi::EXIT_UNIMPLEMENTED => Exit::Unimplemented {
             pc: address,

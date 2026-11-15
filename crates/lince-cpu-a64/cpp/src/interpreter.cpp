@@ -418,8 +418,14 @@ lca_exit exit_at(lca_exit_reason reason, uint64_t pc, uint64_t executed) {
 
 lca_exit run(Core &core, Memory &memory, uint64_t limit) {
   uint64_t executed = 0;
+  // The entry is a safe point, like the end of every block.
+  bool safe_point = true;
   while (executed < limit) {
     const uint64_t pc = core.pc();
+    if (safe_point && memory.interrupted()) {
+      return exit_at(LCA_EXIT_INTERRUPTED, pc, executed);
+    }
+    safe_point = false;
     if (pc % kInsnBytes != 0) {
       return exit_at(LCA_EXIT_PC_MISALIGNED, pc, executed);
     }
@@ -433,6 +439,7 @@ lca_exit run(Core &core, Memory &memory, uint64_t limit) {
       core.set_pc(pc + kInsnBytes);
       break;
     case Outcome::Jumped:
+      safe_point = true;
       break;
     case Outcome::Svc: {
       core.set_pc(pc + kInsnBytes);

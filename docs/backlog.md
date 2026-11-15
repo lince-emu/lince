@@ -60,8 +60,8 @@ Rules:
 | T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Done | — | 0024 |
 | T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Done | T-048 | 0001, 0002 |
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Done | T-047, T-049 | 0004, 0005, 0031 |
-| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | In progress | T-048, T-059 | 0004, 0017, 0024 |
-| T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
+| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Done | T-048, T-059 | 0004, 0017, 0024 |
+| T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051, T-061 | 0024 |
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Blocked | T-052 | 0024 |
 | T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
@@ -70,7 +70,7 @@ Rules:
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
-| T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Blocked | T-051 | 0017, 0024, 0032 |
+| T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | In progress | T-051 | 0017, 0024, 0032 |
 
 ## Details
 
@@ -581,6 +581,11 @@ role thread owned by `lince-sched` that rotates the table every quantum (default
 and wakes sleepers, replaced by a manual tick in tests. No migration or load balancing (a
 separate task, ADR-0032 §5); `SleepThread` -1 and -2 act like 0. List T-051 tests whose
 expectations change because non-sliced priorities no longer take turns.
+Too large for one PR (QUAL-62), so it lands in steps: (1) `lince-cpu-a64` interrupt flag and
+`Exit::Interrupted`; (2) kernel sliced-priority table, reselection pass and prompt preemption
+with a manual tick; (3) the kernel timer role thread in `lince-sched` and the ledger events;
+(4) the loom model, which needs `loom` as a dev-dependency (maintainer decision). T-052 waits
+for step 3, since its timeouts use the timer thread.
 - **Acceptance:** the ADR-0032 validation tests pass (unsliced spinner keeps its core, sliced
   pair alternates per tick, a cross-core wake interrupts a spinner within one block, a core
   mask change never leaves a thread on two cores, loom model of the handoff); ledger events for

@@ -80,7 +80,7 @@ pub fn run_nro(file: &[u8], out: &mut impl Write) -> Result<(), AppError> {
         let result = run(&mut state, &mem, SLICE)?;
         let number = match result.exit {
             Exit::Svc { number } => number,
-            Exit::Limit => continue,
+            Exit::Limit | Exit::Interrupted => continue,
             exit @ (Exit::Undefined { .. }
             | Exit::Unimplemented { .. }
             | Exit::FetchAbort { .. }

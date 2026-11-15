@@ -78,10 +78,12 @@ pub struct lca_callbacks {
             stored: *mut u32,
         ) -> i32,
     >,
+    pub interrupted:
+        ::core::option::Option<unsafe extern "C" fn(context: *mut ::core::ffi::c_void) -> i32>,
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of lca_callbacks"][::core::mem::size_of::<lca_callbacks>() - 32usize];
+    ["Size of lca_callbacks"][::core::mem::size_of::<lca_callbacks>() - 40usize];
     ["Alignment of lca_callbacks"][::core::mem::align_of::<lca_callbacks>() - 8usize];
     ["Offset of field: lca_callbacks::context"]
         [::core::mem::offset_of!(lca_callbacks, context) - 0usize];
@@ -90,6 +92,8 @@ const _: () = {
         [::core::mem::offset_of!(lca_callbacks, write) - 16usize];
     ["Offset of field: lca_callbacks::compare_exchange"]
         [::core::mem::offset_of!(lca_callbacks, compare_exchange) - 24usize];
+    ["Offset of field: lca_callbacks::interrupted"]
+        [::core::mem::offset_of!(lca_callbacks, interrupted) - 32usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -103,7 +107,7 @@ pub struct lca_memory {
 }
 #[allow(clippy::unnecessary_operation, clippy::identity_op)]
 const _: () = {
-    ["Size of lca_memory"][::core::mem::size_of::<lca_memory>() - 64usize];
+    ["Size of lca_memory"][::core::mem::size_of::<lca_memory>() - 72usize];
     ["Alignment of lca_memory"][::core::mem::align_of::<lca_memory>() - 8usize];
     ["Offset of field: lca_memory::host_base"]
         [::core::mem::offset_of!(lca_memory, host_base) - 0usize];
@@ -173,6 +177,7 @@ pub const LCA_EXIT_UNIMPLEMENTED: lca_exit_reason = 4;
 pub const LCA_EXIT_FETCH_ABORT: lca_exit_reason = 5;
 pub const LCA_EXIT_PC_MISALIGNED: lca_exit_reason = 6;
 pub const LCA_EXIT_DATA_ABORT: lca_exit_reason = 7;
+pub const LCA_EXIT_INTERRUPTED: lca_exit_reason = 8;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct lca_exit {

@@ -59,6 +59,7 @@ void check_run() {
               .read = nullptr,
               .write = nullptr,
               .compare_exchange = nullptr,
+              .interrupted = nullptr,
           },
   };
   lca_state state{};

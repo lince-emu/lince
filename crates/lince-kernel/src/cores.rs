@@ -216,7 +216,7 @@ fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State, left: u64) -> Step<'
     };
     let number = match result.exit {
         Exit::Svc { number } => number,
-        Exit::Limit => return leave(None),
+        Exit::Limit | Exit::Interrupted => return leave(None),
         exit @ (Exit::Undefined { .. }
         | Exit::Unimplemented { .. }
         | Exit::FetchAbort { .. }
