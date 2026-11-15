@@ -65,13 +65,15 @@ Rules:
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Done | T-052 | 0024 |
 | T-054 | `lince-hle`: `set:`, `fsp-srv`, `time` and `hid` stubs that log | Impl | Done | T-053, T-057 | 0024 |
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Done | T-053 | 0024, 0027 |
-| T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | In progress | T-049–T-055 | 0001 |
+| T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Done | T-049–T-055 | 0001 |
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Done | T-047 | 0017, 0024 |
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
 | T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Done | T-051 | 0017, 0024, 0032 |
-| T-062 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Ready | T-054 | 0017, 0024 |
+| T-062 | Research: `fsp-srv` IFileSystem and IFile parameters and the path buffer (public sources) | Research | In progress | T-054 | 0024 |
+| T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | Ready | T-057 | 0017, 0024 |
+| T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Blocked | T-062, T-063 | 0017, 0024 |
 
 ## Details
 
@@ -512,11 +514,30 @@ name. No game content enters the repository (LEGAL-50). The file system on a hos
 split out to T-062 (QUAL-62): here `OpenSdCardFileSystem` returns an object with no commands.
 - **Acceptance:** each command tested through the IPC framework.
 
-### T-062 — `fsp-srv` on a host directory
-`OpenSdCardFileSystem` serves a host directory the user chooses. Each command that touches the
-host is queued to the T-057 service-I/O thread, never run on a guest core thread; the guest
-thread waits and resumes through a kernel event (ADR-0024 B2 scope), which needs a deferred
-reply in `lince-kernel`'s `SendSyncRequest`.
+### T-062 — Research: `fsp-srv` protocol details
+Split from the original T-062 (maintainer, 2026-11-15). Use the `research-note` skill. From
+public sources only (LEGAL-10/11), fill what T-048 left open for a file system on a host
+directory: the parameters and buffers of IFile Read, Write, GetSize and SetSize (research O2),
+the HIPC descriptor kind and size limit of the IFileSystem path buffer, how GetEntryType,
+OpenFile and OpenDirectory report a missing path, and IDirectory Read's entry layout. Mark what
+is Switch 1 knowledge and what is known on Switch 2 (doc 08).
+- **Acceptance:** `docs/research/b2-svcs-and-ipc.md` (or a new note) gives each field with its
+  source and evidence level; what stays unknown is listed in doc 08 and as GUESS for T-064.
+
+### T-063 — Deferred IPC replies
+A session object can answer a request later: `SendSyncRequest` blocks the calling guest thread
+(as a wait, ADR-0004), the object queues its work to the T-057 service-I/O thread, and the
+completion writes the reply to the thread's TLS and makes it ready again through the kernel
+(ADR-0024 B2 scope). No host I/O or blocking on a guest core thread (invariants 3 and 7).
+- **Acceptance:** a test service whose work runs on the service-I/O thread replies to a guest
+  thread that blocked; other guest threads keep running meanwhile; a full queue waits without
+  dropping the request (invariant 1); closing the session or the process with a request in
+  flight neither loses nor double-writes the reply.
+
+### T-064 — `fsp-srv` on a host directory
+`OpenSdCardFileSystem` serves a host directory the user chooses, with the commands T-062
+documents, through T-063's deferred replies. No game content enters the repository
+(LEGAL-50).
 - **Acceptance:** `fs` cannot reach outside its host directory; each command tested through
   the IPC framework; no host I/O on a guest core thread.
 
