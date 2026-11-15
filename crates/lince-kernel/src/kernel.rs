@@ -83,6 +83,9 @@ pub struct Kernel {
     pub(crate) current: Option<Current>,
     /// How often [`run_cores`](crate::run_cores) rotates the sliced priorities.
     pub(crate) quantum: Duration,
+    /// One recorder per guest core thread, for the scheduler's ledger events (ADR-0027 B2
+    /// scope); [`run_cores`](crate::run_cores) lends core `n` the `n`th.
+    pub(crate) core_ledgers: Vec<Recorder>,
 }
 
 impl Kernel {
@@ -98,6 +101,9 @@ impl Kernel {
             threads: Threads::default(),
             current: None,
             quantum: DEFAULT_QUANTUM,
+            core_ledgers: (0..CORE_COUNT)
+                .map(|_| trace.recorder(ThreadRole::GuestCore))
+                .collect(),
         })
     }
 

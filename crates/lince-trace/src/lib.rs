@@ -8,7 +8,8 @@
 //! (docs/05-performance-validation.md §3). B1 scope (ADR-0027): named events — a stub, an
 //! unknown SVC — recorded once per name into per-thread buffers that a non-critical thread
 //! drains. Records use the ledger's event shape, so the ledger promoted from PoC-7 later reads
-//! the same data.
+//! the same data. B2 scope adds plain records ([`Recorder::record`]) for the guest scheduler's
+//! `KernelLockHeld` and `PreemptLatency` events, in the same bounded buffers.
 //!
 //! # Threads
 //! [`Recorder`] runs on any thread, render-critical ones included: it never blocks, allocates

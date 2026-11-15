@@ -15,7 +15,7 @@ use lince_kernel::{
     Ticker, run_cores, run_cores_with,
 };
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
-use lince_trace::Trace;
+use lince_trace::{EventKind, ThreadRole, Trace};
 
 const CODE: u64 = 0x1_0000;
 const DATA: u64 = 0x4_0000;
@@ -776,4 +776,43 @@ fn the_timer_rotates_a_sliced_pair() {
 
     assert_eq!(result.expect("test setup"), Finish::ExitProcess);
     assert_eq!((data(&mem, 0), data(&mem, 8)), (1, 1), "both took turns");
+}
+
+/// ADR-0032 ledger: core threads record how long they hold the kernel lock, and a core that
+/// switches after a cross-core start records the latency from the request to the switch.
+#[test]
+fn core_threads_record_lock_hold_and_preemption_latency() {
+    let mut spinner = Asm::default();
+    spinner.mov(10, 1).str(10, 0, 8).spin();
+    let mut urgent = Asm::default();
+    urgent.svc(EXIT_PROCESS);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, PRIORITY, 2)
+        .wait_for(9, 8, 1)
+        .spawn(function(2), DATA, 0, 2)
+        .spin();
+    let mem = space_with(&[&main, &spinner, &urgent]);
+    let mut trace = Trace::new(Trace::MAX_CAPACITY);
+    let mut kernel = Kernel::new(&mut trace).expect("test setup");
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+
+    let result = run_cores(&mut kernel, &mem);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    let drained = trace.drain();
+    let count = |kind| {
+        drained
+            .records
+            .iter()
+            .filter(|record| record.role == ThreadRole::GuestCore && record.event.kind == kind)
+            .count()
+    };
+    assert!(count(EventKind::KernelLockHeld) > 0, "lock holds recorded");
+    assert!(
+        count(EventKind::PreemptLatency) > 0,
+        "the spinner's core recorded its switch"
+    );
 }

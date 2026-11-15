@@ -63,6 +63,11 @@ pub enum EventKind {
     Stub,
     /// The guest called an SVC with no handler. `arg`: the SVC number.
     UnknownSvc,
+    /// A guest core thread released the kernel lock. `arg`: nanoseconds it held it.
+    KernelLockHeld,
+    /// A guest core gave its thread back after a reschedule request (ADR-0032 §2). `arg`:
+    /// nanoseconds from the request until the core gave the thread back.
+    PreemptLatency,
     /// A kind this build does not know.
     Unknown(u16),
 }
@@ -95,6 +100,8 @@ impl EventKind {
             Self::ThreadPreempted => 21,
             Self::Stub => 22,
             Self::UnknownSvc => 23,
+            Self::KernelLockHeld => 24,
+            Self::PreemptLatency => 25,
             Self::Unknown(raw) => raw,
         }
     }
@@ -126,6 +133,8 @@ impl EventKind {
             21 => Self::ThreadPreempted,
             22 => Self::Stub,
             23 => Self::UnknownSvc,
+            24 => Self::KernelLockHeld,
+            25 => Self::PreemptLatency,
             other => Self::Unknown(other),
         }
     }
@@ -224,7 +233,7 @@ mod tests {
 
     #[test]
     fn every_known_kind_and_role_round_trips() {
-        for raw in 0..=23 {
+        for raw in 0..=25 {
             let kind = EventKind::from_raw(raw);
             assert!(!matches!(kind, EventKind::Unknown(_)), "raw {raw}");
             assert_eq!(kind.to_raw(), raw);
