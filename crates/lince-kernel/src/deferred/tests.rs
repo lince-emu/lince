@@ -13,6 +13,7 @@ use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
 use lince_trace::{NameId, Trace};
 use parking_lot::Mutex;
 
+use crate::deferred::DeferredReply;
 use crate::ipc_svc::{IpcMessage, SessionObject, Sessions, UnknownCommand};
 use crate::kernel::{Current, Kernel, Outcome, Regs};
 use crate::thread::{ThreadParams, WaitKind};
@@ -24,8 +25,9 @@ const NAME_AT: u64 = 0x1_0000;
 const PATIENCE: Duration = Duration::from_secs(10);
 
 /// Defers every request; its work waits for a byte on `release` and replies with that byte
-/// everywhere but at offset 1, which echoes the request's first byte. Without a service-I/O
-/// thread it replies at once with `0xEE`.
+/// everywhere but at offset 1, which echoes the request's first byte. A request whose first
+/// byte has bit 7 set first opens another `slow` session, which the reply keeps unless the
+/// byte is `0xFF`. Without a service-I/O thread it replies at once with `0xEE`.
 struct Slow {
     name: NameId,
     release: Arc<Mutex<Receiver<u8>>>,
@@ -46,12 +48,23 @@ impl SessionObject for Slow {
         message: &mut IpcMessage,
     ) -> Result<(), UnknownCommand> {
         let tag = message[0];
+        if tag & 0x80 != 0 {
+            let other = Box::new(Slow {
+                name: self.name,
+                release: Arc::clone(&self.release),
+            });
+            sessions.open_session(other);
+        }
         let release = Arc::clone(&self.release);
         let work = Box::new(move || {
             let byte = release.lock().recv().unwrap_or(0);
             let mut reply = [byte; 0x100];
             reply[1] = tag;
-            reply
+            if byte == 0xFF {
+                DeferredReply::Release(reply)
+            } else {
+                DeferredReply::Keep(reply)
+            }
         });
         if !sessions.defer("slow", work) {
             message.fill(0xEE);
@@ -266,4 +279,49 @@ fn without_a_service_io_thread_the_object_replies_at_once() {
     let session = f.session;
     assert_eq!(f.svc(0, SEND, [session, 0])[0], 0);
     assert_eq!(f.tls(0)[0], 0xEE);
+}
+
+fn live_sessions(f: &Fixture) -> usize {
+    f.kernel.sessions.iter().filter(|s| s.is_some()).count()
+}
+
+#[test]
+fn a_kept_reply_hands_the_guest_the_sessions_its_request_opened() {
+    let mut f = fixture(1, Some(4));
+    f.send_deferred(0, 0x80);
+    assert_eq!(live_sessions(&f), 2);
+    f.release.send(0x5A).unwrap();
+    f.deliver_all(&[0]);
+    assert_eq!(live_sessions(&f), 2, "the new session stays");
+    assert_eq!(f.kernel.deferred.opened, Vec::new());
+}
+
+#[test]
+fn a_released_reply_closes_the_sessions_its_request_opened() {
+    let mut f = fixture(1, Some(4));
+    f.send_deferred(0, 0x80);
+    f.release.send(0xFF).unwrap();
+    f.deliver_all(&[0]);
+    assert_eq!(f.tls(0)[0], 0xFF, "the reply is still delivered");
+    assert_eq!(
+        live_sessions(&f),
+        1,
+        "only the client's own session is left"
+    );
+    assert_eq!(f.kernel.deferred.opened, Vec::new());
+}
+
+#[test]
+fn a_reply_no_thread_waits_for_closes_the_sessions_its_request_opened() {
+    let mut f = fixture(1, Some(4));
+    f.send_deferred(0, 0x80);
+    assert!(f.kernel.threads.end_wait(0, 0xDEAD, None));
+    f.release.send(0x5A).unwrap();
+    let start = Instant::now();
+    while !f.kernel.deferred.opened.is_empty() {
+        assert!(start.elapsed() < PATIENCE, "the work never finished");
+        f.kernel.deliver_replies(&f.mem);
+        std::thread::yield_now();
+    }
+    assert_eq!(live_sessions(&f), 1);
 }

@@ -20,20 +20,31 @@ use lince_mem::AddressSpace;
 use lince_sched::{Request, SchedError, ServiceIo, Shutdown, Signal, SubmitError, Timer};
 use parking_lot::Mutex;
 
-use crate::ipc_svc::{INVALID_POINTER, IpcMessage};
+use crate::ipc_svc::{INVALID_POINTER, IpcMessage, close_sessions};
 use crate::kernel::Kernel;
 use crate::svc::SUCCESS;
 use crate::thread::WaitKind;
 
 /// Builds the reply of a deferred request on the service-I/O thread: it may block and do host
 /// I/O, and returns the whole reply message.
-pub type DeferredWork = Box<dyn FnOnce() -> IpcMessage + Send>;
+pub type DeferredWork = Box<dyn FnOnce() -> DeferredReply + Send>;
+
+/// The reply a [`DeferredWork`] built, and what becomes of the sessions its object opened
+/// while handling the request (such as the file an `OpenFile` hands out).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeferredReply {
+    /// A reply that hands those sessions to the guest.
+    Keep(IpcMessage),
+    /// A reply that names none of them, such as an error: the kernel closes them, so a failed
+    /// request leaves no session the guest cannot name.
+    Release(IpcMessage),
+}
 
 /// A reply built on the service-I/O thread, waiting to be delivered.
 struct Completion {
     thread: usize,
     ticket: u64,
-    message: IpcMessage,
+    reply: DeferredReply,
 }
 
 /// Replies the service-I/O thread finished, and the timer that makes the kernel deliver them.
@@ -82,6 +93,8 @@ pub(crate) struct Deferred {
     next_ticket: u64,
     /// The ticket of the request being handled, once its object deferred it.
     pub(crate) taken: Option<u64>,
+    /// The sessions each deferred request opened, by ticket, until its reply is delivered.
+    pub(crate) opened: Vec<(u64, Vec<u32>)>,
 }
 
 impl Deferred {
@@ -144,11 +157,11 @@ impl Kernel {
         let inbox = Arc::clone(&deferred.inbox);
         let done: Arc<dyn Signal> = Arc::clone(&deferred.inbox) as Arc<dyn Signal>;
         let request = Request::new(name, done, move || {
-            let message = work();
+            let reply = work();
             inbox.push(Completion {
                 thread: index,
                 ticket,
-                message,
+                reply,
             });
         });
         deferred.pending.push_back(request);
@@ -172,27 +185,58 @@ impl Kernel {
     }
 
     /// Copies each finished reply to the TLS of the thread that waits for it and makes that
-    /// thread ready, then submits pending requests. Runs under the kernel lock, off the guest
-    /// cores (the timer thread). Returns whether a thread was woken.
+    /// thread ready, then submits pending requests. The sessions a request opened are closed
+    /// when the guest never learns them: a [`DeferredReply::Release`], a thread that no longer
+    /// waits, or a TLS the reply cannot be written to. Runs under the kernel lock, off the
+    /// guest cores (the timer thread). Returns whether a thread was woken.
     pub(crate) fn deliver_replies(&mut self, mem: &AddressSpace) -> bool {
         let mut woke = false;
         for completion in self.deferred.inbox.take() {
-            let waits = matches!(
-                self.threads.waiting_for(completion.thread),
-                Some(WaitKind::Reply { ticket }) if *ticket == completion.ticket
-            );
-            if !waits {
-                continue;
-            }
-            let tls = self.threads.thread(completion.thread).tls;
-            let code = match mem.write_bytes(tls, &completion.message) {
-                Ok(()) => SUCCESS,
-                Err(_) => INVALID_POINTER,
+            let opened = self.take_opened(completion.ticket);
+            let (message, keep) = match completion.reply {
+                DeferredReply::Keep(message) => (message, true),
+                DeferredReply::Release(message) => (message, false),
             };
-            woke |= self.threads.end_wait(completion.thread, code, None);
+            let delivered = self.deliver(mem, completion.thread, completion.ticket, &message);
+            woke |= delivered.is_some();
+            if !(delivered == Some(true) && keep) {
+                close_sessions(self, opened);
+            }
         }
         self.submit_pending();
         woke
+    }
+
+    /// Writes `message` to the TLS of `thread` and ends its wait, if it still waits for the
+    /// reply with `ticket`. `None` when it does not; otherwise whether the write succeeded.
+    fn deliver(
+        &mut self,
+        mem: &AddressSpace,
+        thread: usize,
+        ticket: u64,
+        message: &IpcMessage,
+    ) -> Option<bool> {
+        let waits = matches!(
+            self.threads.waiting_for(thread),
+            Some(WaitKind::Reply { ticket: t }) if *t == ticket
+        );
+        if !waits {
+            return None;
+        }
+        let tls = self.threads.thread(thread).tls;
+        let written = mem.write_bytes(tls, message).is_ok();
+        let code = if written { SUCCESS } else { INVALID_POINTER };
+        self.threads.end_wait(thread, code, None);
+        Some(written)
+    }
+
+    /// The sessions the request with `ticket` opened; empty when it opened none.
+    fn take_opened(&mut self, ticket: u64) -> Vec<u32> {
+        let opened = &mut self.deferred.opened;
+        match opened.iter().position(|(t, _)| *t == ticket) {
+            Some(at) => opened.swap_remove(at).1,
+            None => Vec::new(),
+        }
     }
 }
 

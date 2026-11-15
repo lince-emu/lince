@@ -56,7 +56,7 @@ mod thread_svc;
 mod wait_svc;
 
 pub use cores::{Finish, Ticker, run_cores, run_cores_with};
-pub use deferred::DeferredWork;
+pub use deferred::{DeferredReply, DeferredWork};
 pub use error::{KernelError, Result, RunError};
 pub use ipc_svc::{
     IPC_MESSAGE_SIZE, IpcMessage, PortFactory, SessionObject, Sessions, UnknownCommand,
