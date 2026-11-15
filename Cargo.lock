@@ -180,6 +180,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lince-sched"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "lince-trace"
 version = "0.0.0"
 dependencies = [
