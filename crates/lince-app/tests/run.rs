@@ -92,7 +92,7 @@ fn the_coverage_list_names_each_call_and_warns_about_dropped_events() {
             "coverage: 2 unimplemented calls\n",
             "  SVC 0x7f\n",
             "  set command 5\n",
-            "coverage: 2 trace events dropped; the list may be incomplete\n",
+            "coverage: 2 once-only trace records dropped; the list may be incomplete\n",
         )
     );
 }
@@ -108,5 +108,16 @@ fn run_prints_the_expected_output_of_the_b2_program() {
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
         expected.lines().collect::<String>()
+    );
+}
+
+#[test]
+fn coverage_of_the_b2_program_lists_nothing_and_warns_about_nothing() {
+    let output = lince(&["run", "--coverage", &homebrew("b2.nro")]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "coverage: 0 unimplemented calls\n",
+        "the scheduler's ledger records may overflow, but they hold no unknown calls"
     );
 }

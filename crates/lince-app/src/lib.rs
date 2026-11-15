@@ -77,7 +77,9 @@ pub struct Options {
 pub struct Report {
     /// Every unknown SVC and IPC command the run reached, each once.
     pub unimplemented: Vec<Unimplemented>,
-    /// Trace events lost because a buffer was full; when non-zero the list may be incomplete.
+    /// Once-only trace records (unknown calls, stubs) lost because a buffer was full; when
+    /// non-zero the list may be incomplete. Lost plain records (scheduler ledger events) do not
+    /// count: they never hold an unknown call.
     pub dropped: u64,
 }
 
@@ -94,7 +96,7 @@ pub fn write_coverage(out: &mut impl Write, report: &Report) -> std::io::Result<
     if report.dropped > 0 {
         writeln!(
             out,
-            "coverage: {} trace events dropped; the list may be incomplete",
+            "coverage: {} once-only trace records dropped; the list may be incomplete",
             report.dropped
         )?;
     }
@@ -128,6 +130,6 @@ pub fn run_nro(file: &[u8], out: &mut impl Write, options: Options) -> Result<Re
     let drained = trace.drain();
     Ok(Report {
         unimplemented: trace.unimplemented(&drained),
-        dropped: drained.dropped,
+        dropped: drained.dropped_once,
     })
 }

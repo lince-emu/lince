@@ -107,8 +107,8 @@ fn recording_past_capacity_counts_drops_instead_of_blocking() {
     assert!(!third);
     let drained = trace.drain();
     assert_eq!(drained.records.len(), 2);
-    assert_eq!(drained.dropped, 1);
-    assert_eq!(trace.drain().dropped, 0);
+    assert_eq!((drained.dropped, drained.dropped_once), (1, 1));
+    assert_eq!(trace.drain().dropped_once, 0);
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn a_full_duplicate_set_counts_new_names_as_dropped() {
     assert!(!third);
     let drained = trace.drain();
     assert_eq!(drained.records, []);
-    assert_eq!(drained.dropped, 1);
+    assert_eq!((drained.dropped, drained.dropped_once), (1, 1));
 }
 
 #[test]
@@ -185,6 +185,7 @@ fn plain_records_past_capacity_are_counted_as_dropped() {
     assert_eq!(accepted, [true, true, false]);
     let drained = trace.drain();
     assert_eq!((drained.records.len(), drained.dropped), (2, 1));
+    assert_eq!(drained.dropped_once, 0, "only plain records were lost");
 }
 
 #[test]
