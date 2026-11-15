@@ -154,6 +154,13 @@ impl Kernel {
         Ok(handle)
     }
 
+    /// Replaces the priority each core time slices (default
+    /// [`DEFAULT_SLICED_PRIORITIES`](crate::DEFAULT_SLICED_PRIORITIES)); `None` slices nothing
+    /// on that core. Call before [`run_cores`](crate::run_cores).
+    pub fn set_sliced_priorities(&mut self, sliced: [Option<u32>; CORE_COUNT]) {
+        self.threads.set_sliced(sliced);
+    }
+
     /// Takes the bytes the guest wrote with `OutputDebugString` since the last call.
     pub fn take_debug_output(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.debug_output)
