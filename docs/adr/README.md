@@ -46,6 +46,7 @@ prototype reports.
 | [0029](0029-no-keys-no-firmware.md) | No console keys and no firmware, including user-provided ones | **Accepted** |
 | [0030](0030-hybrid-rust-cpp.md) | Hybrid Rust + C++ implementation | **Accepted** (amended by ADR-0031) |
 | [0031](0031-rust-cpp-placement.md) | Rust/C++ placement refinements | **Accepted** |
+| [0032](0032-guest-thread-preemption.md) | Horizon-faithful guest thread preemption | **Accepted** |
 
 ## Template
 

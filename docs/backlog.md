@@ -70,6 +70,7 @@ Rules:
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
+| T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Blocked | T-051 | 0017, 0024, 0032 |
 
 ## Details
 
@@ -568,3 +569,19 @@ fires**, even after T-059 is Done.
   section or the slice. *Trigger:* the ledger shows guest cores waiting in `view()`.
 - **Acceptance (per item taken):** before/after numbers from the benchmark or ledger; existing
   differential and stress tests still pass.
+
+### T-061 — Horizon-faithful preemption
+Follow-up of T-051 (PR #59), which slices every priority and preempts only at slice end.
+Blocked on T-051 only: the maintainer accepted ADR-0032's recommendations (2026-11-14). It
+implements them: a per-core table of the one time-sliced priority (default
+`59, 59, 59, 59, 59, 63`, GUESS for NX2); a per-core "reschedule requested" flag that
+`lince_cpu_a64::run` checks at block boundaries (public API change, ADR-0032 §2); one
+reselection pass under the kernel lock that sets the flags of changed cores; a kernel timer
+role thread owned by `lince-sched` that rotates the table every quantum (default 10 ms, GUESS)
+and wakes sleepers, replaced by a manual tick in tests. No migration or load balancing (a
+separate task, ADR-0032 §5); `SleepThread` -1 and -2 act like 0. List T-051 tests whose
+expectations change because non-sliced priorities no longer take turns.
+- **Acceptance:** the ADR-0032 validation tests pass (unsliced spinner keeps its core, sliced
+  pair alternates per tick, a cross-core wake interrupts a spinner within one block, a core
+  mask change never leaves a thread on two cores, loom model of the handoff); ledger events for
+  preemption latency and kernel lock hold time.
