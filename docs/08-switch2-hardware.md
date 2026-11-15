@@ -68,6 +68,9 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
 - The `ServiceSpace` values taken by `sm:` commands 2 and 3, and the `hid`, `time` and
   `fsp-srv` command ids beyond those tagged for Switch 2 (`docs/research/b2-svcs-and-ipc.md`
   S1, S3–S5).
+- Which guest priority each of the six cores time slices, and the length of the quantum; the
+  Switch 1 kernel slices 59 on cores 0 to N-2 and 63 on the last core every 10 ms
+  (`docs/research/ryujinx-kernel-scheduler.md`; ADR-0032 keeps it a configurable table).
 
 ## 5. Implications for Lince
 
