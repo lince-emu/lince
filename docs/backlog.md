@@ -64,8 +64,8 @@ Rules:
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Done | T-051, T-061 | 0024 |
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Done | T-052 | 0024 |
 | T-054 | `lince-hle`: `set:`, `fsp-srv`, `time` and `hid` stubs that log | Impl | Done | T-053, T-057 | 0024 |
-| T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | In progress | T-053 | 0024, 0027 |
-| T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
+| T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Done | T-053 | 0024, 0027 |
+| T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | In progress | T-049–T-055 | 0001 |
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Done | T-047 | 0017, 0024 |
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |

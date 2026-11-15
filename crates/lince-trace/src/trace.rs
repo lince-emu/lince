@@ -39,12 +39,22 @@ pub struct Drained {
     pub records: Vec<Record>,
     /// Events lost since the last drain because a buffer or a duplicate set was full.
     pub dropped: u64,
+    /// The part of `dropped` that were once-only records (stubs, unknown SVCs and commands):
+    /// when it is 0, every such record that ran was drained, whatever plain records were lost.
+    pub dropped_once: u64,
+}
+
+/// Events a recorder lost since the last drain.
+#[derive(Default)]
+struct Dropped {
+    all: AtomicU64,
+    once: AtomicU64,
 }
 
 struct Buffer {
     role: ThreadRole,
     rx: Receiver<[u64; 3]>,
-    dropped: Arc<AtomicU64>,
+    dropped: Arc<Dropped>,
 }
 
 /// Owner of the name table and of every recorder's buffer.
@@ -109,7 +119,7 @@ impl Trace {
     /// A recorder for one thread with the given role. Move it to that thread.
     pub fn recorder(&mut self, role: ThreadRole) -> Recorder {
         let (tx, rx) = sync_channel(self.capacity);
-        let dropped = Arc::new(AtomicU64::new(0));
+        let dropped = Arc::new(Dropped::default());
         self.buffers.push(Buffer {
             role,
             rx,
@@ -128,7 +138,8 @@ impl Trace {
     pub fn drain(&mut self) -> Drained {
         let mut drained = Drained::default();
         self.buffers.retain(|buffer| {
-            drained.dropped += buffer.dropped.swap(0, Ordering::Relaxed);
+            drained.dropped += buffer.dropped.all.swap(0, Ordering::Relaxed);
+            drained.dropped_once += buffer.dropped.once.swap(0, Ordering::Relaxed);
             loop {
                 match buffer.rx.try_recv() {
                     Ok(words) => drained.records.push(Record {
@@ -151,7 +162,7 @@ pub struct Recorder {
     tx: SyncSender<[u64; 3]>,
     /// Keys already recorded; never grows past its initial capacity.
     seen: Vec<(u16, u64)>,
-    dropped: Arc<AtomicU64>,
+    dropped: Arc<Dropped>,
 }
 
 impl Recorder {
@@ -185,12 +196,15 @@ impl Recorder {
             return false;
         }
         if self.seen.len() == self.seen.capacity() {
-            self.dropped.fetch_add(1, Ordering::Relaxed);
+            self.dropped.all.fetch_add(1, Ordering::Relaxed);
+            self.dropped.once.fetch_add(1, Ordering::Relaxed);
             return false;
         }
         let sent = self.send(kind, arg);
         if sent {
             self.seen.push(key);
+        } else {
+            self.dropped.once.fetch_add(1, Ordering::Relaxed);
         }
         sent
     }
@@ -207,7 +221,7 @@ impl Recorder {
         match self.tx.try_send(event.encode()) {
             Ok(()) => true,
             Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {
-                self.dropped.fetch_add(1, Ordering::Relaxed);
+                self.dropped.all.fetch_add(1, Ordering::Relaxed);
                 false
             }
         }
