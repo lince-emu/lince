@@ -62,15 +62,16 @@ Rules:
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Done | T-047, T-049 | 0004, 0005, 0031 |
 | T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Done | T-048, T-059 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Done | T-051, T-061 | 0024 |
-| T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | In progress | T-052 | 0024 |
-| T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
-| T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
+| T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Done | T-052 | 0024 |
+| T-054 | `lince-hle`: `set:`, `fsp-srv`, `time` and `hid` stubs that log | Impl | In progress | T-053, T-057 | 0024 |
+| T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Ready | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
 | T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Done | T-047 | 0017, 0024 |
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
 | T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Done | T-051 | 0017, 0024, 0032 |
+| T-062 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Blocked | T-054 | 0017, 0024 |
 
 ## Details
 
@@ -506,11 +507,18 @@ logged by name, never silently succeed (ADR-0024).
   logged once and returns an error.
 
 ### T-054 — First service stubs
-`set:`, `fs` (a host directory the user chooses), `time` and `hid` with the commands B2's
-program calls; every stub logs by name. No game content enters the repository (LEGAL-50).
-`fs` reads the host directory on the T-057 service-I/O thread, never on a guest core thread.
-- **Acceptance:** each command tested through the IPC framework; `fs` cannot reach outside
-  its host directory.
+`set`, `fsp-srv`, `time:u` and `hid` with the commands B2's program calls; every stub logs by
+name. No game content enters the repository (LEGAL-50). The file system on a host directory is
+split out to T-062 (QUAL-62): here `OpenSdCardFileSystem` returns an object with no commands.
+- **Acceptance:** each command tested through the IPC framework.
+
+### T-062 — `fsp-srv` on a host directory
+`OpenSdCardFileSystem` serves a host directory the user chooses. Each command that touches the
+host is queued to the T-057 service-I/O thread, never run on a guest core thread; the guest
+thread waits and resumes through a kernel event (ADR-0024 B2 scope), which needs a deferred
+reply in `lince-kernel`'s `SendSyncRequest`.
+- **Acceptance:** `fs` cannot reach outside its host directory; each command tested through
+  the IPC framework; no host I/O on a guest core thread.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the

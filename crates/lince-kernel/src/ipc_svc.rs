@@ -55,6 +55,9 @@ pub trait Sessions {
     /// Opens a new session served by `object` and returns the client's handle to it; `None`
     /// when the process is out of handles or sessions.
     fn open_session(&mut self, object: Box<dyn SessionObject>) -> Option<u32>;
+
+    /// Records that the stub `name` ran, the first time only (ADR-0024: stubs log by name).
+    fn log_stub(&mut self, name: NameId);
 }
 
 /// The server end of a session: host code that answers the requests a program sends.
@@ -95,6 +98,10 @@ impl Sessions for Kernel {
             self.opened_during_request.push(handle);
         }
         Some(handle)
+    }
+
+    fn log_stub(&mut self, name: NameId) {
+        Kernel::log_stub(self, name);
     }
 }
 
