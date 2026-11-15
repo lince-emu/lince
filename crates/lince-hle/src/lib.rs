@@ -8,13 +8,16 @@
 //! keeps at the start of its TLS block. [`hipc`] is the outer layout (header, special header,
 //! handles, buffer descriptors, raw data, receive list); [`cmif`] is the request and reply
 //! header inside the raw data; [`tipc`] is the CMIF-less variant `sm:` uses. CMIF domains are
-//! out of B2 scope (ADR-0024: each session serves one object).
+//! out of B2 scope (ADR-0024: each session serves one object). [`sm`] is the service manager,
+//! the first service a program reaches; [`sm::install`] registers it with the kernel.
 //!
 //! Layouts come from docs/research/b2-svcs-and-ipc.md C1–C9 and T1–T3 (Switch 1 knowledge;
 //! whether Switch 2 keeps them is UNKNOWN, doc 08 §4). Guessed fields say GUESS.
 //!
 //! # Threads
-//! Pure functions over a caller-owned buffer: no threads, no I/O, no allocation.
+//! The message functions are pure over a caller-owned buffer: no threads, I/O or allocation.
+//! Session objects run on the guest core that sent the request, under the kernel lock; they
+//! allocate only when a session opens (one boxed object) and perform no I/O.
 //!
 //! # References
 //! ADR-0024 · docs/research/b2-svcs-and-ipc.md · docs/conventions/patterns.md PAT-01
@@ -23,6 +26,7 @@
 pub mod cmif;
 mod error;
 pub mod hipc;
+pub mod sm;
 pub mod tipc;
 
 pub use error::{IpcError, Result};

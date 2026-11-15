@@ -55,7 +55,9 @@ pub(crate) fn signal_event(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Reg
             kernel.threads.wake_waiters(Waitable::Event(event));
             done(regs, SUCCESS)
         }
-        Some(Object::ReadableEvent(_) | Object::Thread(_)) | None => done(regs, INVALID_HANDLE),
+        Some(Object::ReadableEvent(_) | Object::Thread(_) | Object::Session(_)) | None => {
+            done(regs, INVALID_HANDLE)
+        }
     }
 }
 
@@ -67,7 +69,7 @@ pub(crate) fn clear_event(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Regs
             kernel.events[event] = false;
             done(regs, SUCCESS)
         }
-        Some(Object::Thread(_)) | None => done(regs, INVALID_HANDLE),
+        Some(Object::Thread(_) | Object::Session(_)) | None => done(regs, INVALID_HANDLE),
     }
 }
 
@@ -78,17 +80,24 @@ pub(crate) fn reset_signal(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Reg
             let signaled = std::mem::take(&mut kernel.events[event]);
             done(regs, if signaled { SUCCESS } else { NOT_SIGNALED })
         }
-        Some(Object::WritableEvent(_) | Object::Thread(_)) | None => done(regs, INVALID_HANDLE),
+        Some(Object::WritableEvent(_) | Object::Thread(_) | Object::Session(_)) | None => {
+            done(regs, INVALID_HANDLE)
+        }
     }
 }
 
-/// `W0` handle; out `W0` (V9). Closing a thread's handle does not end the thread.
+/// `W0` handle; out `W0` (V9). Closing a thread's handle does not end the thread; closing a
+/// session's handle drops its object.
 // GUESS: the note lists no result for a handle that is not open, a double close included, nor
 // for pseudo-handles such as the current thread (O4); all return the invalid-handle code the
 // other SVCs return.
 pub(crate) fn close_handle(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Regs) -> Outcome {
     let code = match kernel.handles.close(w(regs[0])) {
-        Some(_) => SUCCESS,
+        Some(Object::Session(session)) => {
+            kernel.sessions[session] = None;
+            SUCCESS
+        }
+        Some(Object::Thread(_) | Object::ReadableEvent(_) | Object::WritableEvent(_)) => SUCCESS,
         None => INVALID_HANDLE,
     };
     done(regs, code)

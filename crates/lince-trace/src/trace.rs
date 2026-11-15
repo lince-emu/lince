@@ -95,6 +95,17 @@ impl Trace {
         self.names.get(index).copied()
     }
 
+    /// The object name and command id an [`EventKind::UnknownCommand`] event refers to;
+    /// `None` for other kinds.
+    pub fn unknown_command(&self, event: &Event) -> Option<(&'static str, u32)> {
+        if event.kind != EventKind::UnknownCommand {
+            return None;
+        }
+        let index = usize::try_from(event.arg >> 32).ok()?;
+        let command = u32::try_from(event.arg & 0xFFFF_FFFF).ok()?;
+        Some((self.names.get(index).copied()?, command))
+    }
+
     /// A recorder for one thread with the given role. Move it to that thread.
     pub fn recorder(&mut self, role: ThreadRole) -> Recorder {
         let (tx, rx) = sync_channel(self.capacity);
@@ -147,6 +158,15 @@ impl Recorder {
     /// Records that the stub `name` ran, the first time only. Returns whether it was recorded.
     pub fn stub(&mut self, name: NameId) -> bool {
         self.once(EventKind::Stub, u64::from(name.0))
+    }
+
+    /// Records that object `name` received `command`, which it has no behavior for, the first
+    /// time only. Returns whether it was recorded.
+    pub fn unknown_command(&mut self, name: NameId, command: u32) -> bool {
+        self.once(
+            EventKind::UnknownCommand,
+            u64::from(name.0) << 32 | u64::from(command),
+        )
     }
 
     /// Records `kind` with `arg`. An event that does not fit in the buffer is counted as

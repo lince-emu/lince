@@ -16,6 +16,9 @@ pub const MESSAGE_SIZE: usize = 0x100;
 /// A thread's IPC message buffer.
 pub type MessageBuffer = [u8; MESSAGE_SIZE];
 
+// The kernel hands session objects its own buffer type; both must be the same array.
+const _: () = assert!(MESSAGE_SIZE == lince_kernel::IPC_MESSAGE_SIZE);
+
 /// Highest guest address a descriptor can hold: addresses are 39 bits.
 const ADDRESS_LIMIT: u64 = 1 << 39;
 /// Highest size a send, receive or exchange descriptor can hold: sizes are 36 bits.

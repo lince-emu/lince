@@ -27,6 +27,14 @@ pub enum KernelError {
         /// Its public or descriptive name.
         name: &'static str,
     },
+    /// A session object received a command it has no behavior for (ADR-0024).
+    #[error("{object} has no command {command}")]
+    UnknownCommand {
+        /// The object's public or descriptive name.
+        object: &'static str,
+        /// The command id, or the message type when the message has no command id.
+        command: u32,
+    },
     /// A host-created thread had a priority or core out of range, or its TLS block could not
     /// be mapped.
     #[error("cannot create a thread with priority {priority} on core {core}")]
