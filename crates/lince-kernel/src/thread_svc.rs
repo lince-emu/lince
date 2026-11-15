@@ -16,7 +16,7 @@ use lince_mem::AddressSpace;
 use crate::handle::Object;
 use crate::kernel::{Kernel, Outcome, Regs};
 use crate::svc::{OUT_OF_RESOURCE, SUCCESS, done};
-use crate::thread::{CORE_COUNT, CURRENT_THREAD, LOWEST_PRIORITY, Status, ThreadParams};
+use crate::thread::{CORE_COUNT, CURRENT_THREAD, LOWEST_PRIORITY, Status, ThreadParams, Waitable};
 
 /// The `CreateThread` core id that means the process's default core.
 const DEFAULT_CORE_ID: i32 = -2;
@@ -105,6 +105,7 @@ pub(crate) fn exit_thread(kernel: &mut Kernel, _: &AddressSpace, _: &mut Regs) -
         return Outcome::Unsupported;
     };
     kernel.threads.set_status(current.index, Status::Exited);
+    kernel.threads.wake_waiters(Waitable::Thread(current.index));
     Outcome::Reschedule
 }
 

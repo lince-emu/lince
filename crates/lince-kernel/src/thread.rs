@@ -16,6 +16,9 @@ use lince_common::GuestVa;
 use lince_cpu_a64::State;
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission};
 
+use crate::svc::{ResultCode, SUCCESS};
+use crate::wait_svc::TIMED_OUT;
+
 /// Guest cores (ADR-0004: six application cores, never folded).
 pub const CORE_COUNT: usize = 6;
 
@@ -44,6 +47,11 @@ const MAX_THREADS: usize = 256;
 // (doc 08 §4).
 pub const DEFAULT_SLICED_PRIORITIES: [Option<u32>; CORE_COUNT] =
     [Some(59), Some(59), Some(59), Some(59), Some(59), Some(63)];
+
+/// Most objects one `WaitSynchronization` waits on.
+// GUESS: the Switch 1 limit of 0x40; docs/research/b2-svcs-and-ipc.md V10 names the error, not
+// the count.
+pub(crate) const MAX_WAIT_OBJECTS: usize = 0x40;
 
 /// The pseudo-handle naming the calling thread.
 // GUESS: the Switch 1 value; not in docs/research.
@@ -74,6 +82,9 @@ pub(crate) enum Status {
     Running { core: usize },
     /// Ready again at `until`.
     Sleeping { until: Instant },
+    /// In `WaitSynchronization` on its wait set, until an object is signaled, the wait is
+    /// cancelled, or `until` passes (`None`: no timeout).
+    Waiting { until: Option<Instant> },
     /// Exited; it never runs again.
     Exited,
 }
@@ -86,6 +97,53 @@ pub(crate) struct Thread {
     pub(crate) mask: u64,
     /// Its place in the queue of its priority on its core: lower runs first.
     seq: u64,
+    /// What it waits on while `Waiting`.
+    wait: WaitSet,
+    /// A `CancelSynchronization` that found it not waiting; its next wait is cancelled.
+    cancel_pending: bool,
+}
+
+/// An object a thread can wait on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Waitable {
+    /// An event, signaled until cleared or reset.
+    Event(usize),
+    /// A thread, signaled once it exited.
+    Thread(usize),
+}
+
+/// The objects of one wait, in the order the guest listed them; fixed size, so waiting never
+/// allocates on a guest core.
+#[derive(Clone, Copy)]
+pub(crate) struct WaitSet {
+    objects: [Waitable; MAX_WAIT_OBJECTS],
+    len: usize,
+}
+
+impl Default for WaitSet {
+    fn default() -> Self {
+        Self {
+            objects: [Waitable::Event(0); MAX_WAIT_OBJECTS],
+            len: 0,
+        }
+    }
+}
+
+impl WaitSet {
+    /// Adds `object`; `false` if the set is full.
+    pub(crate) fn push(&mut self, object: Waitable) -> bool {
+        let Some(slot) = self.objects.get_mut(self.len) else {
+            return false;
+        };
+        *slot = object;
+        self.len += 1;
+        true
+    }
+
+    /// The objects, in order.
+    pub(crate) fn objects(&self) -> &[Waitable] {
+        &self.objects[..self.len]
+    }
 }
 
 /// Every thread of the process, indexed by handle.
@@ -172,6 +230,8 @@ impl Threads {
             core: params.core,
             mask: 1 << params.core,
             seq: 0,
+            wait: WaitSet::default(),
+            cancel_pending: false,
         });
         index
     }
@@ -188,8 +248,70 @@ impl Threads {
     /// Makes ready every sleeper whose time has come.
     pub(crate) fn wake_due(&mut self, now: Instant) {
         for index in 0..self.list.len() {
-            if matches!(self.list[index].status, Status::Sleeping { until } if until <= now) {
-                self.make_ready(index);
+            match self.list[index].status {
+                Status::Sleeping { until } if until <= now => self.make_ready(index),
+                Status::Waiting { until: Some(until) } if until <= now => {
+                    self.end_wait(index, TIMED_OUT, None);
+                }
+                Status::Created
+                | Status::Ready
+                | Status::Running { .. }
+                | Status::Sleeping { .. }
+                | Status::Waiting { .. }
+                | Status::Exited => {}
+            }
+        }
+    }
+
+    /// Marks the next wait of thread `index` as cancelled. Scheduling does not change, so no
+    /// reselection is needed.
+    pub(crate) fn set_cancel_pending(&mut self, index: usize) {
+        self.list[index].cancel_pending = true;
+    }
+
+    /// Takes the pending cancellation of thread `index`, if any.
+    pub(crate) fn take_cancel_pending(&mut self, index: usize) -> bool {
+        std::mem::take(&mut self.list[index].cancel_pending)
+    }
+
+    /// Puts thread `index`, whose core still holds its state, to wait on `set` until `until`.
+    pub(crate) fn begin_wait(&mut self, index: usize, set: &WaitSet, until: Option<Instant>) {
+        let thread = &mut self.list[index];
+        thread.wait = *set;
+        thread.status = Status::Waiting { until };
+        self.changed = true;
+    }
+
+    /// Ends the wait of thread `index`, if it waits: `W0` = `code`, `W1` = `which` if given,
+    /// then ready. Returns whether it was waiting.
+    pub(crate) fn end_wait(
+        &mut self,
+        index: usize,
+        code: ResultCode,
+        which: Option<usize>,
+    ) -> bool {
+        let thread = &mut self.list[index];
+        if !matches!(thread.status, Status::Waiting { .. }) {
+            return false;
+        }
+        thread.state.x[0] = u64::from(code);
+        if let Some(which) = which {
+            thread.state.x[1] = which as u64;
+        }
+        self.make_ready(index);
+        true
+    }
+
+    /// Ends, with success, every wait that includes `object`, now signaled; each waiter learns
+    /// the position of `object` in its own list.
+    pub(crate) fn wake_waiters(&mut self, object: Waitable) {
+        for index in 0..self.list.len() {
+            let thread = &self.list[index];
+            if !matches!(thread.status, Status::Waiting { .. }) {
+                continue;
+            }
+            if let Some(which) = thread.wait.objects().iter().position(|o| *o == object) {
+                self.end_wait(index, SUCCESS, Some(which));
             }
         }
     }
@@ -258,8 +380,12 @@ impl Threads {
             .iter()
             .filter(|thread| thread.core == core)
             .filter_map(|thread| match thread.status {
-                Status::Sleeping { until } => Some(until),
-                Status::Created | Status::Ready | Status::Running { .. } | Status::Exited => None,
+                Status::Sleeping { until } | Status::Waiting { until: Some(until) } => Some(until),
+                Status::Created
+                | Status::Ready
+                | Status::Running { .. }
+                | Status::Waiting { until: None }
+                | Status::Exited => None,
             })
             .min()
     }

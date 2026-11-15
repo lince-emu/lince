@@ -14,7 +14,9 @@
 //! a per-core priority scheduler, and the thread SVCs create, start, end, put to sleep,
 //! reprioritize and move them. Each thread has a TLS block that `TPIDRRO_EL0` points to.
 //! A per-process handle table names threads and events (T-052); events are created, signaled,
-//! cleared and reset through their SVCs, and `CloseHandle` closes any handle.
+//! cleared and reset through their SVCs, and `CloseHandle` closes any handle. A thread waits on
+//! events and threads with `WaitSynchronization`, with a timeout, until another thread signals
+//! one or cancels the wait; only such a wait blocks a guest thread (ADR-0004).
 //! Preemption follows ADR-0032: only each core's sliced priority rotates, and a selection
 //! change interrupts the affected core at its next block boundary.
 //!
@@ -40,6 +42,7 @@ mod kernel;
 mod svc;
 mod thread;
 mod thread_svc;
+mod wait_svc;
 
 pub use cores::{Finish, Ticker, run_cores, run_cores_with};
 pub use error::{KernelError, Result, RunError};

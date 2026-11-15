@@ -34,6 +34,14 @@ const GET_THREAD_CORE_MASK: u16 = 0x0E;
 const SET_THREAD_CORE_MASK: u16 = 0x0F;
 const GET_CURRENT_PROCESSOR_NUMBER: u16 = 0x10;
 const EXIT_PROCESS: u16 = 0x07;
+const SIGNAL_EVENT: u16 = 0x11;
+const WAIT_SYNCHRONIZATION: u16 = 0x18;
+const CANCEL_SYNCHRONIZATION: u16 = 0x19;
+const CREATE_EVENT: u16 = 0x45;
+const TIMED_OUT: u64 = 0xEA01;
+const CANCELLED: u64 = 0xEC01;
+/// Where wait programs keep their handle arrays.
+const HANDLES: u32 = 0x80;
 
 /// A tiny A64 encoder for the instructions these programs use.
 #[derive(Default)]
@@ -80,6 +88,30 @@ impl Asm {
     /// `STR Xt, [Xn, #offset]`.
     fn str(&mut self, t: u32, n: u32, offset: u32) -> &mut Self {
         self.emit(0xF900_0000 | (offset / 8) << 10 | n << 5 | t)
+    }
+
+    /// `STR Wt, [Xn, #offset]`.
+    fn str_w(&mut self, t: u32, n: u32, offset: u32) -> &mut Self {
+        self.emit(0xB900_0000 | (offset / 4) << 10 | n << 5 | t)
+    }
+
+    /// `WaitSynchronization` on the `count` handles at `[Xn, #HANDLES]` with `timeout_ns`
+    /// (negative: forever); clobbers `X0`–`X3`.
+    fn wait(&mut self, n: u32, count: u64, timeout_ns: i64) -> &mut Self {
+        self.add_imm(1, n, HANDLES)
+            .mov(2, count)
+            .mov(3, timeout_ns.cast_unsigned())
+            .svc(WAIT_SYNCHRONIZATION)
+    }
+
+    /// Appends `Xv` to the list at `[Xn]`: count at offset 0, entries after it; clobbers
+    /// `X10`–`X13`.
+    fn append(&mut self, n: u32, v: u32) -> &mut Self {
+        self.ldr(11, n, 0)
+            .add_imm(12, 11, 1)
+            .str(12, n, 0)
+            .add_lsl3(13, n, 11)
+            .str(v, 13, 8)
     }
 
     /// `LDR Xt, [Xn, #offset]`.
@@ -814,5 +846,164 @@ fn core_threads_record_lock_hold_and_preemption_latency() {
     assert!(
         count(EventKind::PreemptLatency) > 0,
         "the spinner's core recorded its switch"
+    );
+}
+
+/// Waiters of priorities 40, 20 and 30 block on one event; once it is signaled they all wake
+/// and run in priority order, each seeing the signal and a successful wait on index 0.
+#[test]
+fn waiters_on_an_event_wake_in_priority_order() {
+    let mut waiter = Asm::default();
+    waiter
+        .mov_reg(20, 0)
+        .mov(9, DATA)
+        .wait(9, 1, -1)
+        // Accumulate (signal flag - 1) | W0 | W1 at 0x48: zero when every waiter saw the
+        // signal and a successful wait on index 0. Same-core waiters run one at a time.
+        .ldr(21, 9, 0x40)
+        .sub_imm(21, 21, 1)
+        .orr(21, 21, 0)
+        .orr(21, 21, 1)
+        .ldr(22, 9, 0x48)
+        .orr(22, 22, 21)
+        .str(22, 9, 0x48)
+        .append(9, 20)
+        .svc(EXIT_THREAD);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .mov(0, u64::from(CURRENT_THREAD))
+        .mov(1, 10)
+        .svc(SET_THREAD_PRIORITY)
+        .svc(CREATE_EVENT)
+        .mov_reg(22, 1)
+        .str_w(2, 9, HANDLES);
+    for priority in [40, 20, 30] {
+        main.spawn(function(1), u64::from(priority), priority, 0);
+    }
+    main.mov(0, 10_000_000)
+        .svc(SLEEP_THREAD)
+        .mov(10, 1)
+        .str(10, 9, 0x40)
+        .mov_reg(0, 22)
+        .svc(SIGNAL_EVENT)
+        .svc(EXIT_THREAD);
+
+    let (mem, result) = run(&[&main, &waiter]);
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    let list: Vec<u64> = (0..4).map(|n| data(&mem, 8 * n)).collect();
+    assert_eq!(list, [3, 20, 30, 40]);
+    assert_eq!(
+        data(&mem, 0x48),
+        0,
+        "each saw the signal, W0 = 0 and W1 = 0"
+    );
+}
+
+/// A wait with a timeout ends with `TIMED_OUT` once it passes; a zero timeout only polls.
+#[test]
+fn a_wait_times_out_and_a_zero_timeout_polls() {
+    const TIMEOUT: Duration = Duration::from_millis(20);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .svc(CREATE_EVENT)
+        .str_w(2, 9, HANDLES)
+        .wait(9, 1, 0)
+        .str(0, 9, 0)
+        .wait(9, 1, i64::try_from(TIMEOUT.as_nanos()).expect("test setup"))
+        .str(0, 9, 8)
+        .svc(EXIT_THREAD);
+
+    let start = Instant::now();
+    let (mem, result) = run(&[&main]);
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    assert_eq!((data(&mem, 0), data(&mem, 8)), (TIMED_OUT, TIMED_OUT));
+    assert!(start.elapsed() >= TIMEOUT);
+}
+
+/// `CancelSynchronization` ends a worker's endless wait with `CANCELLED`, whether it finds the
+/// worker waiting or the cancellation waits for the worker's next wait. On the caller itself
+/// it cancels the next wait only.
+#[test]
+fn cancel_synchronization_ends_a_wait_now_or_the_next_one() {
+    let mut worker = Asm::default();
+    worker
+        .mov(9, DATA)
+        .wait(9, 1, -1)
+        .str(0, 9, 0)
+        .svc(EXIT_THREAD);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .svc(CREATE_EVENT)
+        .str_w(2, 9, HANDLES)
+        .spawn(function(1), 0, PRIORITY, 1)
+        .mov_reg(0, 1)
+        .svc(CANCEL_SYNCHRONIZATION)
+        .mov(0, u64::from(CURRENT_THREAD))
+        .svc(CANCEL_SYNCHRONIZATION)
+        .wait(9, 1, -1)
+        .str(0, 9, 8)
+        .wait(9, 1, 0)
+        .str(0, 9, 16)
+        .svc(EXIT_THREAD);
+
+    let (mem, result) = run(&[&main, &worker]);
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    assert_eq!(data(&mem, 0), CANCELLED, "the worker's wait");
+    assert_eq!(data(&mem, 8), CANCELLED, "the caller's next wait");
+    assert_eq!(data(&mem, 16), TIMED_OUT, "the pending cancel was used up");
+}
+
+/// A thread is signaled once it exits; the waiter learns its position in the handle list.
+#[test]
+fn waiting_on_a_thread_ends_when_it_exits() {
+    let mut worker = Asm::default();
+    worker.mov(0, 5_000_000).svc(SLEEP_THREAD).svc(EXIT_THREAD);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .svc(CREATE_EVENT)
+        .str_w(2, 9, HANDLES)
+        .spawn(function(1), 0, PRIORITY, 1)
+        .str_w(1, 9, HANDLES + 4)
+        .wait(9, 2, -1)
+        .str(0, 9, 0)
+        .str(1, 9, 8)
+        .svc(EXIT_THREAD);
+
+    let (mem, result) = run(&[&main, &worker]);
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    assert_eq!((data(&mem, 0), data(&mem, 8)), (0, 1));
+}
+
+/// Bad handle lists fail before any wait: too many handles, an unreadable array, or a handle
+/// that is not waitable.
+#[test]
+fn wait_synchronization_rejects_bad_handle_lists() {
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .svc(CREATE_EVENT)
+        .str_w(1, 9, HANDLES)
+        .wait(9, 0x41, -1)
+        .str(0, 9, 0)
+        .mov(1, 0)
+        .mov(2, 1)
+        .mov(3, u64::MAX)
+        .svc(WAIT_SYNCHRONIZATION)
+        .str(0, 9, 8)
+        .wait(9, 1, -1)
+        .str(0, 9, 16)
+        .svc(EXIT_THREAD);
+
+    let (mem, result) = run(&[&main]);
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    let codes = (data(&mem, 0), data(&mem, 8), data(&mem, 16));
+    assert_eq!(
+        codes,
+        (0xEE01, 0xE601, 0xE401),
+        "too many, bad address, writable end"
     );
 }

@@ -4,13 +4,14 @@
 //! Events and `CloseHandle` (docs/research/b2-svcs-and-ipc.md V7–V9, Switch 1 knowledge).
 //!
 //! An event has a writable end, which signals it, and a readable end, which programs wait on
-//! (T-052 step 2) and reset. It stays signaled until cleared or reset.
+//! and reset. It stays signaled until cleared or reset; signaling it ends every wait on it.
 
 use lince_mem::AddressSpace;
 
 use crate::handle::Object;
 use crate::kernel::{Kernel, Outcome, Regs};
 use crate::svc::{OUT_OF_RESOURCE, ResultCode, SUCCESS, done};
+use crate::thread::Waitable;
 
 /// The handle names no open object of the kind the SVC takes (V7).
 pub(crate) const INVALID_HANDLE: ResultCode = 0xE401;
@@ -51,6 +52,7 @@ pub(crate) fn signal_event(kernel: &mut Kernel, _: &AddressSpace, regs: &mut Reg
     match kernel.handles.get(w(regs[0])) {
         Some(Object::WritableEvent(event)) => {
             kernel.events[event] = true;
+            kernel.threads.wake_waiters(Waitable::Event(event));
             done(regs, SUCCESS)
         }
         Some(Object::ReadableEvent(_) | Object::Thread(_)) | None => done(regs, INVALID_HANDLE),
