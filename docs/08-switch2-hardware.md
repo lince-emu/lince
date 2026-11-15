@@ -68,6 +68,10 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
 - The `ServiceSpace` values taken by `sm:` commands 2 and 3, and the `hid`, `time` and
   `fsp-srv` command ids beyond those tagged for Switch 2 (`docs/research/b2-svcs-and-ipc.md`
   S1, S3–S5).
+- Whether `fsp-srv`'s IFileSystem, IFile and IDirectory commands are unchanged on Switch 2
+  (assumed unchanged; no public source shows a change), which result each command returns for
+  a missing path, an over-long path or a read past the end of a file, and how SD-card paths
+  are prefixed (`docs/research/fsp-srv-filesystem-protocol.md` §4).
 - The unit of the HIPC `ReceiveListOffset` field, and the TIPC request type, reply layout and
   close message; `lince-hle` guesses them (`docs/research/b2-svcs-and-ipc.md` C10, T4, O1).
 - Which guest priority each of the six cores time slices, and the length of the quantum; the

@@ -107,7 +107,9 @@ Result codes are printed as 16-bit values; arithmetic shows `0xE401` = module 1,
 
 - O1: TIPC message type values, result placement, and the 16 offset (T3). Re-read the raw page
   and the sm: page. Until then T-053 builds `sm:` behind a layout that is easy to change.
-- O2: IFile Read/Write parameters and the IAppletResource shared-memory handle command.
+- O2: IFile Read/Write parameters (answered for IFile and IDirectory by
+  [fsp-srv-filesystem-protocol.md](fsp-srv-filesystem-protocol.md), T-062) and the
+  IAppletResource shared-memory handle command (still open).
 - O3: SetThreadCoreMask special core ids, and GetInfo ids B2 reads.
 - O4: result codes for CloseHandle (bad handle, double close), thread SVCs, ArbitrateLock and
   WaitProcessWideKey; the wiki lists none. Needed by T-052's "documented error".
