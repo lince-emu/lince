@@ -1,6 +1,7 @@
 # ADR-0032: Horizon-faithful guest thread preemption
 
-- **Status:** Proposed
+- **Status:** Accepted: the recommended option of each sub-decision, 1b, 2c, 3c, 4a and 5c
+  (maintainer, 2026-11-14).
 - **Date:** 2026-11-14
 - **Deciders:** maintainer
 - **Related:** ADR-0004, ADR-0017, ADR-0018, ADR-0024; `docs/research/ryujinx-kernel-scheduler.md`,
@@ -31,7 +32,8 @@ no ad-hoc threads (ARCH-04, invariant 7); no I/O on core threads (ARCH-01); a gu
 state is owned by at most one core at a time; kernel tests can drive the quantum by hand.
 
 ## Alternatives and decision
-Each sub-decision lists its options; **bold** is the recommendation.
+Each sub-decision lists its options; **bold** is the recommendation, accepted by the
+maintainer (2026-11-14).
 
 1. **Sliced priorities.** (a) Status quo: every priority sliced; fair, but unfaithful.
    **(b) Per-core table** `[Option<u32>; 6]`, one rotated priority per core or none; default
