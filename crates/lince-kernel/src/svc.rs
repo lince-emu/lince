@@ -10,7 +10,7 @@ use lince_common::GuestVa;
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission};
 
 use crate::kernel::{Entry, HEAP_BASE, Handler, Kernel, Outcome, Regs};
-use crate::{event_svc, thread_svc, wait_svc};
+use crate::{arbiter_svc, event_svc, thread_svc, wait_svc};
 
 /// An SVC number: the immediate of the `SVC` instruction.
 pub type SvcNumber = u8;
@@ -88,6 +88,16 @@ const fn build_table() -> [Option<Entry>; 256] {
     table[0x19] = Some(entry(
         "CancelSynchronization",
         wait_svc::cancel_synchronization,
+    ));
+    table[0x1A] = Some(entry("ArbitrateLock", arbiter_svc::arbitrate_lock));
+    table[0x1B] = Some(entry("ArbitrateUnlock", arbiter_svc::arbitrate_unlock));
+    table[0x1C] = Some(entry(
+        "WaitProcessWideKeyAtomic",
+        arbiter_svc::wait_process_wide_key_atomic,
+    ));
+    table[0x1D] = Some(entry(
+        "SignalProcessWideKey",
+        arbiter_svc::signal_process_wide_key,
     ));
     table[BREAK as usize] = Some(entry(BREAK_NAME, break_));
     table[0x45] = Some(entry("CreateEvent", event_svc::create_event));

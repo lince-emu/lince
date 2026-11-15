@@ -8,6 +8,8 @@
 //! accessed through typed [`GuestVa`](lince_common::GuestVa) reads and writes (QUAL-20) by
 //! software lookup. The space is one contiguous host reservation, and the host page size is an
 //! explicit parameter, so native execution on ARM64 hosts with 16 KiB pages stays possible.
+//! Plain reads and writes are atomic per byte; `compare_exchange_u32` changes an aligned word
+//! as one host compare-and-swap, for kernel objects that guest atomics share (ADR-0004).
 //!
 //! # Threads
 //! One [`AddressSpace`] is shared by the core threads of a process (ADR-0019 B2 scope). Reads,

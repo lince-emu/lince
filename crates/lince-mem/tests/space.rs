@@ -456,3 +456,35 @@ fn map_unmap_and_protect_on_one_thread_never_disturb_reads_on_another() {
     });
     assert_eq!(mem.view().regions().count(), 1);
 }
+
+#[test]
+fn compare_exchange_replaces_a_word_only_when_it_holds_the_expected_value() {
+    let mem = space().unwrap();
+    mem.map(va(0x1_0000), PAGE, RW).unwrap();
+    mem.write(va(0x1_0004), 7u32).unwrap();
+
+    assert_eq!(mem.compare_exchange_u32(va(0x1_0004), 7, 9).unwrap(), Ok(7));
+    assert_eq!(
+        mem.compare_exchange_u32(va(0x1_0004), 7, 1).unwrap(),
+        Err(9)
+    );
+    assert_eq!(mem.read::<u32>(va(0x1_0004)).unwrap(), 9);
+}
+
+#[test]
+fn compare_exchange_needs_an_aligned_writable_word() {
+    let mem = space().unwrap();
+    mem.map(va(0x1_0000), PAGE, Permission::READ).unwrap();
+    assert!(matches!(
+        mem.compare_exchange_u32(va(0x1_0002), 0, 1),
+        Err(MemError::Unaligned { size: 4, .. })
+    ));
+    assert!(matches!(
+        mem.compare_exchange_u32(va(0x1_0000), 0, 1),
+        Err(MemError::PermissionDenied { .. })
+    ));
+    assert!(matches!(
+        mem.compare_exchange_u32(va(0x2_0000), 0, 1),
+        Err(MemError::Unmapped { .. })
+    ));
+}

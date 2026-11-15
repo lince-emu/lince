@@ -16,7 +16,10 @@
 //! A per-process handle table names threads and events (T-052); events are created, signaled,
 //! cleared and reset through their SVCs, and `CloseHandle` closes any handle. A thread waits on
 //! events and threads with `WaitSynchronization`, with a timeout, until another thread signals
-//! one or cancels the wait; only such a wait blocks a guest thread (ADR-0004).
+//! one or cancels the wait; only such a wait blocks a guest thread (ADR-0004). Mutexes and
+//! condition variables live in guest memory; `ArbitrateLock`/`ArbitrateUnlock` and
+//! `WaitProcessWideKeyAtomic`/`SignalProcessWideKey` queue the threads that must block and
+//! update the words with host compare-and-swaps.
 //! Preemption follows ADR-0032: only each core's sliced priority rotates, and a selection
 //! change interrupts the affected core at its next block boundary.
 //!
@@ -32,6 +35,7 @@
 //! ADR-0024 · ADR-0027 · docs/research/nro-and-b1-svcs.md · docs/conventions/patterns.md PAT-01
 #![forbid(unsafe_code)]
 
+mod arbiter_svc;
 mod cores;
 mod error;
 mod event_svc;

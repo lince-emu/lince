@@ -47,6 +47,14 @@ pub enum MemError {
         /// Length of the range in bytes.
         size: u64,
     },
+    /// An atomic access is not aligned to its size.
+    #[error("{size}-byte atomic access at {va:#x} is not aligned to its size")]
+    Unaligned {
+        /// The address accessed.
+        va: GuestVa,
+        /// The access size in bytes.
+        size: u64,
+    },
     /// A range ends past the address space.
     #[error("range {va:#x}+{size:#x} is outside the address space")]
     OutOfRange {

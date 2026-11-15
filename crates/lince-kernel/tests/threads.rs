@@ -38,6 +38,15 @@ const SIGNAL_EVENT: u16 = 0x11;
 const WAIT_SYNCHRONIZATION: u16 = 0x18;
 const CANCEL_SYNCHRONIZATION: u16 = 0x19;
 const CREATE_EVENT: u16 = 0x45;
+const ARBITRATE_LOCK: u16 = 0x1A;
+const ARBITRATE_UNLOCK: u16 = 0x1B;
+const WAIT_KEY: u16 = 0x1C;
+const SIGNAL_KEY: u16 = 0x1D;
+/// The mutex-word bit that says threads wait (tests/homebrew/b2.s).
+const WAITERS: u64 = 0x4000_0000;
+/// Where arbiter programs keep their mutex word and condition-variable key.
+const MUTEX: u32 = 0x50;
+const KEY: u32 = 0x58;
 const TIMED_OUT: u64 = 0xEA01;
 const CANCELLED: u64 = 0xEC01;
 /// Where wait programs keep their handle arrays.
@@ -112,6 +121,41 @@ impl Asm {
             .str(12, n, 0)
             .add_lsl3(13, n, 11)
             .str(v, 13, 8)
+    }
+
+    /// `LDR Wt, [Xn, #offset]`.
+    fn ldr_w(&mut self, t: u32, n: u32, offset: u32) -> &mut Self {
+        self.emit(0xB940_0000 | (offset / 4) << 10 | n << 5 | t)
+    }
+
+    /// `ArbitrateLock(owner = Xo, [Xn, #MUTEX], tag = Xt)`; clobbers `X0`–`X2`.
+    fn lock(&mut self, n: u32, owner: u32, tag: u32) -> &mut Self {
+        self.mov_reg(0, owner)
+            .add_imm(1, n, MUTEX)
+            .mov_reg(2, tag)
+            .svc(ARBITRATE_LOCK)
+    }
+
+    /// `ArbitrateUnlock([Xn, #MUTEX])`; clobbers `X0`.
+    fn unlock(&mut self, n: u32) -> &mut Self {
+        self.add_imm(0, n, MUTEX).svc(ARBITRATE_UNLOCK)
+    }
+
+    /// `WaitProcessWideKeyAtomic([Xn, #KEY], [Xn, #MUTEX], tag = Xt, timeout_ns)`; clobbers
+    /// `X0`–`X3`.
+    fn wait_key(&mut self, n: u32, tag: u32, timeout_ns: i64) -> &mut Self {
+        self.add_imm(0, n, KEY)
+            .add_imm(1, n, MUTEX)
+            .mov_reg(2, tag)
+            .mov(3, timeout_ns.cast_unsigned())
+            .svc(WAIT_KEY)
+    }
+
+    /// `SignalProcessWideKey([Xn, #KEY], count)`; clobbers `X0`–`X1`.
+    fn signal_key(&mut self, n: u32, count: i64) -> &mut Self {
+        self.add_imm(0, n, KEY)
+            .mov(1, count.cast_unsigned())
+            .svc(SIGNAL_KEY)
     }
 
     /// `LDR Xt, [Xn, #offset]`.
@@ -1006,4 +1050,188 @@ fn wait_synchronization_rejects_bad_handle_lists() {
         (0xEE01, 0xE601, 0xE401),
         "too many, bad address, writable end"
     );
+}
+
+/// Runs `functions` like [`run`], after `setup` saw the space and the main thread's handle.
+fn run_with_main(
+    functions: &[&Asm],
+    setup: impl FnOnce(&AddressSpace, u64),
+) -> (AddressSpace, Result<Finish, RunError>) {
+    let mem = space_with(functions);
+    let mut kernel = kernel();
+    let main = kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+    setup(&mem, u64::from(main));
+    let result = run_cores(&mut kernel, &mem);
+    (mem, result)
+}
+
+fn set_word(mem: &AddressSpace, offset: u32, value: u64) {
+    let value = u32::try_from(value).expect("test setup");
+    mem.write(GuestVa::new(DATA + u64::from(offset)), value)
+        .expect("test setup");
+}
+
+fn word(mem: &AddressSpace, offset: u32) -> u64 {
+    u64::from(
+        mem.read::<u32>(GuestVa::new(DATA + u64::from(offset)))
+            .expect("test setup"),
+    )
+}
+
+/// The main thread holds a contended mutex; waiters of priorities 40, 20 and 30 block in
+/// `ArbitrateLock`. Each unlock hands the mutex to the best waiter, which returns owning it,
+/// until the last unlock frees it.
+#[test]
+fn arbitrate_unlock_hands_the_mutex_to_waiters_in_priority_order() {
+    let mut waiter = Asm::default();
+    waiter
+        .mov_reg(20, 0)
+        .mov(9, DATA)
+        .ldr(21, 9, 0x60)
+        .lock(9, 21, 20)
+        .ldr(22, 9, 0x48)
+        .orr(22, 22, 0)
+        .str(22, 9, 0x48)
+        .ldr_w(23, 9, MUTEX)
+        .str(23, 9, 0x68)
+        .append(9, 20)
+        .unlock(9)
+        .svc(EXIT_THREAD);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .mov(0, u64::from(CURRENT_THREAD))
+        .mov(1, 10)
+        .svc(SET_THREAD_PRIORITY);
+    for priority in [40, 20, 30] {
+        main.spawn(function(1), u64::from(priority), priority, 0);
+    }
+    main.mov(0, 10_000_000)
+        .svc(SLEEP_THREAD)
+        .unlock(9)
+        .svc(EXIT_THREAD);
+
+    let (mem, result) = run_with_main(&[&main, &waiter], |mem, main| {
+        set_word(mem, MUTEX, main | WAITERS);
+        mem.write(GuestVa::new(DATA + 0x60), main)
+            .expect("test setup");
+    });
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    let list: Vec<u64> = (0..4).map(|n| data(&mem, 8 * n)).collect();
+    assert_eq!(list, [3, 20, 30, 40]);
+    assert_eq!(data(&mem, 0x48), 0, "every lock returned success");
+    assert_eq!(data(&mem, 0x68), 40, "the last owner held it uncontended");
+    assert_eq!(word(&mem, MUTEX), 0, "the last unlock freed it");
+}
+
+/// `ArbitrateLock` returns at once when the word no longer names the owner with waiters.
+#[test]
+fn arbitrate_lock_returns_at_once_when_the_mutex_changed() {
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .ldr(21, 9, 0x60)
+        .mov(22, 7)
+        .lock(9, 21, 22)
+        .str(0, 9, 0)
+        .svc(EXIT_THREAD);
+
+    let (mem, result) = run_with_main(&[&main], |mem, main| {
+        set_word(mem, MUTEX, main);
+        mem.write(GuestVa::new(DATA + 0x60), main)
+            .expect("test setup");
+    });
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    assert_eq!(data(&mem, 0), 0);
+    assert_eq!(word(&mem, MUTEX), data(&mem, 0x60), "untouched");
+}
+
+/// Two waiters (priorities 30 and 20) take the mutex and wait on a key, which releases it.
+/// Signaling one waiter wakes priority 20 with the mutex free; signaling all wakes priority
+/// 30 into a mutex waiter, and the key reads 0 again. The unlocks then hand the mutex on.
+#[test]
+fn a_signaled_condition_variable_waiter_reacquires_its_mutex() {
+    let mut waiter = Asm::default();
+    waiter
+        .mov_reg(20, 0)
+        .mov(9, DATA)
+        .str_w(20, 9, MUTEX)
+        .wait_key(9, 20, -1)
+        .ldr(22, 9, 0x48)
+        .orr(22, 22, 0)
+        .str(22, 9, 0x48)
+        .append(9, 20)
+        .unlock(9)
+        .svc(EXIT_THREAD);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .mov(0, u64::from(CURRENT_THREAD))
+        .mov(1, 10)
+        .svc(SET_THREAD_PRIORITY);
+    for priority in [30, 20] {
+        main.spawn(function(1), u64::from(priority), priority, 0);
+    }
+    main.mov(0, 10_000_000)
+        .svc(SLEEP_THREAD)
+        .ldr_w(10, 9, KEY)
+        .str(10, 9, 0x70)
+        .ldr_w(10, 9, MUTEX)
+        .str(10, 9, 0x78)
+        .signal_key(9, 1)
+        .ldr_w(10, 9, KEY)
+        .str(10, 9, 0x80 + 0x20)
+        .signal_key(9, -1)
+        .ldr_w(10, 9, KEY)
+        .str(10, 9, 0x80 + 0x28)
+        .ldr_w(10, 9, MUTEX)
+        .str(10, 9, 0x80 + 0x30)
+        .svc(EXIT_THREAD);
+
+    let (mem, result) = run(&[&main, &waiter]);
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    assert_eq!(
+        (data(&mem, 0x70), data(&mem, 0x78)),
+        (1, 0),
+        "both waiting, mutex free"
+    );
+    assert_eq!(data(&mem, 0xA0), 1, "one waiter left on the key");
+    assert_eq!(data(&mem, 0xA8), 0, "no waiter left on the key");
+    assert_eq!(
+        data(&mem, 0xB0),
+        0x14 | WAITERS,
+        "20 owns it, 30 waits for it"
+    );
+    let list: Vec<u64> = (0..3).map(|n| data(&mem, 8 * n)).collect();
+    assert_eq!(list, [2, 20, 30]);
+    assert_eq!(data(&mem, 0x48), 0, "every wait returned success");
+    assert_eq!(word(&mem, MUTEX), 0);
+}
+
+/// A condition-variable wait that times out returns `TIMED_OUT` without the mutex (GUESS).
+#[test]
+fn a_timed_out_condition_variable_wait_returns_without_the_mutex() {
+    const TIMEOUT: Duration = Duration::from_millis(20);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .mov(20, 5)
+        .str_w(20, 9, MUTEX)
+        .wait_key(
+            9,
+            20,
+            i64::try_from(TIMEOUT.as_nanos()).expect("test setup"),
+        )
+        .str(0, 9, 0)
+        .ldr_w(10, 9, MUTEX)
+        .str(10, 9, 8)
+        .svc(EXIT_THREAD);
+
+    let start = Instant::now();
+    let (mem, result) = run(&[&main]);
+
+    assert_eq!(result.expect("test setup"), Finish::AllThreadsExited);
+    assert_eq!((data(&mem, 0), data(&mem, 8)), (TIMED_OUT, 0));
+    assert!(start.elapsed() >= TIMEOUT);
 }
