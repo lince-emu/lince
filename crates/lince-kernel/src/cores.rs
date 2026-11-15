@@ -15,7 +15,13 @@
 //! Time comes from the kernel timer role thread of `lince-sched` (ADR-0032 §3): every quantum
 //! it rotates the sliced priorities, and between quanta it fires when a sleeper is due, so a
 //! sleeper wakes on time even while its core runs another thread.
+//!
+//! Each core thread records how long it holds the kernel lock (`KernelLockHeld`) and, when it
+//! switches threads after a reschedule request, how long the switch took (`PreemptLatency`),
+//! through its own recorder (ADR-0027 B2 scope).
 
+use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -23,6 +29,7 @@ use std::time::{Duration, Instant};
 use lince_cpu_a64::{Exit, State, run_interruptible};
 use lince_mem::AddressSpace;
 use lince_sched::{Fire, Timer};
+use lince_trace::{EventKind, Recorder};
 use parking_lot::{Condvar, Mutex, MutexGuard};
 
 use crate::error::{KernelError, RunError};
@@ -53,11 +60,64 @@ struct Shared<'k> {
 struct Locked<'k> {
     kernel: &'k mut Kernel,
     result: Option<Result<Finish, RunError>>,
+    /// Per core: when its pending reschedule request was made, for `PreemptLatency`.
+    requested: [Option<Instant>; CORE_COUNT],
+}
+
+/// The ledger of one core thread: its recorder, if the kernel lent it one.
+struct Ledger<'r>(RefCell<Option<&'r mut Recorder>>);
+
+impl Ledger<'_> {
+    /// Records a duration event ending now (D-003).
+    fn record(&self, kind: EventKind, since: Instant) {
+        if let Some(recorder) = self.0.borrow_mut().as_deref_mut() {
+            let ns = u64::try_from(since.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            // A full buffer counts the event as dropped; the core never waits for it.
+            recorder.record(kind, ns);
+        }
+    }
+}
+
+/// The kernel lock held by a core thread; records `KernelLockHeld` when released.
+struct Held<'g, 'k> {
+    guard: MutexGuard<'g, Locked<'k>>,
+    since: Instant,
+    ledger: &'g Ledger<'g>,
+}
+
+impl<'k> Deref for Held<'_, 'k> {
+    type Target = Locked<'k>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl DerefMut for Held<'_, '_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
+impl Drop for Held<'_, '_> {
+    fn drop(&mut self) {
+        self.ledger.record(EventKind::KernelLockHeld, self.since);
+    }
 }
 
 impl<'k> Shared<'k> {
     fn lock(&self) -> MutexGuard<'_, Locked<'k>> {
         self.kernel.lock()
+    }
+
+    /// Takes the lock for a core thread whose ledger times the hold.
+    fn lock_on<'g>(&'g self, ledger: &'g Ledger<'g>) -> Held<'g, 'k> {
+        let guard = self.kernel.lock();
+        Held {
+            guard,
+            since: Instant::now(),
+            ledger,
+        }
     }
 
     /// Records the first result and takes every core back.
@@ -99,9 +159,14 @@ impl<'k> Shared<'k> {
         if !threads.take_changed() {
             return;
         }
+        let now = Instant::now();
         for (core, flag) in self.interrupt.iter().enumerate() {
             if threads.needs_switch(core) {
                 flag.store(true, Ordering::Release);
+                locked.requested[core].get_or_insert(now);
+            } else {
+                // A request a later change withdrew is no latency to report.
+                locked.requested[core] = None;
             }
         }
         if let Some(at) = threads.next_wake_any() {
@@ -174,21 +239,26 @@ fn run_on_cores(
     if kernel.threads.all_exited() {
         return Err(RunError::NoThreads);
     }
+    // Lent to the core threads for this run and given back after it.
+    let mut ledgers = std::mem::take(&mut kernel.core_ledgers);
     let shared = Shared {
         kernel: Mutex::new(Locked {
             kernel,
             result: None,
+            requested: [None; CORE_COUNT],
         }),
         changed: Condvar::new(),
         interrupt: std::array::from_fn(|_| AtomicBool::new(false)),
         timer: Timer::new(),
     };
     thread::scope(|scope| {
+        let mut lent = ledgers.iter_mut();
         for core in 0..CORE_COUNT {
             let shared = &shared;
+            let ledger = lent.next();
             let spawned = thread::Builder::new()
                 .name(format!("lince-core-{core}"))
-                .spawn_scoped(scope, move || core_main(shared, mem, core));
+                .spawn_scoped(scope, move || core_main(shared, mem, core, ledger));
             if let Err(source) = spawned {
                 let mut locked = shared.lock();
                 shared.finish(&mut locked, Err(RunError::Spawn { core, source }));
@@ -209,14 +279,21 @@ fn run_on_cores(
     });
     let locked = shared.kernel.into_inner();
     locked.kernel.current = None;
+    locked.kernel.core_ledgers = ledgers;
     // Every core returns only once a result is set.
     locked.result.unwrap_or(Err(RunError::NoThreads))
 }
 
-fn core_main(shared: &Shared<'_>, mem: &AddressSpace, core: usize) {
+fn core_main(
+    shared: &Shared<'_>,
+    mem: &AddressSpace,
+    core: usize,
+    recorder: Option<&mut Recorder>,
+) {
     let _panic = PanicGuard { shared, core };
+    let ledger = Ledger(RefCell::new(recorder));
     let mut last = None;
-    while let Some((index, mut state)) = next_thread(shared, core) {
+    while let Some((index, mut state)) = next_thread(shared, core, &ledger) {
         if last != Some(index) {
             // The monitor is per core: a reservation never survives a thread switch.
             state.exclusive = None;
@@ -227,6 +304,7 @@ fn core_main(shared: &Shared<'_>, mem: &AddressSpace, core: usize) {
             mem,
             core,
             index,
+            ledger: &ledger,
         };
         run_thread(&on, state);
     }
@@ -275,10 +353,13 @@ impl Drop for PanicGuard<'_, '_> {
 
 /// Parks until `core` has a ready thread and takes it, or returns `None` once the process
 /// has finished.
-fn next_thread(shared: &Shared<'_>, core: usize) -> Option<(usize, State)> {
+fn next_thread(shared: &Shared<'_>, core: usize, ledger: &Ledger<'_>) -> Option<(usize, State)> {
     let mut locked = shared.lock();
     loop {
+        // Timed by hand: the wait below releases the lock, and parked time is not held time.
+        let since = Instant::now();
         if locked.result.is_some() {
+            ledger.record(EventKind::KernelLockHeld, since);
             return None;
         }
         locked.kernel.threads.wake_due(Instant::now());
@@ -286,8 +367,10 @@ fn next_thread(shared: &Shared<'_>, core: usize) -> Option<(usize, State)> {
         // Nothing runs here, so a pending request is already answered by this pick.
         shared.interrupt[core].store(false, Ordering::Release);
         if let Some(picked) = locked.kernel.threads.take(core) {
+            ledger.record(EventKind::KernelLockHeld, since);
             return Some(picked);
         }
+        ledger.record(EventKind::KernelLockHeld, since);
         match locked.kernel.threads.next_wake(core) {
             Some(until) => {
                 shared.changed.wait_until(&mut locked, until);
@@ -303,6 +386,7 @@ struct OnCore<'s, 'k, 'm> {
     mem: &'m AddressSpace,
     core: usize,
     index: usize,
+    ledger: &'s Ledger<'s>,
 }
 
 /// Runs thread `index` on `core` until it should leave: an SVC rescheduled it, a better
@@ -320,10 +404,14 @@ fn run_thread(on: &OnCore<'_, '_, '_>, mut state: State) {
                 if locked.result.is_some() || locked.kernel.threads.needs_switch(on.core) {
                     break (locked, None);
                 }
+                locked.requested[on.core] = None;
             }
             Step::Leave { locked, finished } => break (locked, finished),
         }
     };
+    if let Some(requested) = locked.requested[on.core].take() {
+        on.ledger.record(EventKind::PreemptLatency, requested);
+    }
     locked.kernel.threads.put_back(on.index, state);
     let all_exited = locked.kernel.threads.all_exited();
     let finished = finished.or_else(|| all_exited.then_some(Ok(Finish::AllThreadsExited)));
@@ -337,17 +425,17 @@ fn run_thread(on: &OnCore<'_, '_, '_>, mut state: State) {
 /// What one interpreter call and its SVC, if any, decided. Both variants hold the lock.
 enum Step<'g, 'k> {
     /// A safe point where the thread may keep its core: an SVC that resumes, or an interrupt.
-    SafePoint(MutexGuard<'g, Locked<'k>>),
+    SafePoint(Held<'g, 'k>),
     /// The thread leaves its core; `finished` says how the process ended, if it did.
     Leave {
-        locked: MutexGuard<'g, Locked<'k>>,
+        locked: Held<'g, 'k>,
         finished: Option<Result<Finish, RunError>>,
     },
 }
 
 fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State) -> Step<'s, 'k> {
     let leave = |finished| Step::Leave {
-        locked: on.shared.lock(),
+        locked: on.shared.lock_on(on.ledger),
         finished,
     };
     // No instruction limit: the core comes back only at an SVC or when interrupted.
@@ -358,7 +446,7 @@ fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State) -> Step<'s, 'k> {
     };
     let number = match result.exit {
         Exit::Svc { number } => number,
-        Exit::Interrupted | Exit::Limit => return Step::SafePoint(on.shared.lock()),
+        Exit::Interrupted | Exit::Limit => return Step::SafePoint(on.shared.lock_on(on.ledger)),
         exit @ (Exit::Undefined { .. }
         | Exit::Unimplemented { .. }
         | Exit::FetchAbort { .. }
@@ -378,7 +466,7 @@ fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State) -> Step<'s, 'k> {
     let mut regs = Regs::default();
     let args = regs.len();
     regs.copy_from_slice(&state.x[..args]);
-    let mut locked = on.shared.lock();
+    let mut locked = on.shared.lock_on(on.ledger);
     locked.kernel.current = Some(Current {
         index: on.index,
         core: on.core,
