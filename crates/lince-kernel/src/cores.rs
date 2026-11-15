@@ -156,12 +156,12 @@ impl<'k> Shared<'k> {
     /// parked ones, if anything changed since the last pass.
     fn reselect(&self, locked: &mut Locked<'_>) {
         let threads = &mut locked.kernel.threads;
-        if !threads.take_changed() {
+        let Some(switch) = threads.switch_requests() else {
             return;
-        }
+        };
         let now = Instant::now();
         for (core, flag) in self.interrupt.iter().enumerate() {
-            if threads.needs_switch(core) {
+            if switch[core] {
                 flag.store(true, Ordering::Release);
                 locked.requested[core].get_or_insert(now);
             } else {
