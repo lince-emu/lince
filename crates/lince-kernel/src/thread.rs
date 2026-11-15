@@ -137,6 +137,9 @@ pub(crate) enum WaitKind {
         mutex: GuestVa,
         tag: u32,
     },
+    /// `SendSyncRequest` to an object that deferred its reply: the reply with `ticket`, built
+    /// on the service-I/O thread (T-063).
+    Reply { ticket: u64 },
 }
 
 /// The objects of one wait, in the order the guest listed them; fixed size, so waiting never
@@ -197,6 +200,12 @@ impl Default for Threads {
 impl Threads {
     pub(crate) fn thread(&self, index: usize) -> &Thread {
         &self.list[index]
+    }
+
+    /// What thread `index` waits for, if it is `Waiting`.
+    pub(crate) fn waiting_for(&self, index: usize) -> Option<&WaitKind> {
+        let thread = self.list.get(index)?;
+        matches!(thread.status, Status::Waiting { .. }).then_some(&thread.wait)
     }
 
     pub(crate) fn thread_mut(&mut self, index: usize) -> &mut Thread {

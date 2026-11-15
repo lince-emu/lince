@@ -29,7 +29,9 @@
 //! # Threads
 //! Dispatch runs on the guest core that executed the `SVC` instruction, under the kernel lock.
 //! [`run_cores`] owns the six core threads (ADR-0017 B2 scope) and joins them before it
-//! returns; the crate creates no other thread.
+//! returns. The only other threads are `lince-sched` role threads: the kernel timer during a
+//! run, and the service-I/O thread that builds deferred IPC replies (T-063) between
+//! [`Kernel::start_service_io`] and [`Kernel::shutdown_service_io`].
 //! It allocates only for the debug-output buffer, the heap bookkeeping and the bounded thread,
 //! handle and event tables, performs no I/O and records unknown SVCs with the non-blocking
 //! `lince-trace` recorder.
@@ -40,6 +42,7 @@
 
 mod arbiter_svc;
 mod cores;
+mod deferred;
 mod error;
 mod event_svc;
 mod handle;
@@ -53,6 +56,7 @@ mod thread_svc;
 mod wait_svc;
 
 pub use cores::{Finish, Ticker, run_cores, run_cores_with};
+pub use deferred::DeferredWork;
 pub use error::{KernelError, Result, RunError};
 pub use ipc_svc::{
     IPC_MESSAGE_SIZE, IpcMessage, PortFactory, SessionObject, Sessions, UnknownCommand,
