@@ -118,7 +118,7 @@ fn moving_a_running_thread_hands_it_over_once_and_always() {
             priority: 44,
             core: 0,
         };
-        threads.insert(GuestVa::new(0), params).expect("one thread");
+        threads.insert(GuestVa::new(0), params);
         threads.make_ready(0);
         let (_, state) = threads.take(0).expect("core 0 runs it");
         let shared = Arc::new(Shared {
