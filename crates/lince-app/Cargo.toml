@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 lince-common = { path = "../lince-common", version = "0.0.0" }
-lince-cpu-a64 = { path = "../lince-cpu-a64", version = "0.0.0" }
+lince-hle = { path = "../lince-hle", version = "0.0.0" }
 lince-kernel = { path = "../lince-kernel", version = "0.0.0" }
 lince-loader = { path = "../lince-loader", version = "0.0.0" }
 lince-mem = { path = "../lince-mem", version = "0.0.0" }

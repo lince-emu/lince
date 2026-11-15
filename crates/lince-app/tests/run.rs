@@ -96,3 +96,17 @@ fn the_coverage_list_names_each_call_and_warns_about_dropped_events() {
         )
     );
 }
+
+/// The B2 exit criterion (doc 07): threads on several cores, synchronization and IPC to the
+/// first services. Each line of `b2.expected` is one `OutputDebugString` call, which prints no
+/// newline of its own, so the output is the lines run together.
+#[test]
+fn run_prints_the_expected_output_of_the_b2_program() {
+    let output = lince(&["run", &homebrew("b2.nro")]);
+    assert!(output.status.success(), "{output:?}");
+    let expected = std::fs::read_to_string(homebrew("b2.expected")).expect("read b2.expected");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        expected.lines().collect::<String>()
+    );
+}

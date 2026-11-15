@@ -142,7 +142,7 @@ name = "lince-app"
 version = "0.0.0"
 dependencies = [
  "lince-common",
- "lince-cpu-a64",
+ "lince-hle",
  "lince-kernel",
  "lince-loader",
  "lince-mem",
