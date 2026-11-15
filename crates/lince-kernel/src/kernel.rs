@@ -11,6 +11,7 @@ use lince_trace::{EventKind, NameId, Recorder, ThreadRole, Trace};
 
 use crate::error::{KernelError, Result};
 use crate::handle::{Handles, Object};
+use crate::ipc_svc::{PortFactory, SessionObject};
 use crate::svc::{self, SvcNumber};
 use crate::thread::{CORE_COUNT, LOWEST_PRIORITY, ThreadParams, Threads};
 
@@ -53,6 +54,8 @@ pub(crate) enum Outcome {
     Reschedule,
     /// The SVC is reserved, or was called with arguments this build has no behavior for.
     Unsupported,
+    /// A session object received a command it has no behavior for.
+    UnknownCommand { object: &'static str, command: u32 },
 }
 
 /// The thread that made the SVC being dispatched, and its core.
@@ -82,6 +85,17 @@ pub struct Kernel {
     pub(crate) handles: Handles,
     /// Whether each event is signaled, by event index; events are never freed (B2).
     pub(crate) events: Vec<bool>,
+    /// Session objects by session index; `None` once the session's handle is closed.
+    pub(crate) sessions: Vec<Option<Box<dyn SessionObject>>>,
+    /// The session whose object is handling a request; its slot is empty while the object runs
+    /// but stays reserved, so a session the object opens never lands in it.
+    pub(crate) running_session: Option<usize>,
+    /// Handles of the sessions the running object opened during its request; closed again if
+    /// the request fails, since the guest never learns them. Kept between requests so its
+    /// capacity is reused.
+    pub(crate) opened_during_request: Vec<u32>,
+    /// Named ports a program connects to with `ConnectToNamedPort`.
+    pub(crate) named_ports: Vec<(&'static str, PortFactory)>,
     /// Set by a core thread while it dispatches; `None` on the single-thread B1 path, where
     /// the thread SVCs are unsupported.
     pub(crate) current: Option<Current>,
@@ -105,6 +119,10 @@ impl Kernel {
             threads: Threads::default(),
             handles: Handles::default(),
             events: Vec::new(),
+            sessions: Vec::new(),
+            running_session: None,
+            opened_during_request: Vec::new(),
+            named_ports: Vec::new(),
             current: None,
             quantum: DEFAULT_QUANTUM,
             core_ledgers: (0..CORE_COUNT)
@@ -129,7 +147,10 @@ impl Kernel {
             Outcome::Break(reason) => Flow::Break { reason },
             // `run_svc` turns `Unsupported` into an error. Only a thread SVC reschedules, and
             // without a current thread those are unsupported.
-            Outcome::Resume | Outcome::Reschedule | Outcome::Unsupported => Flow::Continue,
+            Outcome::Resume
+            | Outcome::Reschedule
+            | Outcome::Unsupported
+            | Outcome::UnknownCommand { .. } => Flow::Continue,
         })
     }
 
@@ -152,6 +173,9 @@ impl Kernel {
                 number: u32::from(number),
                 name: entry.name,
             }),
+            Outcome::UnknownCommand { object, command } => {
+                Err(KernelError::UnknownCommand { object, command })
+            }
             outcome @ (Outcome::Resume
             | Outcome::Exit
             | Outcome::Break(_)
@@ -191,6 +215,12 @@ impl Kernel {
         self.quantum = quantum;
     }
 
+    /// Makes `name` a port programs can connect to; each connection gets a new object from
+    /// `factory`. Call before [`run_cores`](crate::run_cores).
+    pub fn register_named_port(&mut self, name: &'static str, factory: PortFactory) {
+        self.named_ports.push((name, factory));
+    }
+
     /// Takes the bytes the guest wrote with `OutputDebugString` since the last call.
     pub fn take_debug_output(&mut self) -> Vec<u8> {
         std::mem::take(&mut self.debug_output)
@@ -198,5 +228,9 @@ impl Kernel {
 
     pub(crate) fn log_stub(&mut self, name: NameId) {
         self.recorder.stub(name);
+    }
+
+    pub(crate) fn log_unknown_command(&mut self, name: NameId, command: u32) {
+        self.recorder.unknown_command(name, command);
     }
 }

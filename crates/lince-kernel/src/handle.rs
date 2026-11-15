@@ -24,6 +24,8 @@ pub(crate) enum Object {
     ReadableEvent(usize),
     /// The writable end of an event, by its index in the event list.
     WritableEvent(usize),
+    /// The client end of an IPC session, by its index in the session table.
+    Session(usize),
 }
 
 #[derive(Clone, Copy)]

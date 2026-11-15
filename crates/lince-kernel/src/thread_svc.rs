@@ -39,7 +39,7 @@ fn resolve(kernel: &Kernel, handle: u32) -> Option<usize> {
     }
     match kernel.handles.get(handle)? {
         Object::Thread(index) => Some(index),
-        Object::ReadableEvent(_) | Object::WritableEvent(_) => None,
+        Object::ReadableEvent(_) | Object::WritableEvent(_) | Object::Session(_) => None,
     }
 }
 

@@ -52,6 +52,26 @@ fn different_names_and_kinds_are_each_recorded_once() {
 }
 
 #[test]
+fn an_unknown_command_is_recorded_once_per_object_and_command() {
+    let mut trace = Trace::new(16);
+    let sm = trace.name("sm:").unwrap();
+    let mut recorder = trace.recorder(ThreadRole::GuestCore);
+
+    assert!(recorder.unknown_command(sm, 7));
+    assert!(!recorder.unknown_command(sm, 7));
+    assert!(recorder.unknown_command(sm, 8));
+
+    let drained = trace.drain();
+    let commands: Vec<_> = drained
+        .records
+        .iter()
+        .filter_map(|r| trace.unknown_command(&r.event))
+        .collect();
+    assert_eq!(commands, [("sm:", 7), ("sm:", 8)]);
+    assert_eq!(trace.stub_name(&drained.records[0].event), None);
+}
+
+#[test]
 fn registering_a_name_twice_returns_the_same_id() {
     let mut trace = Trace::new(1);
 

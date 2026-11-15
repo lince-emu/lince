@@ -479,8 +479,8 @@ fn step<'s, 'k>(on: &OnCore<'s, 'k, '_>, state: &mut State) -> Step<'s, 'k> {
         Ok(Outcome::Reschedule) => None,
         Ok(Outcome::Exit) => Some(Ok(Finish::ExitProcess)),
         Ok(Outcome::Break(reason)) => Some(Err(RunError::Break { reason })),
-        Ok(Outcome::Unsupported) => {
-            unreachable!("invariant: run_svc turns Unsupported into an error")
+        Ok(Outcome::Unsupported | Outcome::UnknownCommand { .. }) => {
+            unreachable!("invariant: run_svc turns Unsupported and UnknownCommand into errors")
         }
         Err(error) => Some(Err(RunError::Kernel(error))),
     };
