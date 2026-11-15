@@ -47,6 +47,9 @@ pub enum RunError {
     /// No thread was started, so nothing could run.
     #[error("no thread was started")]
     NoThreads,
+    /// The kernel timer thread could not be created.
+    #[error("cannot create the kernel timer thread")]
+    Timer(#[source] lince_sched::SchedError),
     /// A core thread could not be created.
     #[error("cannot create the thread of guest core {core}: {source}")]
     Spawn {
@@ -63,6 +66,9 @@ pub enum RunError {
         /// The guest core.
         core: usize,
     },
+    /// The kernel timer thread panicked; [`run_cores`](crate::run_cores) stops the cores.
+    #[error("the kernel timer thread panicked")]
+    TimerPanicked,
     /// The interpreter failed.
     #[error("interpreter error: {0}")]
     Cpu(#[from] CpuError),

@@ -3,6 +3,8 @@
 
 //! The kernel state and the SVC dispatch table.
 
+use std::time::Duration;
+
 use lince_common::GuestVa;
 use lince_mem::AddressSpace;
 use lince_trace::{EventKind, NameId, Recorder, ThreadRole, Trace};
@@ -19,6 +21,10 @@ pub type Regs = [u64; 8];
 // GUESS: B1 programs take the base from `X1` and need no particular address; the caller must
 // load the program elsewhere (docs/research/nro-and-b1-svcs.md O6).
 pub const HEAP_BASE: GuestVa = GuestVa::new(0x20_0000_0000);
+
+/// How often [`run_cores`](crate::run_cores) rotates the sliced priorities, by default.
+// GUESS: the Switch 1 quantum (ADR-0032 §3, Ryujinx note); not measured on NX2.
+pub const DEFAULT_QUANTUM: Duration = Duration::from_millis(10);
 
 /// What the guest core does after an SVC.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,6 +81,11 @@ pub struct Kernel {
     /// Set by a core thread while it dispatches; `None` on the single-thread B1 path, where
     /// the thread SVCs are unsupported.
     pub(crate) current: Option<Current>,
+    /// How often [`run_cores`](crate::run_cores) rotates the sliced priorities.
+    pub(crate) quantum: Duration,
+    /// One recorder per guest core thread, for the scheduler's ledger events (ADR-0027 B2
+    /// scope); [`run_cores`](crate::run_cores) lends core `n` the `n`th.
+    pub(crate) core_ledgers: Vec<Recorder>,
 }
 
 impl Kernel {
@@ -89,6 +100,10 @@ impl Kernel {
             debug_output: Vec::new(),
             threads: Threads::default(),
             current: None,
+            quantum: DEFAULT_QUANTUM,
+            core_ledgers: (0..CORE_COUNT)
+                .map(|_| trace.recorder(ThreadRole::GuestCore))
+                .collect(),
         })
     }
 
@@ -159,6 +174,12 @@ impl Kernel {
     /// on that core. Call before [`run_cores`](crate::run_cores).
     pub fn set_sliced_priorities(&mut self, sliced: [Option<u32>; CORE_COUNT]) {
         self.threads.set_sliced(sliced);
+    }
+
+    /// Replaces how often [`run_cores`](crate::run_cores) ends a quantum (default
+    /// [`DEFAULT_QUANTUM`]). Call before it.
+    pub fn set_quantum(&mut self, quantum: Duration) {
+        self.quantum = quantum;
     }
 
     /// Takes the bytes the guest wrote with `OutputDebugString` since the last call.

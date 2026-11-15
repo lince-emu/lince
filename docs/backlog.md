@@ -583,9 +583,10 @@ separate task, ADR-0032 §5); `SleepThread` -1 and -2 act like 0. List T-051 tes
 expectations change because non-sliced priorities no longer take turns.
 Too large for one PR (QUAL-62), so it lands in steps: (1) `lince-cpu-a64` interrupt flag and
 `Exit::Interrupted`; (2) kernel sliced-priority table, reselection pass and prompt preemption
-with a manual tick; (3) the kernel timer role thread in `lince-sched` and the ledger events;
+with a manual tick; (3a) the kernel timer role thread in `lince-sched`; (3b) the ledger events, which need a
+recording call in `lince-trace` beyond its once-only records;
 (4) the loom model, which needs `loom` as a dev-dependency of `lince-kernel` (approved by the maintainer, 2026-11-14). T-052 waits
-for step 3, since its timeouts use the timer thread.
+for step 3a, since its timeouts use the timer thread.
 - **Acceptance:** the ADR-0032 validation tests pass (unsliced spinner keeps its core, sliced
   pair alternates per tick, a cross-core wake interrupts a spinner within one block, a core
   mask change never leaves a thread on two cores, loom model of the handoff); ledger events for

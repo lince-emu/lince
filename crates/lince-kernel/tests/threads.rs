@@ -15,7 +15,7 @@ use lince_kernel::{
     Ticker, run_cores, run_cores_with,
 };
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
-use lince_trace::Trace;
+use lince_trace::{EventKind, ThreadRole, Trace};
 
 const CODE: u64 = 0x1_0000;
 const DATA: u64 = 0x4_0000;
@@ -713,4 +713,106 @@ fn run_cores_with_stops_the_process_when_its_driver_returns() {
     let (_, result) = run_ticked(&[&main], |_, _| {});
 
     assert_eq!(result.expect("test setup"), Finish::Stopped);
+}
+
+/// With the kernel timer keeping time, a priority-10 sleeper wakes on time on a core that a
+/// priority-44 spinner keeps busy. The quantum is far longer than the sleep, so only the
+/// timer's wakeup fire can end it.
+#[test]
+fn the_timer_wakes_a_sleeper_on_a_busy_core() {
+    const SLEEP: Duration = Duration::from_millis(30);
+    let mut spinner = Asm::default();
+    spinner.mov(10, 1).str(10, 0, 8).spin();
+    let mut sleeper = Asm::default();
+    sleeper
+        .mov_reg(9, 0)
+        .mov(0, u64::try_from(SLEEP.as_nanos()).expect("test setup"))
+        .svc(SLEEP_THREAD)
+        .mov(10, 1)
+        .str(10, 9, 16)
+        .svc(EXIT_PROCESS);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, PRIORITY, 1)
+        .wait_for(9, 8, 1)
+        .spawn(function(2), DATA, 10, 1)
+        .svc(EXIT_THREAD);
+
+    let mem = space_with(&[&main, &spinner, &sleeper]);
+    let mut kernel = kernel();
+    kernel.set_quantum(PATIENCE * 4);
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+
+    let start = Instant::now();
+    let result = run_cores(&mut kernel, &mem);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!(data(&mem, 16), 1);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed >= SLEEP && elapsed < PATIENCE,
+        "woke after {elapsed:?}"
+    );
+}
+
+/// With the kernel timer keeping time, two priority-59 spinners on core 1 both run: the
+/// second only gets the core when a quantum rotates the first out. The main thread exits once
+/// both have marked their word.
+#[test]
+fn the_timer_rotates_a_sliced_pair() {
+    let mut marker = Asm::default();
+    marker.mov(10, 1).str(10, 0, 0).spin();
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, 59, 1)
+        .spawn(function(1), DATA + 8, 59, 1)
+        .wait_for(9, 0, 1)
+        .wait_for(9, 8, 1)
+        .svc(EXIT_PROCESS);
+
+    let (mem, result) = run(&[&main, &marker]);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!((data(&mem, 0), data(&mem, 8)), (1, 1), "both took turns");
+}
+
+/// ADR-0032 ledger: core threads record how long they hold the kernel lock, and a core that
+/// switches after a cross-core start records the latency from the request to the switch.
+#[test]
+fn core_threads_record_lock_hold_and_preemption_latency() {
+    let mut spinner = Asm::default();
+    spinner.mov(10, 1).str(10, 0, 8).spin();
+    let mut urgent = Asm::default();
+    urgent.svc(EXIT_PROCESS);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, PRIORITY, 2)
+        .wait_for(9, 8, 1)
+        .spawn(function(2), DATA, 0, 2)
+        .spin();
+    let mem = space_with(&[&main, &spinner, &urgent]);
+    let mut trace = Trace::new(Trace::MAX_CAPACITY);
+    let mut kernel = Kernel::new(&mut trace).expect("test setup");
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+
+    let result = run_cores(&mut kernel, &mem);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    let drained = trace.drain();
+    let count = |kind| {
+        drained
+            .records
+            .iter()
+            .filter(|record| record.role == ThreadRole::GuestCore && record.event.kind == kind)
+            .count()
+    };
+    assert!(count(EventKind::KernelLockHeld) > 0, "lock holds recorded");
+    assert!(
+        count(EventKind::PreemptLatency) > 0,
+        "the spinner's core recorded its switch"
+    );
 }
