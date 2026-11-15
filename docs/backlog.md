@@ -72,8 +72,8 @@ Rules:
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |
 | T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Done | T-051 | 0017, 0024, 0032 |
 | T-062 | Research: `fsp-srv` IFileSystem and IFile parameters and the path buffer (public sources) | Research | Done | T-054 | 0024 |
-| T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | In progress | T-057 | 0017, 0024 |
-| T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Blocked | T-062, T-063 | 0017, 0024 |
+| T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | Done | T-057 | 0017, 0024 |
+| T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | In progress | T-062, T-063 | 0017, 0024 |
 
 ## Details
 
@@ -540,6 +540,10 @@ documents, through T-063's deferred replies. No game content enters the reposito
 (LEGAL-50).
 - **Acceptance:** `fs` cannot reach outside its host directory; each command tested through
   the IPC framework; no host I/O on a guest core thread.
+Lands in steps (QUAL-62): (1) a deferred reply can release the sessions its request opened,
+so a failed `OpenFile` leaves no session the guest cannot name (also when the waiter is
+gone); (2) read-only `fsp-srv`: path sandbox, GetEntryType, OpenFile, IFile Read and GetSize,
+and `lince run --sd <dir>`; (3) IFile Write, Flush and SetSize, OpenDirectory and IDirectory.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the

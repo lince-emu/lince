@@ -200,9 +200,12 @@ pub(crate) fn send_sync_request(
         };
     }
     if let Some(ticket) = deferred {
-        // The reply comes later through `deliver_replies`; the sessions the object opened are
-        // the guest's once that reply names them.
-        kernel.opened_during_request.clear();
+        // The reply comes later through `deliver_replies`, which keeps the sessions the object
+        // opened only if that reply hands them to the guest.
+        if !kernel.opened_during_request.is_empty() {
+            let opened = std::mem::take(&mut kernel.opened_during_request);
+            kernel.deferred.opened.push((ticket, opened));
+        }
         kernel
             .threads
             .begin_wait(current.index, &WaitKind::Reply { ticket }, None);
@@ -221,12 +224,18 @@ pub(crate) fn send_sync_request(
 /// so no handle or session slot is left behind that the guest cannot name.
 fn close_opened(kernel: &mut Kernel) {
     let mut opened = std::mem::take(&mut kernel.opened_during_request);
-    for handle in opened.drain(..) {
-        if let Some(Object::Session(index)) = kernel.handles.close(handle) {
+    close_sessions(kernel, opened.drain(..));
+    kernel.opened_during_request = opened;
+}
+
+/// Closes the session handles in `handles`; other handles are left alone.
+pub(crate) fn close_sessions(kernel: &mut Kernel, handles: impl IntoIterator<Item = u32>) {
+    for handle in handles {
+        if let Some(Object::Session(index)) = kernel.handles.get(handle) {
+            kernel.handles.close(handle);
             kernel.sessions[index] = None;
         }
     }
-    kernel.opened_during_request = opened;
 }
 
 #[cfg(test)]

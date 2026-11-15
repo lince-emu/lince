@@ -13,9 +13,9 @@ use std::time::{Duration, Instant};
 
 use lince_common::GuestVa;
 use lince_kernel::{
-    CURRENT_THREAD, Finish, IPC_MESSAGE_SIZE, IpcMessage, Kernel, KernelError, Regs, RunError,
-    SessionObject, Sessions, TLS_BASE, TLS_SIZE, ThreadParams, Ticker, UnknownCommand, run_cores,
-    run_cores_with,
+    CURRENT_THREAD, DeferredReply, Finish, IPC_MESSAGE_SIZE, IpcMessage, Kernel, KernelError, Regs,
+    RunError, SessionObject, Sessions, TLS_BASE, TLS_SIZE, ThreadParams, Ticker, UnknownCommand,
+    run_cores, run_cores_with,
 };
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
 use lince_trace::{EventKind, NameId, ThreadRole, Trace};
@@ -1267,7 +1267,7 @@ impl SessionObject for Deferring {
             }
             let mut reply = [0; IPC_MESSAGE_SIZE];
             reply[0] = 0x5A;
-            reply
+            DeferredReply::Keep(reply)
         });
         if sessions.defer("deferring", work) {
             Ok(())
