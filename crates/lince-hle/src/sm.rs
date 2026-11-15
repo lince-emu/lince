@@ -31,7 +31,7 @@ const GET_SERVICE_HANDLE: u16 = 1;
 const NOT_REGISTERED: u32 = 0xE15;
 /// The client is out of handles or sessions.
 // GUESS: the kernel's out-of-resource code; `sm:` codes are not in the note (O6).
-const OUT_OF_SESSIONS: u32 = 0xD001;
+pub(crate) const OUT_OF_SESSIONS: u32 = 0xD001;
 
 /// A service name as `sm:` takes it: up to 8 bytes, zero-padded, as a little-endian `u64`
 /// (S1, section 3.4). `None` for an empty name, one longer than 8 bytes or one with a NUL.
@@ -65,7 +65,7 @@ impl ServiceRegistry {
         true
     }
 
-    fn find(&self, name: u64) -> Option<&ServiceFactory> {
+    pub(crate) fn find(&self, name: u64) -> Option<&ServiceFactory> {
         self.services
             .iter()
             .find(|(registered, _)| *registered == name)
@@ -175,6 +175,7 @@ mod tests {
 
     use super::{NOT_REGISTERED, ServiceManager, ServiceRegistry, service_name};
     use crate::hipc::{MESSAGE_SIZE, Message, Parts};
+    use crate::testing::FakeSessions;
     use crate::tipc;
 
     struct Dummy(NameId);
@@ -194,17 +195,6 @@ mod tests {
             _: &mut IpcMessage,
         ) -> Result<(), UnknownCommand> {
             Ok(())
-        }
-    }
-
-    /// Hands out handles 0x100, 0x101, … and keeps the objects.
-    #[derive(Default)]
-    struct FakeSessions(Vec<Box<dyn SessionObject>>);
-
-    impl Sessions for FakeSessions {
-        fn open_session(&mut self, object: Box<dyn SessionObject>) -> Option<u32> {
-            self.0.push(object);
-            u32::try_from(0xFF + self.0.len()).ok()
         }
     }
 
@@ -251,8 +241,8 @@ mod tests {
             .handle_request(&mut sessions, &mut message)
             .unwrap();
         assert_eq!(reply(&message), (0, vec![0x100]));
-        assert_eq!(sessions.0.len(), 1);
-        assert_eq!(sessions.0[0].name(), "set");
+        assert_eq!(sessions.objects.len(), 1);
+        assert_eq!(sessions.objects[0].name(), "set");
     }
 
     #[test]
@@ -264,7 +254,7 @@ mod tests {
             .handle_request(&mut sessions, &mut message)
             .unwrap();
         assert_eq!(reply(&message), (NOT_REGISTERED, vec![]));
-        assert!(sessions.0.is_empty());
+        assert!(sessions.objects.is_empty());
     }
 
     #[test]
