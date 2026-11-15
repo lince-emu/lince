@@ -6,15 +6,16 @@
 //!
 //! Encodings follow the A64 base instruction formats of the Arm Architecture Reference Manual.
 
+use std::thread;
 use std::time::{Duration, Instant};
 
 use lince_common::GuestVa;
 use lince_kernel::{
     CURRENT_THREAD, Finish, Kernel, KernelError, Regs, RunError, TLS_BASE, TLS_SIZE, ThreadParams,
-    run_cores,
+    Ticker, run_cores, run_cores_with,
 };
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
-use lince_trace::Trace;
+use lince_trace::{EventKind, ThreadRole, Trace};
 
 const CODE: u64 = 0x1_0000;
 const DATA: u64 = 0x4_0000;
@@ -99,6 +100,20 @@ impl Asm {
         let back = i32::try_from(self.0.len() - target).expect("test setup");
         let imm = (-back).cast_unsigned() & 0x7_FFFF;
         self.emit(0xB500_0000 | imm << 5 | t)
+    }
+
+    /// `B` back to the instruction at index `target`.
+    fn b_back(&mut self, target: usize) -> &mut Self {
+        let back = i32::try_from(self.0.len() - target).expect("test setup");
+        self.emit(0x1400_0000 | ((-back).cast_unsigned() & 0x03FF_FFFF))
+    }
+
+    /// Loops until the word at `[Xn, #offset]` equals `value`; clobbers `X12`.
+    fn wait_for(&mut self, n: u32, offset: u32, value: u32) -> &mut Self {
+        let top = self.here();
+        self.ldr(12, n, offset)
+            .sub_imm(12, 12, value)
+            .cbnz_back(12, top)
     }
 
     /// `B .`: spins forever.
@@ -271,8 +286,10 @@ fn a_pinned_thread_never_runs_elsewhere_and_moves_only_when_told() {
     assert_eq!((data(&mem, 16), data(&mem, 24)), (4, 0b1_0000));
 }
 
-/// Two workers on the main thread's core, started low priority first: the high-priority one
-/// runs first once the main thread exits. Each appends its argument to a list at `DATA`.
+/// Two workers on the main thread's core, started low priority first by a main thread that
+/// outranks both: the high-priority one runs first once the main thread exits. Each appends
+/// its argument to a list at `DATA`. (Under T-051 the main thread kept priority 44; with
+/// prompt preemption the priority-40 worker would then run as soon as it started.)
 #[test]
 fn a_core_runs_its_highest_priority_ready_thread_first() {
     let mut worker = Asm::default();
@@ -285,7 +302,10 @@ fn a_core_runs_its_highest_priority_ready_thread_first() {
         .str(0, 13, 8)
         .svc(EXIT_THREAD);
     let mut main = Asm::default();
-    main.spawn(function(1), 0xA, 40, 0)
+    main.mov(0, u64::from(CURRENT_THREAD))
+        .mov(1, 10)
+        .svc(SET_THREAD_PRIORITY)
+        .spawn(function(1), 0xA, 40, 0)
         .spawn(function(1), 0xB, 20, 0)
         .svc(EXIT_THREAD);
 
@@ -503,4 +523,296 @@ fn moving_a_sleeping_thread_from_another_core_keeps_its_state() {
         Finish::AllThreadsExited
     );
     assert_eq!(data(&mem, 0), 1);
+}
+
+/// How long a test waits for the guest before it gives up.
+const PATIENCE: Duration = Duration::from_secs(5);
+
+/// Polls `done` until it holds or [`PATIENCE`] runs out; stops the process on a timeout so
+/// `run_cores_with` can return and the test can fail instead of hanging.
+fn wait_for(ticker: &Ticker<'_, '_>, mut done: impl FnMut() -> bool) -> bool {
+    let start = Instant::now();
+    while !done() {
+        if start.elapsed() > PATIENCE {
+            ticker.stop();
+            return false;
+        }
+        thread::yield_now();
+    }
+    true
+}
+
+/// Runs `functions` as [`run`] does, with quanta ending only when `driver` ticks.
+fn run_ticked(
+    functions: &[&Asm],
+    driver: impl FnOnce(&AddressSpace, &Ticker<'_, '_>),
+) -> (AddressSpace, Result<Finish, RunError>) {
+    let mem = space_with(functions);
+    let mut kernel = kernel();
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+    let result = run_cores_with(&mut kernel, &mem, |ticker| driver(&mem, ticker));
+    (mem, result)
+}
+
+/// ADR-0032 validation: two priority-44 threads on one core (44 is not sliced). The first
+/// spins through every quantum and the second never runs until the first yields.
+#[test]
+fn an_unsliced_spinner_keeps_its_core_until_it_yields() {
+    let mut spinner = Asm::default();
+    spinner
+        .mov_reg(9, 0)
+        .mov(10, 0xA)
+        .str(10, 9, 0)
+        .wait_for(9, 16, 1);
+    spinner.mov(0, 0).svc(SLEEP_THREAD).spin();
+    let mut other = Asm::default();
+    other.mov_reg(9, 0).mov(10, 0xB).str(10, 9, 8).spin();
+    let mut main = Asm::default();
+    main.spawn(function(1), DATA, PRIORITY, 1)
+        .spawn(function(2), DATA, PRIORITY, 1)
+        .svc(EXIT_THREAD);
+    let mut seen = Vec::new();
+
+    let (_, result) = run_ticked(&[&main, &spinner, &other], |mem, ticker| {
+        seen.push(wait_for(ticker, || data(mem, 0) == 0xA));
+        for _ in 0..5 {
+            ticker.tick();
+            thread::sleep(Duration::from_millis(2));
+        }
+        seen.push(data(mem, 8) == 0);
+        mem.write(GuestVa::new(DATA + 16), 1u64)
+            .expect("test setup");
+        seen.push(wait_for(ticker, || data(mem, 8) == 0xB));
+        ticker.stop();
+    });
+
+    assert_eq!(result.expect("test setup"), Finish::Stopped);
+    assert_eq!(
+        seen,
+        [true, true, true],
+        "started, kept its core, then yielded"
+    );
+}
+
+/// ADR-0032 validation: two priority-59 threads (59 is sliced on core 1) take turns, one
+/// per tick. Each keeps writing its id into the same word.
+#[test]
+fn a_sliced_pair_alternates_on_every_tick() {
+    let mut a = Asm::default();
+    a.mov_reg(9, 0).mov(10, 0xA);
+    let top = a.here();
+    a.str(10, 9, 0).b_back(top);
+    let mut b = Asm::default();
+    b.mov_reg(9, 0).mov(10, 0xB);
+    let top = b.here();
+    b.str(10, 9, 0).b_back(top);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, 59, 1)
+        .spawn(function(2), DATA, 59, 1)
+        .mov(10, 1)
+        .str(10, 9, 8)
+        .svc(EXIT_THREAD);
+    let mut turns = Vec::new();
+
+    let (_, result) = run_ticked(&[&main, &a, &b], |mem, ticker| {
+        // Both threads exist before the first tick, or it would rotate a lone thread.
+        let mut ok = wait_for(ticker, || data(mem, 8) == 1 && data(mem, 0) == 0xA);
+        turns.push(data(mem, 0));
+        for _ in 0..4 {
+            let before = data(mem, 0);
+            ticker.tick();
+            ok &= wait_for(ticker, || data(mem, 0) != before);
+            turns.push(data(mem, 0));
+        }
+        assert!(ok || ticker.is_finished());
+        ticker.stop();
+    });
+
+    assert_eq!(result.expect("test setup"), Finish::Stopped);
+    assert_eq!(turns, [0xA, 0xB, 0xA, 0xB, 0xA]);
+}
+
+/// ADR-0032 validation: a priority-0 thread started from core 0 onto core 2 interrupts the
+/// priority-44 spinner there. No tick ever comes, so only the interrupt flag can free the core.
+#[test]
+fn a_cross_core_start_interrupts_a_spinner_without_a_tick() {
+    let mut spinner = Asm::default();
+    spinner.mov(10, 1).str(10, 0, 8).spin();
+    let mut urgent = Asm::default();
+    urgent.mov(10, 1).str(10, 0, 16).svc(EXIT_PROCESS);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, PRIORITY, 2)
+        .wait_for(9, 8, 1)
+        .spawn(function(2), DATA, 0, 2)
+        .spin();
+
+    let (mem, result) = run_ticked(&[&main, &spinner, &urgent], |_, ticker| {
+        wait_for(ticker, || ticker.is_finished());
+    });
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!(data(&mem, 16), 1, "the urgent thread ran");
+}
+
+/// ADR-0032 validation: moving a running thread to another core takes it off its old core
+/// before the new one runs it; its registers survive and it reports the new core.
+#[test]
+fn moving_a_running_thread_hands_it_over_between_cores() {
+    let mut mover = Asm::default();
+    mover.mov_reg(9, 0).mov(20, 0);
+    let top = mover.here();
+    mover
+        .svc(GET_CURRENT_PROCESSOR_NUMBER)
+        .str(0, 9, 0)
+        .add_imm(20, 20, 1)
+        .str(20, 9, 8)
+        .b_back(top);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .mov(1, function(1))
+        .mov(2, DATA)
+        .mov(3, STACK)
+        .mov(4, u64::from(PRIORITY))
+        .mov(5, 2)
+        .svc(CREATE_THREAD)
+        .mov_reg(21, 1)
+        .mov_reg(0, 1)
+        .svc(START_THREAD)
+        .wait_for(9, 0, 2)
+        .mov_reg(0, 21)
+        .mov(1, 3)
+        .mov(2, 0b1000)
+        .svc(SET_THREAD_CORE_MASK)
+        .wait_for(9, 0, 3)
+        .ldr(22, 9, 8)
+        .str(22, 9, 16)
+        .svc(EXIT_PROCESS);
+
+    let (mem, result) = run_ticked(&[&main, &mover], |_, ticker| {
+        wait_for(ticker, || ticker.is_finished());
+    });
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert!(
+        data(&mem, 16) > 0,
+        "its loop counter carried over to core 3"
+    );
+}
+
+/// A driver that returns while a guest thread still spins stops the process, so
+/// `run_cores_with` returns instead of waiting forever.
+#[test]
+fn run_cores_with_stops_the_process_when_its_driver_returns() {
+    let mut main = Asm::default();
+    main.spin();
+
+    let (_, result) = run_ticked(&[&main], |_, _| {});
+
+    assert_eq!(result.expect("test setup"), Finish::Stopped);
+}
+
+/// With the kernel timer keeping time, a priority-10 sleeper wakes on time on a core that a
+/// priority-44 spinner keeps busy. The quantum is far longer than the sleep, so only the
+/// timer's wakeup fire can end it.
+#[test]
+fn the_timer_wakes_a_sleeper_on_a_busy_core() {
+    const SLEEP: Duration = Duration::from_millis(30);
+    let mut spinner = Asm::default();
+    spinner.mov(10, 1).str(10, 0, 8).spin();
+    let mut sleeper = Asm::default();
+    sleeper
+        .mov_reg(9, 0)
+        .mov(0, u64::try_from(SLEEP.as_nanos()).expect("test setup"))
+        .svc(SLEEP_THREAD)
+        .mov(10, 1)
+        .str(10, 9, 16)
+        .svc(EXIT_PROCESS);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, PRIORITY, 1)
+        .wait_for(9, 8, 1)
+        .spawn(function(2), DATA, 10, 1)
+        .svc(EXIT_THREAD);
+
+    let mem = space_with(&[&main, &spinner, &sleeper]);
+    let mut kernel = kernel();
+    kernel.set_quantum(PATIENCE * 4);
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+
+    let start = Instant::now();
+    let result = run_cores(&mut kernel, &mem);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!(data(&mem, 16), 1);
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed >= SLEEP && elapsed < PATIENCE,
+        "woke after {elapsed:?}"
+    );
+}
+
+/// With the kernel timer keeping time, two priority-59 spinners on core 1 both run: the
+/// second only gets the core when a quantum rotates the first out. The main thread exits once
+/// both have marked their word.
+#[test]
+fn the_timer_rotates_a_sliced_pair() {
+    let mut marker = Asm::default();
+    marker.mov(10, 1).str(10, 0, 0).spin();
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, 59, 1)
+        .spawn(function(1), DATA + 8, 59, 1)
+        .wait_for(9, 0, 1)
+        .wait_for(9, 8, 1)
+        .svc(EXIT_PROCESS);
+
+    let (mem, result) = run(&[&main, &marker]);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    assert_eq!((data(&mem, 0), data(&mem, 8)), (1, 1), "both took turns");
+}
+
+/// ADR-0032 ledger: core threads record how long they hold the kernel lock, and a core that
+/// switches after a cross-core start records the latency from the request to the switch.
+#[test]
+fn core_threads_record_lock_hold_and_preemption_latency() {
+    let mut spinner = Asm::default();
+    spinner.mov(10, 1).str(10, 0, 8).spin();
+    let mut urgent = Asm::default();
+    urgent.svc(EXIT_PROCESS);
+    let mut main = Asm::default();
+    main.mov_reg(9, 0)
+        .spawn(function(1), DATA, PRIORITY, 2)
+        .wait_for(9, 8, 1)
+        .spawn(function(2), DATA, 0, 2)
+        .spin();
+    let mem = space_with(&[&main, &spinner, &urgent]);
+    let mut trace = Trace::new(Trace::MAX_CAPACITY);
+    let mut kernel = Kernel::new(&mut trace).expect("test setup");
+    kernel
+        .spawn_thread(&mem, main_thread(DATA))
+        .expect("test setup");
+
+    let result = run_cores(&mut kernel, &mem);
+
+    assert_eq!(result.expect("test setup"), Finish::ExitProcess);
+    let drained = trace.drain();
+    let count = |kind| {
+        drained
+            .records
+            .iter()
+            .filter(|record| record.role == ThreadRole::GuestCore && record.event.kind == kind)
+            .count()
+    };
+    assert!(count(EventKind::KernelLockHeld) > 0, "lock holds recorded");
+    assert!(
+        count(EventKind::PreemptLatency) > 0,
+        "the spinner's core recorded its switch"
+    );
 }

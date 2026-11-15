@@ -156,6 +156,7 @@ dependencies = [
  "lince-common",
  "lince-cpu-a64",
  "lince-mem",
+ "lince-sched",
  "lince-trace",
  "parking_lot",
  "thiserror",
@@ -185,6 +186,7 @@ dependencies = [
 name = "lince-sched"
 version = "0.0.0"
 dependencies = [
+ "parking_lot",
  "thiserror",
 ]
 

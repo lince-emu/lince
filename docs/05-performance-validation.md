@@ -30,7 +30,8 @@ and a frame sequence number:
 `Tier0Used`, `CompileStart{tier}`, `CompileEnd{ns}`, `PipelineWait{ns}`, `CacheResolve{ns}`,
 `CacheWrite{ns}`, `CacheFsync{ns}`, `Alloc{size}`, `Upload{bytes}`, `Evict`, `FenceWait{ns}`,
 `QueueSubmit`, `MacroBurst`, `HleCall{service}`, `GovernorThrottle{level}`,
-`ThreadPreempted{ns}` (sampled).
+`ThreadPreempted{ns}` (sampled), `KernelLockHeld{ns}`, `PreemptLatency{ns}` (guest scheduler,
+ADR-0027 B2 scope).
 
 Events for blocking work — `PipelineWait`, `FenceWait`, `CacheResolve`, `CacheWrite`,
 `CacheFsync` and `CompileEnd` — carry their duration in nanoseconds as the argument, and their

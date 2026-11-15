@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Lince contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Once-per-name log records in per-thread buffers, drained off the critical threads.
+//! Log records in per-thread buffers, drained off the critical threads: once per name
+//! (ADR-0027 B1 scope) or every time (B2 scope).
 //!
 //! A [`Trace`] is owned by one thread that is not render-critical: it registers names, hands a
 //! [`Recorder`] to each recording thread and drains the buffers. Recorders only ever do
-//! non-blocking work: a bounded duplicate check and a `try_send` into a bounded channel. No
+//! non-blocking work: a bounded duplicate check (once-per-name records) and a `try_send` into
+//! a bounded channel. No
 //! I/O, locks or allocation happen on the recording path (ARCH-03, ARCH-06).
 
 use std::sync::Arc;
@@ -147,6 +149,12 @@ impl Recorder {
         self.once(EventKind::Stub, u64::from(name.0))
     }
 
+    /// Records `kind` with `arg`. An event that does not fit in the buffer is counted as
+    /// dropped. Returns whether it was recorded.
+    pub fn record(&mut self, kind: EventKind, arg: u64) -> bool {
+        self.send(kind, arg)
+    }
+
     /// Records `kind` with `arg` the first time this recorder sees that pair; later calls with
     /// the same pair do nothing. Once `capacity` pairs were recorded, new pairs are counted as
     /// dropped. An event that could not be sent is not remembered as seen. Returns whether the
@@ -160,6 +168,16 @@ impl Recorder {
             self.dropped.fetch_add(1, Ordering::Relaxed);
             return false;
         }
+        let sent = self.send(kind, arg);
+        if sent {
+            self.seen.push(key);
+        }
+        sent
+    }
+
+    /// Sends one event stamped now; counts it as dropped if the buffer is full or drained by
+    /// no one.
+    fn send(&mut self, kind: EventKind, arg: u64) -> bool {
         let event = Event {
             ts_ns: u64::try_from(self.epoch.elapsed().as_nanos()).unwrap_or(u64::MAX),
             frame: 0,
@@ -167,10 +185,7 @@ impl Recorder {
             arg,
         };
         match self.tx.try_send(event.encode()) {
-            Ok(()) => {
-                self.seen.push(key);
-                true
-            }
+            Ok(()) => true,
             Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {
                 self.dropped.fetch_add(1, Ordering::Relaxed);
                 false

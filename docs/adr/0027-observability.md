@@ -1,7 +1,8 @@
 # ADR-0027: Observability — frame ledger and tracing
 
 - **Status:** Partially accepted. **B1 scope** (logging) accepted (maintainer, 2026-11-14);
-  the ledger stays Proposed until PoC-7's ARM run.
+  **B2 scope** (plain records, scheduler events) accepted (maintainer, 2026-11-15); the
+  ledger stays Proposed until PoC-7's ARM run.
 - **Date:** 2026-11-13
 - **Related:** doc 05 §3–§4
 
@@ -28,6 +29,14 @@ variables: every subsystem emits typed events into the same rings.
 once per name into a per-thread buffer drained off the critical threads, with no I/O on
 render-critical threads (ARCH-03); the records use the ledger's event shape so the ledger
 added later reads the same data.
+
+**B2 scope:** plain records for the guest scheduler (ADR-0032 validation plan). A recorder
+also records every event, not only the first per name, into the same bounded per-thread
+buffer: it never blocks, and an event that does not fit is counted as dropped. Two kinds:
+`KernelLockHeld{ns}`, the time a core thread held the kernel lock, and `PreemptLatency{ns}`,
+from a core's reschedule request until it gives its thread back (a request a later change
+withdraws is not reported). Both follow D-003 (timestamp at the end of the
+interval). Rings, dumps and frame numbers stay with the ledger.
 
 ## Technical justification
 Tracy is excellent for investigation but not for always-on field data; the ledger is.
