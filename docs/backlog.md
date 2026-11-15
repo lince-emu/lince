@@ -61,8 +61,8 @@ Rules:
 | T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Done | T-048 | 0001, 0002 |
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Done | T-047, T-049 | 0004, 0005, 0031 |
 | T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Done | T-048, T-059 | 0004, 0017, 0024 |
-| T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | In progress | T-051, T-061 | 0024 |
-| T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Blocked | T-052 | 0024 |
+| T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Done | T-051, T-061 | 0024 |
+| T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Ready | T-052 | 0024 |
 | T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |

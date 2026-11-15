@@ -21,7 +21,7 @@ use crate::svc::{ResultCode, SUCCESS, done};
 use crate::thread::{CURRENT_THREAD, MAX_WAIT_OBJECTS, Status, WaitSet, Waitable};
 
 /// The handle array cannot be read (V10).
-const INVALID_ADDRESS: ResultCode = 0xE601;
+pub(crate) const INVALID_ADDRESS: ResultCode = 0xE601;
 /// The timeout passed before any object was signaled (V10).
 pub(crate) const TIMED_OUT: ResultCode = 0xEA01;
 /// `CancelSynchronization` ended the wait (V10).
@@ -98,7 +98,7 @@ pub(crate) fn wait_synchronization(
         Ok(ns) => Instant::now().checked_add(Duration::from_nanos(ns)),
         Err(_) => None,
     };
-    kernel.threads.begin_wait(current.index, &set, until);
+    kernel.threads.begin_object_wait(current.index, &set, until);
     Outcome::Reschedule
 }
 
@@ -122,7 +122,7 @@ pub(crate) fn cancel_synchronization(
     let Some(index) = index else {
         return done(regs, INVALID_HANDLE);
     };
-    if !kernel.threads.end_wait(index, CANCELLED, None) {
+    if !kernel.threads.cancel_wait(index, CANCELLED) {
         kernel.threads.set_cancel_pending(index);
     }
     done(regs, SUCCESS)

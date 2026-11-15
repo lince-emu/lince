@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 use std::ops::BitOr;
 use std::ptr::{self, NonNull};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
 use lince_common::GuestVa;
 use parking_lot::{RwLock, RwLockReadGuard};
@@ -304,6 +304,16 @@ impl AddressSpace {
         self.view().read_bytes(va, buf)
     }
 
+    /// See [`SpaceView::compare_exchange_u32`].
+    pub fn compare_exchange_u32(
+        &self,
+        va: GuestVa,
+        current: u32,
+        new: u32,
+    ) -> Result<std::result::Result<u32, u32>> {
+        self.view().compare_exchange_u32(va, current, new)
+    }
+
     /// Copies `data` to guest memory at `va`; every byte must be mapped and writable.
     pub fn write_bytes(&self, va: GuestVa, data: &[u8]) -> Result<()> {
         self.view().write_bytes(va, data)
@@ -434,6 +444,36 @@ impl SpaceView<'_> {
             unsafe { AtomicU8::from_ptr(guest.add(offset)) }.store(*byte, Ordering::Relaxed);
         }
         Ok(())
+    }
+
+    /// Atomically replaces the little-endian `u32` at `va` with `new` if it holds `current`,
+    /// as one host compare-and-swap that other cores' guest atomics see whole (ADR-0004).
+    /// Returns `Ok(current)` if it replaced it, `Err(actual)` if not. `va` must be a multiple
+    /// of 4, mapped and writable.
+    pub fn compare_exchange_u32(
+        &self,
+        va: GuestVa,
+        current: u32,
+        new: u32,
+    ) -> Result<std::result::Result<u32, u32>> {
+        if !va.get().is_multiple_of(4) {
+            return Err(MemError::Unaligned { va, size: 4 });
+        }
+        let guest = self.checked_bytes(va, 4, Access::Write)?;
+        // SAFETY: `checked_bytes` proved the 4 bytes are mapped, hence committed, and this view
+        // keeps them mapped. The reservation is page-aligned and `va` is a multiple of 4, so
+        // the pointer is aligned for `AtomicU32`. Other threads reach these bytes only through
+        // atomics.
+        let word = unsafe { AtomicU32::from_ptr(guest.cast()) };
+        Ok(word
+            .compare_exchange(
+                current.to_le(),
+                new.to_le(),
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .map(u32::from_le)
+            .map_err(u32::from_le))
     }
 
     /// Checks that `[va, va + len)` is mapped with `access` allowed; returns its host address.

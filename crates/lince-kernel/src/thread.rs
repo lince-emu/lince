@@ -82,8 +82,8 @@ pub(crate) enum Status {
     Running { core: usize },
     /// Ready again at `until`.
     Sleeping { until: Instant },
-    /// In `WaitSynchronization` on its wait set, until an object is signaled, the wait is
-    /// cancelled, or `until` passes (`None`: no timeout).
+    /// Blocked on guest synchronization (its `WaitKind`) until it is woken or `until` passes
+    /// (`None`: no timeout).
     Waiting { until: Option<Instant> },
     /// Exited; it never runs again.
     Exited,
@@ -98,9 +98,18 @@ pub(crate) struct Thread {
     /// Its place in the queue of its priority on its core: lower runs first.
     seq: u64,
     /// What it waits on while `Waiting`.
-    wait: WaitSet,
+    wait: WaitKind,
+    /// The objects of its `WaitSynchronization`, when `wait` is `Objects`.
+    objects: WaitSet,
     /// A `CancelSynchronization` that found it not waiting; its next wait is cancelled.
     cancel_pending: bool,
+}
+
+impl Thread {
+    /// What it waits for; meaningful only while it is `Waiting`.
+    pub(crate) fn wait(&self) -> &WaitKind {
+        &self.wait
+    }
 }
 
 /// An object a thread can wait on.
@@ -110,6 +119,22 @@ pub(crate) enum Waitable {
     Event(usize),
     /// A thread, signaled once it exited.
     Thread(usize),
+}
+
+/// What a `Waiting` thread waits for.
+#[derive(Clone, Copy)]
+pub(crate) enum WaitKind {
+    /// `WaitSynchronization`: one of the thread's wait objects to be signaled.
+    Objects,
+    /// `ArbitrateLock`: the mutex word at `address` to be handed to it as `tag`.
+    Mutex { address: GuestVa, tag: u32 },
+    /// `WaitProcessWideKeyAtomic`: the key at `key` to be signaled; it then reacquires the
+    /// mutex at `mutex` as `tag`.
+    Key {
+        key: GuestVa,
+        mutex: GuestVa,
+        tag: u32,
+    },
 }
 
 /// The objects of one wait, in the order the guest listed them; fixed size, so waiting never
@@ -230,7 +255,8 @@ impl Threads {
             core: params.core,
             mask: 1 << params.core,
             seq: 0,
-            wait: WaitSet::default(),
+            wait: WaitKind::Objects,
+            objects: WaitSet::default(),
             cancel_pending: false,
         });
         index
@@ -274,12 +300,56 @@ impl Threads {
         std::mem::take(&mut self.list[index].cancel_pending)
     }
 
-    /// Puts thread `index`, whose core still holds its state, to wait on `set` until `until`.
-    pub(crate) fn begin_wait(&mut self, index: usize, set: &WaitSet, until: Option<Instant>) {
+    /// Puts thread `index`, whose core still holds its state, in `WaitSynchronization` on
+    /// `set` until `until`.
+    pub(crate) fn begin_object_wait(
+        &mut self,
+        index: usize,
+        set: &WaitSet,
+        until: Option<Instant>,
+    ) {
+        self.list[index].objects = *set;
+        self.begin_wait(index, &WaitKind::Objects, until);
+    }
+
+    /// Puts thread `index`, whose core still holds its state, to wait for `kind` until
+    /// `until`.
+    pub(crate) fn begin_wait(&mut self, index: usize, kind: &WaitKind, until: Option<Instant>) {
         let thread = &mut self.list[index];
-        thread.wait = *set;
+        thread.wait = *kind;
         thread.status = Status::Waiting { until };
         self.changed = true;
+    }
+
+    /// Makes waiting thread `index` wait for `kind` instead, with no timeout.
+    pub(crate) fn rewait(&mut self, index: usize, kind: &WaitKind) {
+        let thread = &mut self.list[index];
+        thread.wait = *kind;
+        thread.status = Status::Waiting { until: None };
+    }
+
+    /// The best waiter whose wait `matches`: highest priority first, then the earliest
+    /// created (ADR-0032 has no queue order for arbiter waits; GUESS).
+    pub(crate) fn best_waiter(&self, matches: impl Fn(&WaitKind) -> bool) -> Option<usize> {
+        self.list
+            .iter()
+            .enumerate()
+            .filter(|(_, thread)| {
+                matches!(thread.status, Status::Waiting { .. }) && matches(&thread.wait)
+            })
+            .min_by_key(|(index, thread)| (thread.priority, *index))
+            .map(|(index, _)| index)
+    }
+
+    /// Whether any thread's wait `matches`.
+    pub(crate) fn any_waiter(&self, matches: impl Fn(&WaitKind) -> bool) -> bool {
+        self.best_waiter(matches).is_some()
+    }
+
+    /// Ends thread `index`'s `WaitSynchronization`, if it is in one, with `code`. Other waits
+    /// are not cancellable. Returns whether it ended one.
+    pub(crate) fn cancel_wait(&mut self, index: usize, code: ResultCode) -> bool {
+        matches!(self.list[index].wait, WaitKind::Objects) && self.end_wait(index, code, None)
     }
 
     /// Ends the wait of thread `index`, if it waits: `W0` = `code`, `W1` = `which` if given,
@@ -310,7 +380,10 @@ impl Threads {
             if !matches!(thread.status, Status::Waiting { .. }) {
                 continue;
             }
-            if let Some(which) = thread.wait.objects().iter().position(|o| *o == object) {
+            if !matches!(thread.wait, WaitKind::Objects) {
+                continue;
+            }
+            if let Some(which) = thread.objects.objects().iter().position(|o| *o == object) {
                 self.end_wait(index, SUCCESS, Some(which));
             }
         }
