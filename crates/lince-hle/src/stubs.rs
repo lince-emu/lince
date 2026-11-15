@@ -19,11 +19,12 @@ use lince_kernel::{IpcMessage, SessionObject, Sessions, UnknownCommand};
 use lince_trace::{NameId, Trace, TraceError};
 
 use crate::cmif::{self, Header, IN_MAGIC, OUT_MAGIC};
+use crate::fsp::SdCard;
 use crate::hipc::{Message, Parts};
 use crate::sm::{OUT_OF_SESSIONS, ServiceRegistry};
 
 /// Message type of a request in the pre-5.0.0 layout (C3); the B2 program sends it.
-const TYPE_REQUEST_OLD: u16 = 4;
+pub(crate) const TYPE_REQUEST_OLD: u16 = 4;
 const SUCCESS: u32 = 0;
 
 /// What a command replies.
@@ -117,10 +118,20 @@ static APPLET_RESOURCE: Interface = Interface {
     commands: &[],
 };
 
-/// The services the B2 program reaches through `sm:`, ready for [`crate::sm::install`].
-pub fn b2_services(trace: &mut Trace) -> Result<ServiceRegistry, TraceError> {
+/// The services the B2 program reaches through `sm:`, ready for [`crate::sm::install`]. With
+/// `sd`, `fsp-srv` serves that host directory ([`crate::fsp`]); without, it is the stub whose
+/// file system has no commands.
+pub fn b2_services(trace: &mut Trace, sd: Option<SdCard>) -> Result<ServiceRegistry, TraceError> {
     let mut registry = ServiceRegistry::default();
-    for interface in [&SET, &FSP_SRV, &TIME_U, &HID] {
+    let stubbed: &[&'static Interface] = match sd {
+        Some(sd) => {
+            let added = crate::fsp::register(&mut registry, trace, sd)?;
+            debug_assert!(added, "fsp-srv registered twice");
+            &[&SET, &TIME_U, &HID]
+        }
+        None => &[&SET, &FSP_SRV, &TIME_U, &HID],
+    };
+    for &interface in stubbed {
         let resolved = resolve(interface, trace)?;
         let added = registry.register(
             interface.name,
@@ -240,6 +251,15 @@ impl SessionObject for StubObject {
 
 /// The method id of a CMIF request.
 fn request_command(message: &IpcMessage) -> Result<u32, UnknownCommand> {
+    read_request(message).map(|(_, command, _)| command)
+}
+
+/// Reads a CMIF request: the message, its method id and the bytes after the CMIF header
+/// (parameters, then padding). A message that is not a CMIF request (C3: type 4 or 6) is an
+/// unknown command named by its message type.
+pub(crate) fn read_request(
+    message: &IpcMessage,
+) -> Result<(Message<'_>, u32, &[u8]), UnknownCommand> {
     let unknown = |tag: u16| UnknownCommand {
         command: u32::from(tag),
     };
@@ -249,11 +269,12 @@ fn request_command(message: &IpcMessage) -> Result<u32, UnknownCommand> {
     if tag != TYPE_REQUEST_OLD && tag != cmif::TYPE_REQUEST {
         return Err(unknown(tag));
     }
-    let (header, _) = cmif::read(&msg, IN_MAGIC).map_err(|_| unknown(tag))?;
-    Ok(header.value)
+    let (header, params) = cmif::read(&msg, IN_MAGIC).map_err(|_| unknown(tag))?;
+    Ok((msg, header.value, params))
 }
 
-fn write_reply(
+/// Writes a CMIF reply with `result`, an optional moved handle and `params`.
+pub(crate) fn write_reply(
     message: &mut IpcMessage,
     result: u32,
     handle: Option<u32>,
@@ -428,7 +449,7 @@ mod tests {
     #[test]
     fn the_registry_serves_each_b2_service_by_name() {
         let mut trace = Trace::new(16);
-        let registry = super::b2_services(&mut trace).unwrap();
+        let registry = super::b2_services(&mut trace, None).unwrap();
         for (name, object) in [
             ("set", "set"),
             ("fsp-srv", "fsp-srv"),

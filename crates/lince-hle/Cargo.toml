@@ -8,13 +8,11 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+lince-common = { path = "../lince-common", version = "0.0.0" }
 lince-kernel = { path = "../lince-kernel", version = "0.0.0" }
+lince-mem = { path = "../lince-mem", version = "0.0.0" }
 lince-trace = { path = "../lince-trace", version = "0.0.0" }
 thiserror.workspace = true
-
-[dev-dependencies]
-lince-common = { path = "../lince-common", version = "0.0.0" }
-lince-mem = { path = "../lince-mem", version = "0.0.0" }
 
 [lints]
 workspace = true

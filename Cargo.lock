@@ -146,6 +146,7 @@ dependencies = [
  "lince-kernel",
  "lince-loader",
  "lince-mem",
+ "lince-sched",
  "lince-trace",
  "thiserror",
 ]

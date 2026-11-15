@@ -17,6 +17,7 @@ lince-hle = { path = "../lince-hle", version = "0.0.0" }
 lince-kernel = { path = "../lince-kernel", version = "0.0.0" }
 lince-loader = { path = "../lince-loader", version = "0.0.0" }
 lince-mem = { path = "../lince-mem", version = "0.0.0" }
+lince-sched = { path = "../lince-sched", version = "0.0.0" }
 lince-trace = { path = "../lince-trace", version = "0.0.0" }
 thiserror.workspace = true
 

@@ -1,30 +1,28 @@
 // SPDX-FileCopyrightText: 2026 Lince contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! `lince run [--coverage] <file.nro>`: runs a homebrew NRO and prints its debug output; with
-//! `--coverage`, also the unimplemented SVCs and IPC commands it reached, on stderr (T-055).
+//! `lince run [--coverage] [--sd <dir>] <file.nro>`: runs a homebrew NRO and prints its debug
+//! output; with `--coverage`, also the unimplemented SVCs and IPC commands it reached, on
+//! stderr (T-055); with `--sd`, the guest's SD card is that host directory, read-only (T-064).
 #![expect(
     clippy::print_stderr,
     reason = "the command line reports errors on the terminal (QUAL-43)"
 )]
 
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use lince_app::Options;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (options, file) = match args.as_slice() {
-        [command, file] if command == "run" => (Options::default(), file),
-        [command, flag, file] if command == "run" && flag == "--coverage" => {
-            (Options { coverage: true }, file)
-        }
-        _ => return usage(),
+    let Some((options, file)) = parse(&args) else {
+        return usage();
     };
     let result = std::fs::read(file)
         .map_err(|error| format!("cannot read {file}: {error}"))
         .and_then(|nro| {
-            lince_app::run_nro(&nro, &mut std::io::stdout().lock(), options)
+            lince_app::run_nro(&nro, &mut std::io::stdout().lock(), &options)
                 .map_err(|error| format!("{file}: {error}"))
         })
         .and_then(|report| {
@@ -43,7 +41,30 @@ fn main() -> ExitCode {
     }
 }
 
+/// `run [--coverage] [--sd <dir>] <file.nro>`, each flag at most once.
+fn parse(args: &[String]) -> Option<(Options, &String)> {
+    let (command, mut rest) = args.split_first()?;
+    if command != "run" {
+        return None;
+    }
+    let mut options = Options::default();
+    loop {
+        match rest {
+            [flag, tail @ ..] if flag == "--coverage" && !options.coverage => {
+                options.coverage = true;
+                rest = tail;
+            }
+            [flag, dir, tail @ ..] if flag == "--sd" && options.sd.is_none() => {
+                options.sd = Some(PathBuf::from(dir));
+                rest = tail;
+            }
+            [file] if !file.starts_with("--") => return Some((options, file)),
+            _ => return None,
+        }
+    }
+}
+
 fn usage() -> ExitCode {
-    eprintln!("usage: lince run [--coverage] <file.nro>");
+    eprintln!("usage: lince run [--coverage] [--sd <dir>] <file.nro>");
     ExitCode::from(2)
 }
