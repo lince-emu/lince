@@ -173,6 +173,10 @@ dependencies = [
 name = "lince-hle"
 version = "0.0.0"
 dependencies = [
+ "lince-common",
+ "lince-kernel",
+ "lince-mem",
+ "lince-trace",
  "thiserror",
 ]
 

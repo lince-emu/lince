@@ -95,6 +95,8 @@ pub(crate) struct Thread {
     pub(crate) priority: u32,
     pub(crate) core: usize,
     pub(crate) mask: u64,
+    /// Its TLS block; the IPC message buffer is its first 0x100 bytes.
+    pub(crate) tls: GuestVa,
     /// Its place in the queue of its priority on its core: lower runs first.
     seq: u64,
     /// What it waits on while `Waiting`.
@@ -254,6 +256,7 @@ impl Threads {
             priority: params.priority,
             core: params.core,
             mask: 1 << params.core,
+            tls,
             seq: 0,
             wait: WaitKind::Objects,
             objects: WaitSet::default(),

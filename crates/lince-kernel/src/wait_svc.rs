@@ -44,7 +44,7 @@ fn waitable(kernel: &Kernel, handle: u32) -> Option<Waitable> {
     match kernel.handles.get(handle)? {
         Object::ReadableEvent(event) => Some(Waitable::Event(event)),
         Object::Thread(index) => Some(Waitable::Thread(index)),
-        Object::WritableEvent(_) => None,
+        Object::WritableEvent(_) | Object::Session(_) => None,
     }
 }
 
@@ -116,7 +116,8 @@ pub(crate) fn cancel_synchronization(
         (CURRENT_THREAD, Some(current)) => Some(current.index),
         _ => match kernel.handles.get(handle) {
             Some(Object::Thread(index)) => Some(index),
-            Some(Object::ReadableEvent(_) | Object::WritableEvent(_)) | None => None,
+            Some(Object::ReadableEvent(_) | Object::WritableEvent(_) | Object::Session(_))
+            | None => None,
         },
     };
     let Some(index) = index else {

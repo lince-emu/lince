@@ -10,7 +10,7 @@ use lince_common::GuestVa;
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission};
 
 use crate::kernel::{Entry, HEAP_BASE, Handler, Kernel, Outcome, Regs};
-use crate::{arbiter_svc, event_svc, thread_svc, wait_svc};
+use crate::{arbiter_svc, event_svc, ipc_svc, thread_svc, wait_svc};
 
 /// An SVC number: the immediate of the `SVC` instruction.
 pub type SvcNumber = u8;
@@ -99,6 +99,8 @@ const fn build_table() -> [Option<Entry>; 256] {
         "SignalProcessWideKey",
         arbiter_svc::signal_process_wide_key,
     ));
+    table[0x1F] = Some(entry("ConnectToNamedPort", ipc_svc::connect_to_named_port));
+    table[0x21] = Some(entry("SendSyncRequest", ipc_svc::send_sync_request));
     table[BREAK as usize] = Some(entry(BREAK_NAME, break_));
     table[0x45] = Some(entry("CreateEvent", event_svc::create_event));
     table[OUTPUT_DEBUG_STRING as usize] = Some(entry("OutputDebugString", output_debug_string));

@@ -68,6 +68,9 @@ pub enum EventKind {
     /// A guest core gave its thread back after a reschedule request (ADR-0032 §2). `arg`:
     /// nanoseconds from the request until the core gave the thread back.
     PreemptLatency,
+    /// A session received a command its object has no behavior for. `arg`: the object's
+    /// [`NameId`](crate::NameId) in the high 32 bits, the command id in the low 32 bits.
+    UnknownCommand,
     /// A kind this build does not know.
     Unknown(u16),
 }
@@ -102,6 +105,7 @@ impl EventKind {
             Self::UnknownSvc => 23,
             Self::KernelLockHeld => 24,
             Self::PreemptLatency => 25,
+            Self::UnknownCommand => 26,
             Self::Unknown(raw) => raw,
         }
     }
@@ -135,6 +139,7 @@ impl EventKind {
             23 => Self::UnknownSvc,
             24 => Self::KernelLockHeld,
             25 => Self::PreemptLatency,
+            26 => Self::UnknownCommand,
             other => Self::Unknown(other),
         }
     }
@@ -233,7 +238,7 @@ mod tests {
 
     #[test]
     fn every_known_kind_and_role_round_trips() {
-        for raw in 0..=25 {
+        for raw in 0..=26 {
             let kind = EventKind::from_raw(raw);
             assert!(!matches!(kind, EventKind::Unknown(_)), "raw {raw}");
             assert_eq!(kind.to_raw(), raw);
