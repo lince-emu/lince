@@ -10,8 +10,14 @@
 //! it never reports success. Numbers, arguments and results come from
 //! docs/research/nro-and-b1-svcs.md (Switch 1 knowledge; Switch 2 values are UNKNOWN).
 //!
+//! B2 scope adds guest threads (T-051): [`run_cores`] runs them on six host core threads with
+//! a simple per-core priority scheduler, and the thread SVCs create, start, end, put to sleep,
+//! reprioritize and move them. Each thread has a TLS block that `TPIDRRO_EL0` points to.
+//!
 //! # Threads
-//! Dispatch runs on the guest core that executed the `SVC` instruction. B1 has one guest thread.
+//! Dispatch runs on the guest core that executed the `SVC` instruction, under the kernel lock.
+//! [`run_cores`] owns the six core threads (ADR-0017 B2 scope) and joins them before it
+//! returns; the crate creates no other thread.
 //! It allocates only for the debug-output buffer and the heap bookkeeping, performs no I/O and
 //! records unknown SVCs with the non-blocking `lince-trace` recorder.
 //!
@@ -19,10 +25,15 @@
 //! ADR-0024 · ADR-0027 · docs/research/nro-and-b1-svcs.md · docs/conventions/patterns.md PAT-01
 #![forbid(unsafe_code)]
 
+mod cores;
 mod error;
 mod kernel;
 mod svc;
+mod thread;
+mod thread_svc;
 
-pub use error::{KernelError, Result};
+pub use cores::{Finish, run_cores};
+pub use error::{KernelError, Result, RunError};
 pub use kernel::{Flow, HEAP_BASE, Kernel, Regs};
 pub use svc::{ResultCode, SvcNumber, svc_name};
+pub use thread::{CORE_COUNT, CURRENT_THREAD, LOWEST_PRIORITY, TLS_BASE, TLS_SIZE, ThreadParams};

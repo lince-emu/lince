@@ -10,6 +10,7 @@ use lince_common::GuestVa;
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission};
 
 use crate::kernel::{Entry, HEAP_BASE, Handler, Kernel, Outcome, Regs};
+use crate::thread_svc;
 
 /// An SVC number: the immediate of the `SVC` instruction.
 pub type SvcNumber = u8;
@@ -17,10 +18,10 @@ pub type SvcNumber = u8;
 /// A Horizon result code, returned in `W0`.
 pub type ResultCode = u32;
 
-const SUCCESS: ResultCode = 0;
+pub(crate) const SUCCESS: ResultCode = 0;
 const INVALID_SIZE: ResultCode = 0xCA01;
 const INVALID_ADDRESS: ResultCode = 0xCC01;
-const OUT_OF_RESOURCE: ResultCode = 0xD001;
+pub(crate) const OUT_OF_RESOURCE: ResultCode = 0xD001;
 const INVALID_STATE: ResultCode = 0xD401;
 const INVALID_PERMISSION: ResultCode = 0xD801;
 
@@ -67,6 +68,18 @@ const fn build_table() -> [Option<Entry>; 256] {
     table[SET_MEMORY_ATTRIBUTE as usize] = Some(entry(ATTRIBUTE_NAME, set_memory_attribute));
     table[QUERY_MEMORY as usize] = Some(entry("QueryMemory", query_memory));
     table[EXIT_PROCESS as usize] = Some(entry("ExitProcess", exit_process));
+    table[0x08] = Some(entry("CreateThread", thread_svc::create_thread));
+    table[0x09] = Some(entry("StartThread", thread_svc::start_thread));
+    table[0x0A] = Some(entry("ExitThread", thread_svc::exit_thread));
+    table[0x0B] = Some(entry("SleepThread", thread_svc::sleep_thread));
+    table[0x0C] = Some(entry("GetThreadPriority", thread_svc::get_thread_priority));
+    table[0x0D] = Some(entry("SetThreadPriority", thread_svc::set_thread_priority));
+    table[0x0E] = Some(entry("GetThreadCoreMask", thread_svc::get_thread_core_mask));
+    table[0x0F] = Some(entry("SetThreadCoreMask", thread_svc::set_thread_core_mask));
+    table[0x10] = Some(entry(
+        "GetCurrentProcessorNumber",
+        thread_svc::get_current_processor_number,
+    ));
     table[BREAK as usize] = Some(entry(BREAK_NAME, break_));
     table[OUTPUT_DEBUG_STRING as usize] = Some(entry("OutputDebugString", output_debug_string));
     // 0x80..=0x8F are reserved for Switch 2 (ADR-0024); only 0x80 has a name so far.
@@ -84,7 +97,7 @@ pub fn svc_name(number: SvcNumber) -> Option<&'static str> {
     TABLE[usize::from(number)].map(|entry| entry.name)
 }
 
-fn done(regs: &mut Regs, code: ResultCode) -> Outcome {
+pub(crate) fn done(regs: &mut Regs, code: ResultCode) -> Outcome {
     regs[0] = u64::from(code);
     Outcome::Resume
 }

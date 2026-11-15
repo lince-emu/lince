@@ -60,13 +60,13 @@ Rules:
 | T-048 | Research: the SVCs, IPC wire format (CMIF/TIPC) and service commands B2 uses (public sources) | Research | Done | — | 0024 |
 | T-049 | Test homebrew: a multi-threaded B2 program that synchronizes and talks to `sm:`, `set:`, `fs`, `time` and `hid` | Impl | Done | T-048 | 0001, 0002 |
 | T-050 | `lince-cpu-a64`: exclusives, barriers and system registers the B2 programs use | Impl | Done | T-047, T-049 | 0004, 0005, 0031 |
-| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | Blocked | T-048, T-059 | 0004, 0017, 0024 |
+| T-051 | `lince-kernel`: guest threads on the six core threads, simple scheduler, TLS | Impl | In progress | T-048, T-059 | 0004, 0017, 0024 |
 | T-052 | `lince-kernel`: handle table, sync objects, events and the wait SVCs | Impl | Blocked | T-051 | 0024 |
 | T-053 | `lince-kernel` + `lince-hle`: sessions, CMIF/TIPC framework and `sm:` | Impl | Blocked | T-052 | 0024 |
 | T-054 | `lince-hle`: `set:`, `fs` (host directory), `time` and `hid` stubs that log | Impl | Blocked | T-053, T-057 | 0024 |
 | T-055 | Coverage tool: list every unimplemented SVC and IPC command a run reaches | Impl | Blocked | T-053 | 0024, 0027 |
 | T-056 | `lince run` runs the B2 program to completion (B2 exit) | Impl | Blocked | T-049–T-055 | 0001 |
-| T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | In progress | T-047 | 0017, 0024 |
+| T-057 | `lince-sched` (minimal): one service-I/O role thread fed by a bounded queue | Impl | Done | T-047 | 0017, 0024 |
 | T-058 | `cargo xtask ci` builds the test programs in `tests/homebrew/` (assemble and link, no byte comparison) | Impl | Done | T-049 | 0002 |
 | T-059 | `lince-mem` + `lince-cpu-a64`: one address space shared by several core threads | Impl | Done | T-047, T-050 | 0004, 0019, 0031 |
 | T-060 | Shared guest memory: data-race-free inline accesses and cheaper locked paths (deferred; start only on its trigger) | Impl | Blocked | T-059 | 0004, 0019, 0031 |

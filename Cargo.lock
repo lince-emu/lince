@@ -154,8 +154,10 @@ name = "lince-kernel"
 version = "0.0.0"
 dependencies = [
  "lince-common",
+ "lince-cpu-a64",
  "lince-mem",
  "lince-trace",
+ "parking_lot",
  "thiserror",
 ]
 

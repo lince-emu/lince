@@ -6,6 +6,7 @@
 //! Failures a guest can observe (bad arguments, unmapped memory) are SVC result codes, not
 //! these errors. These errors mean the dispatcher itself cannot complete the call.
 
+use lince_cpu_a64::{CpuError, Exit};
 use lince_trace::TraceError;
 use thiserror::Error;
 
@@ -26,9 +27,62 @@ pub enum KernelError {
         /// Its public or descriptive name.
         name: &'static str,
     },
+    /// A host-created thread had a priority or core out of range, or its TLS block could not
+    /// be mapped.
+    #[error("cannot create a thread with priority {priority} on core {core}")]
+    BadThread {
+        /// The priority asked for.
+        priority: u32,
+        /// The core asked for.
+        core: usize,
+    },
     /// The names of the kernel's stubs could not be registered.
     #[error("cannot register kernel trace names: {0}")]
     Trace(#[from] TraceError),
+}
+
+/// Why [`run_cores`](crate::run_cores) stopped other than by a normal process exit.
+#[derive(Debug, Error)]
+pub enum RunError {
+    /// No thread was started, so nothing could run.
+    #[error("no thread was started")]
+    NoThreads,
+    /// A core thread could not be created.
+    #[error("cannot create the thread of guest core {core}: {source}")]
+    Spawn {
+        /// The guest core.
+        core: usize,
+        /// The host error.
+        #[source]
+        source: std::io::Error,
+    },
+    /// A core thread panicked, a host bug; the panic itself reaches the caller of
+    /// [`run_cores`](crate::run_cores) once every core is joined.
+    #[error("the thread of guest core {core} panicked")]
+    Panicked {
+        /// The guest core.
+        core: usize,
+    },
+    /// The interpreter failed.
+    #[error("interpreter error: {0}")]
+    Cpu(#[from] CpuError),
+    /// The kernel rejected an SVC.
+    #[error("{0}")]
+    Kernel(#[from] KernelError),
+    /// A guest thread stopped on an exception the kernel does not handle.
+    #[error("guest fault on core {core}: {exit:?}")]
+    Fault {
+        /// The guest core.
+        core: usize,
+        /// The interpreter exit.
+        exit: Exit,
+    },
+    /// A guest thread aborted with `Break`.
+    #[error("guest called Break with reason {reason:#x}")]
+    Break {
+        /// The reason in `X0`.
+        reason: u64,
+    },
 }
 
 /// `Result` with [`KernelError`] as the default error type.
