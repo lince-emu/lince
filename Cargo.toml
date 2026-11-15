@@ -18,6 +18,7 @@ thiserror = "2.0.21"                 # error enums in library crates (DEV-20, PA
 rustix = { version = "1.1.6", features = ["mm", "param"] }   # unix host memory (lince-mem, doc 04 §8)
 windows-sys = { version = "0.61.2", features = ["Win32_System_Memory", "Win32_System_SystemInformation"] }   # windows host memory (lince-mem)
 parking_lot = "0.13.0"               # locks (doc 04 §6); the region map of lince-mem
+loom = "0.7.3"                       # concurrency model tests under --cfg loom (T-061, maintainer 2026-11-14)
 
 # docs/conventions/lints.md — every crate opts in with `[lints] workspace = true`.
 [workspace.lints.rust]
@@ -28,6 +29,7 @@ unreachable_pub = "warn"             # STRUCT-05
 rust_2018_idioms = { level = "warn", priority = -1 }
 let_underscore_drop = "warn"         # QUAL-41
 static_mut_refs = "deny"             # QUAL-51
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }   # loom models (cargo xtask ci)
 
 [workspace.lints.clippy]
 # Groups

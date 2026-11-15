@@ -29,6 +29,8 @@
 
 mod cores;
 mod error;
+#[cfg(all(test, loom))]
+mod handoff_loom;
 mod kernel;
 mod svc;
 mod thread;
