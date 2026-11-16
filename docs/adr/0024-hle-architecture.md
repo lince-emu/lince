@@ -43,6 +43,15 @@ reading the host directory) never runs on a guest core thread (invariant 3): it 
 the service-I/O role thread (ADR-0017 B2 scope) and resumes the guest thread through a kernel
 event (maintainer, 2026-11-14).
 
+**B3 scope:** process creation from the NPDM in `lince-kernel` (address-space type, main
+thread priority, core and stack size, the kernel capabilities B3 needs; any other NPDM field
+is logged, never dropped silently; T-074); the `am`/applet services a title opens at start
+(T-076); `nvdrv` and `vi` to their first GPU submission, which ends the run and is reported
+(T-077); and the title's RomFS served by `fsp-srv` from a directory the user extracted, on
+the service-I/O role thread and confined to that directory (T-075). New services follow the
+B2 rules: stubs log by name and are listed by `--coverage`; the ledger event, the debug
+auto-stub mode and CMIF domains stay out.
+
 ## Technical justification
 Declarative descriptions make protocol differences between Switch 1 and 2 explicit and testable;
 avoiding default auto-stubs prevents silent wrong behavior (Lichii needed auto-stubbing for

@@ -41,6 +41,13 @@ region up under the read side, and map, unmap and protect take the write side. P
 are read and written without that lock, through atomics where the guest asks for ordering
 (maintainer, 2026-11-14). Fastmem replaces the lookup in the JIT phase.
 
+**B3 scope:** code regions in the B2 address space: each NSO segment mapped with its own
+permissions (text read-execute, rodata read-only, data and zeroed `.bss` read-write), the
+modules placed at consecutive addresses in ExeFS order (T-073), and the address-space layout
+the NPDM selects (T-074). Only the 39-bit layout is supported; an NPDM asking for another is
+rejected with a typed error. A write to a read-only or execute-only region is a reported
+guest fault, never a silent success. Fastmem, write tracking and the GPU page table stay out.
+
 **Keep native execution possible.** The guest address-space layout must not rule out native
 execution on ARM64 hosts later (ADR-0005 option 4): the guest space is reserved as one
 contiguous host range whose base address and guest-page-to-host-page mapping are explicit
