@@ -9,7 +9,8 @@
 //! `sm:` and the B2 service stubs registered. The guest's `OutputDebugString` text goes to a
 //! host writer. With no `lince-core` yet, this crate wires
 //! the subsystems together itself. In coverage mode ([`Options::coverage`], T-055) unknown
-//! SVCs and IPC commands do not stop the run; [`Report`] lists them at exit.
+//! SVCs and IPC commands do not stop the run; [`Report`] lists them at exit, with the
+//! requests that failed on the host (T-065).
 //!
 //! # Threads
 //! The guest runs on the kernel's guest core threads; the calling thread waits for them. The
@@ -29,7 +30,7 @@ use lince_kernel::{Kernel, KernelError, RunError, ThreadParams, run_cores};
 use lince_loader::{LoaderError, load_nro};
 use lince_mem::{AddressSpace, MemError, Permission, SpaceConfig};
 use lince_sched::SchedError;
-use lince_trace::{Trace, TraceError, Unimplemented};
+use lince_trace::{HostIoFailure, Trace, TraceError, Unimplemented};
 use thiserror::Error;
 
 /// Requests the service-I/O queue holds before deferring services wait (T-063).
@@ -101,13 +102,17 @@ pub struct Options {
 pub struct Report {
     /// Every unknown SVC and IPC command the run reached, each once.
     pub unimplemented: Vec<Unimplemented>,
+    /// Every request that failed on the host (T-065), each object, command and error class
+    /// once.
+    pub host_io_failures: Vec<HostIoFailure>,
     /// Once-only trace records (unknown calls, stubs) lost because a buffer was full; when
     /// non-zero the list may be incomplete. Lost plain records (scheduler ledger events) do not
     /// count: they never hold an unknown call.
     pub dropped: u64,
 }
 
-/// Writes the coverage list in `report`: a count line, then one line per call.
+/// Writes the coverage list in `report`: a count line, then one line per call; then, if any
+/// request failed on the host, a count line and one line per failure.
 pub fn write_coverage(out: &mut impl Write, report: &Report) -> std::io::Result<()> {
     writeln!(
         out,
@@ -116,6 +121,16 @@ pub fn write_coverage(out: &mut impl Write, report: &Report) -> std::io::Result<
     )?;
     for call in &report.unimplemented {
         writeln!(out, "  {call}")?;
+    }
+    if !report.host_io_failures.is_empty() {
+        writeln!(
+            out,
+            "host I/O: {} kinds of failed requests",
+            report.host_io_failures.len()
+        )?;
+        for failure in &report.host_io_failures {
+            writeln!(out, "  {failure}")?;
+        }
     }
     if report.dropped > 0 {
         writeln!(
@@ -178,6 +193,7 @@ pub fn run_nro(file: &[u8], out: &mut impl Write, options: &Options) -> Result<R
     let drained = trace.drain();
     Ok(Report {
         unimplemented: trace.unimplemented(&drained),
+        host_io_failures: trace.host_io_failures(&drained),
         dropped: drained.dropped_once,
     })
 }

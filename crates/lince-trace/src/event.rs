@@ -81,7 +81,7 @@ pub enum EventKind {
 
 /// Why a host I/O request failed: the class of the host error, never its text or path
 /// (PAT-07). Raw values are part of the dump format; unknown values are kept (PAT-03).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HostIoError {
     /// The host path does not exist.
     NotFound,

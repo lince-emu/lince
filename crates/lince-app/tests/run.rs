@@ -6,7 +6,7 @@
 use std::process::{Command, Output};
 
 use lince_app::{Options, Report};
-use lince_trace::Unimplemented;
+use lince_trace::{HostIoError, HostIoFailure, Unimplemented};
 
 fn homebrew(name: &str) -> String {
     format!("{}/../../tests/homebrew/{name}", env!("CARGO_MANIFEST_DIR"))
@@ -100,6 +100,7 @@ fn the_coverage_list_names_each_call_and_warns_about_dropped_events() {
                 command: 5,
             },
         ],
+        host_io_failures: vec![],
         dropped: 2,
     };
     let mut out = Vec::new();
@@ -111,6 +112,34 @@ fn the_coverage_list_names_each_call_and_warns_about_dropped_events() {
             "  SVC 0x7f\n",
             "  set command 5\n",
             "coverage: 2 once-only trace records dropped; the list may be incomplete\n",
+        )
+    );
+}
+
+#[test]
+fn the_report_names_each_failed_host_request_after_the_coverage_list() {
+    let failure = |object, command, error| HostIoFailure {
+        object,
+        command,
+        error,
+    };
+    let report = Report {
+        unimplemented: vec![],
+        host_io_failures: vec![
+            failure("fsp-srv.IFile", 0, HostIoError::GuestMemory),
+            failure("fsp-srv.IFileSystem", 7, HostIoError::NotFound),
+        ],
+        dropped: 0,
+    };
+    let mut out = Vec::new();
+    lince_app::write_coverage(&mut out, &report).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&out),
+        concat!(
+            "coverage: 0 unimplemented calls\n",
+            "host I/O: 2 kinds of failed requests\n",
+            "  fsp-srv.IFile command 0: guest memory\n",
+            "  fsp-srv.IFileSystem command 7: not found\n",
         )
     );
 }

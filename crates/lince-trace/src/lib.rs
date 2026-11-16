@@ -25,7 +25,7 @@ mod error;
 mod event;
 mod trace;
 
-pub use coverage::Unimplemented;
+pub use coverage::{HostIoFailure, Unimplemented};
 pub use error::{Result, TraceError};
 pub use event::{Event, EventKind, HostIoError, ThreadRole};
 pub use trace::{Drained, NameId, Record, Recorder, Trace};

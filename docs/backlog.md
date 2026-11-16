@@ -74,7 +74,8 @@ Rules:
 | T-062 | Research: `fsp-srv` IFileSystem and IFile parameters and the path buffer (public sources) | Research | Done | T-054 | 0024 |
 | T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | Done | T-057 | 0017, 0024 |
 | T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Done | T-062, T-063 | 0017, 0024 |
-| T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | In progress | T-064 | 0024, 0027 |
+| T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | Done | T-064 | 0024, 0027 |
+| T-066 | `lince-trace` + `lince-app`: list host I/O failures in the `lince run --coverage` report | Impl | In progress | T-065 | 0027 |
 
 ## Details
 
@@ -559,6 +560,13 @@ user paths in logs). Start after T-064 step 3, so writes and directories record 
 - **Acceptance:** a test per failure class shows its event after the drain; the guest still
   gets the same result code; a guest-memory write failure is distinguishable from a missing
   file.
+
+### T-066 — Report host I/O failures
+T-065 records why a host request failed, but `lince run` never showed it. With `--coverage`,
+the report on stderr lists each object, command and error class that failed, once, after
+the unimplemented calls (maintainer, 2026-11-16).
+- **Acceptance:** `Trace::host_io_failures` lists them sorted and once each; the report
+  prints them; a clean run prints nothing new.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the
