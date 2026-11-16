@@ -1,7 +1,7 @@
 # ADR-0004: Guest CPU architecture model
 
 - **Status:** Partially accepted. **B1 scope** and **B2 scope** accepted (maintainer,
-  2026-11-14); the rest stays Proposed.
+  2026-11-14); **B3 scope** accepted (maintainer, 2026-11-16); the rest stays Proposed.
 - **Date:** 2026-11-13
 - **Related:** doc 08 §1, ADR-0005, ADR-0019
 
@@ -59,7 +59,9 @@ PAC/MTE stay out; the interpreter gains only what the B2 test program uses (T-05
 **B3 scope:** the full v8.0–v8.5 decode table and `lince-a64-coverage` (T-040), so a user's
 own title reports every encoding it uses that the table lacks; the interpreter gains the FP
 and AdvSIMD instructions the B3 test title uses (T-079), each with differential tests. PAC
-and MTE encodings are decoded with the identity / zero-tag behavior above. The deterministic
+and MTE encodings are decoded with the identity / zero-tag behavior above, since titles sign
+and authenticate return addresses in most function prologues (maintainer, 2026-11-16); a
+faithful PAC computation waits for a title that depends on it. The deterministic
 clock mode stays out; the rest of the ISA a real title needs is added one class at a time
 from the coverage report.
 

@@ -1,6 +1,6 @@
 # ADR-0025: Switch 1 / Switch 2 component boundaries
 
-- **Status:** Proposed
+- **Status:** Accepted (maintainer, 2026-11-16)
 - **Date:** 2026-11-13
 - **Related:** charter §2.2; ADR-0004, ADR-0009, ADR-0024
 
@@ -24,7 +24,9 @@ service registry per system generation.
 
 **B3 scope:** the whole decision above. In B3 it shows as the per-generation service
 registry: the shared services in `lince-hle`, the Switch 2-only ones in `lince-hle-nx2`
-(T-078), and the registry a process gets chosen by its title's system generation.
+(T-078), and the registry a process gets chosen by its title's system generation. The
+generation is an explicit parameter of process creation, Switch 2 by default; detecting it
+from a title's files stays UNKNOWN until a real title shows how (maintainer, 2026-11-16).
 
 ## Technical justification
 These seams already exist in the architecture for other reasons, so Switch 1 costs nothing now.
