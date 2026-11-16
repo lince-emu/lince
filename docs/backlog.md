@@ -48,7 +48,7 @@ Rules:
 | T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Done | T-042 | 0005 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Done | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Done | T-029–T-034, T-042 | 0001 |
-| T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033, T-069 | 0004, 0031 |
+| T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Ready | T-033, T-069 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Done | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
@@ -78,7 +78,7 @@ Rules:
 | T-066 | `lince-trace` + `lince-app`: list host I/O failures in the `lince run --coverage` report | Impl | Done | T-065 | 0027 |
 | T-067 | Break B3 into tasks | Docs | Done | T-056 | 0024, 0025 |
 | T-068 | Mark the **B3 scope** in ADR-0004, 0019, 0024 and 0025 | Docs | In progress | T-067 | 0004, 0019, 0024, 0025 |
-| T-069 | Review the B3 ADRs for acceptance (B3 scope of 0004, 0019, 0024, 0025; the `lz4_flex` dependency) | Maintainer | Blocked | T-068 | 0004, 0019, 0024, 0025 |
+| T-069 | Review the B3 ADRs for acceptance (B3 scope of 0004, 0019, 0024, 0025; the `lz4_flex` dependency) | Maintainer | Done | T-068 | 0004, 0019, 0024, 0025 |
 | T-070 | Research: ExeFS, NPDM, NSO, the rtld/subsdk module chain and RomFS (public sources) | Research | Ready | — | 0024, 0025 |
 | T-071 | Research: the services and calls a title makes before its first GPU submission (`am`/applet, `nvdrv`, `vi`, Switch 2-only services) | Research | Ready | — | 0024, 0025 |
 | T-072 | Test title: a team-written ExeFS (NPDM, a loader-stub NSO, main NSO, one subsdk) and a RomFS directory, built by `xtask` | Impl | Blocked | T-070 | 0001, 0002 |
@@ -90,7 +90,8 @@ Rules:
 | T-078 | `lince-hle-nx2`: the Switch 2 service registry skeleton (per-generation registry seam) | Impl | Blocked | T-069, T-071 | 0024, 0025 |
 | T-079 | `lince-cpu-a64`: the FP/AdvSIMD instructions the B3 test title uses | Impl | Blocked | T-069, T-072 | 0004, 0005, 0031 |
 | T-080 | `lince run <exefs-dir> [--romfs <dir>]` runs the test title to its first GPU submission (B3 exit in CI) | Impl | Blocked | T-072–T-079 | 0001, 0024 |
-| T-081 | Run the B3 exit on a title dumped from a game you own, locally (never in CI) | Maintainer | Blocked | T-080 | 0029 |
+| T-081 | Run the B3 exit on a title dumped from a game you own, locally (never in CI) | Maintainer | Blocked | T-080, T-082 | 0029 |
+| T-082 | `lince-hle`: CMIF domains (convert a session to a domain, objects addressed by id, close) | Impl | Blocked | T-071 | 0024 |
 
 ## Details
 
@@ -612,6 +613,10 @@ for T-069.
 Accept the B3 scope marked by T-068, or send it back with questions; decide on `lz4_flex`.
 - **Acceptance:** each ADR's status line states what is accepted; the B3 `Impl` tasks can
   start.
+- **Outcome (maintainer, 2026-11-16):** B3 scope of ADR-0004, 0019 and 0024 accepted, ADR-0025
+  accepted whole. `lz4_flex` approved (safe-decode); only the 39-bit layout; PAC/MTE as
+  identity / zero tags; the system generation is an explicit process-creation parameter,
+  Switch 2 by default; CMIF domains join B3 as T-082.
 
 ### T-070 — Research: ExeFS, NPDM, NSO, the module chain and RomFS
 From public sources only (LEGAL-16, LEGAL-52): the ExeFS file names; the NPDM fields B3 needs
@@ -695,6 +700,14 @@ only. Nothing from the title, its output or its logs beyond service and command 
 the repository (LEGAL-50).
 - **Acceptance:** the title runs its own code to its first GPU submission (doc 07 B3 exit);
   the `--coverage` list of what it reached becomes the B4 task input.
+
+### T-082 — CMIF domains
+`lince-hle` supports CMIF domains as T-071 shows titles use them: converting a session to a
+domain, requests addressed to an object id, objects returned into the domain, and closing an
+object, with the exact CMIF layouts (ADR-0024). Real titles need them (`am`); the test title
+need not use them.
+- **Acceptance:** each domain message tested through the IPC framework; a session converted
+  to a domain serves two objects; unknown domain commands are logged by name.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the
