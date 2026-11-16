@@ -336,6 +336,7 @@ Outcome exec_mrs(Core &core, uint32_t word) {
 Outcome execute(Core &core, Memory &memory, Insn insn, uint32_t word) {
   switch (insn) {
   case Insn::UNKNOWN:
+  case Insn::UDF:
     return Outcome::Undefined;
   case Insn::B:
   case Insn::BL:

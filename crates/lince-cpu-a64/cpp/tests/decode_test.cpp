@@ -92,7 +92,9 @@ int main() {
   std::array<char, LCA_INSN_NAME_MAX> buffer{};
   const uint32_t ret_x30 = 0xd65f03c0; // ret
   check(name_of(lca_decode(ret_x30), buffer) == "RET", "lca_decode finds RET");
-  check(lca_decode(0) == LCA_INSN_UNKNOWN, "lca_decode reports udf #0 as unknown");
+  check(name_of(lca_decode(0), buffer) == "UDF", "lca_decode finds udf #0");
+  const uint32_t reserved = 0x00010000; // op0 = 0b0000 outside UDF
+  check(lca_decode(reserved) == LCA_INSN_UNKNOWN, "lca_decode reports a reserved word as unknown");
   check(lca_insn_name(LCA_INSN_UNKNOWN, buffer.data()) == 0, "UNKNOWN has no name");
   check(lca_insn_name(std::numeric_limits<lca_insn>::max(), buffer.data()) == 0,
         "an out-of-range id has no name");

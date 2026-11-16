@@ -48,7 +48,7 @@ Rules:
 | T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Done | T-042 | 0005 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Done | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Done | T-029–T-034, T-042 | 0001 |
-| T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Ready | T-033, T-069 | 0004, 0031 |
+| T-040 | `lince-cpu-a64`: decoder indexed by op0 group, `UDF`, and the `lince-a64-coverage` tool | Impl | In progress | T-033, T-069 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Done | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
@@ -79,12 +79,12 @@ Rules:
 | T-067 | Break B3 into tasks | Docs | Done | T-056 | 0024, 0025 |
 | T-068 | Mark the **B3 scope** in ADR-0004, 0019, 0024 and 0025 | Docs | Done | T-067 | 0004, 0019, 0024, 0025 |
 | T-069 | Review the B3 ADRs for acceptance (B3 scope of 0004, 0019, 0024, 0025; the `lz4_flex` dependency) | Maintainer | Done | T-068 | 0004, 0019, 0024, 0025 |
-| T-070 | Research: ExeFS, NPDM, NSO, the rtld/subsdk module chain and RomFS (public sources) | Research | In progress | — | 0024, 0025 |
+| T-070 | Research: ExeFS, NPDM, NSO, the rtld/subsdk module chain and RomFS (public sources) | Research | Done | — | 0024, 0025 |
 | T-071 | Research: the services and calls a title makes before its first GPU submission (`am`/applet, `nvdrv`, `vi`, Switch 2-only services) | Research | Ready | — | 0024, 0025 |
-| T-072 | Test title: a team-written ExeFS (NPDM, a loader-stub NSO, main NSO, one subsdk) and a RomFS directory, built by `xtask` | Impl | Blocked | T-070 | 0001, 0002 |
-| T-073 | `lince-loader`: NPDM and NSO (segments, LZ4, permissions, `.bss`), modules loaded in ExeFS order | Impl | Blocked | T-069, T-070 | 0019, 0024, 0025 |
+| T-072 | Test title: a team-written ExeFS (NPDM, a loader-stub NSO, main NSO, one subsdk) and a RomFS directory, built by `xtask` | Impl | Ready | T-070 | 0001, 0002 |
+| T-073 | `lince-loader`: NPDM and NSO (segments, LZ4, permissions, `.bss`), modules loaded in ExeFS order | Impl | Ready | T-069, T-070 | 0019, 0024, 0025 |
 | T-074 | `lince-kernel`: create the process from the NPDM (address-space type, main thread, capabilities B3 needs) | Impl | Blocked | T-073 | 0019, 0024 |
-| T-075 | `lince-hle`: RomFS served from a user-supplied extracted directory | Impl | Blocked | T-069, T-070 | 0024 |
+| T-075 | `lince-hle`: RomFS served from a user-supplied extracted directory | Impl | Ready | T-069, T-070 | 0024 |
 | T-076 | `lince-hle`: `am`/applet lifecycle stubs that log, to the depth T-071 finds | Impl | Blocked | T-069, T-071 | 0024, 0025 |
 | T-077 | `lince-hle`: `nvdrv` and `vi` skeletons; the first GPU submission stops the run and is reported | Impl | Blocked | T-069, T-071 | 0024, 0025 |
 | T-078 | `lince-hle-nx2`: the Switch 2 service registry skeleton (per-generation registry seam) | Impl | Blocked | T-069, T-071 | 0024, 0025 |
@@ -92,6 +92,11 @@ Rules:
 | T-080 | `lince run <exefs-dir> [--romfs <dir>]` runs the test title to its first GPU submission (B3 exit in CI) | Impl | Blocked | T-072–T-079 | 0001, 0024 |
 | T-081 | Run the B3 exit on a title dumped from a game you own, locally (never in CI) | Maintainer | Blocked | T-080, T-082 | 0029 |
 | T-082 | `lince-hle`: CMIF domains (convert a session to a domain, objects addressed by id, close) | Impl | Blocked | T-071 | 0024 |
+| T-083 | `lince-cpu-a64`: decode table, branches, exception generation and system (hints incl. PAC hints, barriers, `MSR`/`MRS`/`SYS`) | Impl | Blocked | T-040 | 0004, 0031 |
+| T-084 | `lince-cpu-a64`: decode table, data processing (immediate and register, incl. PAC and MTE data forms) | Impl | Blocked | T-083 | 0004, 0031 |
+| T-085 | `lince-cpu-a64`: decode table, loads and stores (LSE, CAS/CASP, LDAPR, MTE tag loads/stores, `LDRAA`/`LDRAB`) | Impl | Blocked | T-083 | 0004, 0031 |
+| T-086 | `lince-cpu-a64`: decode table, scalar floating point | Impl | Blocked | T-083 | 0004, 0031 |
+| T-087 | `lince-cpu-a64`: decode table, AdvSIMD and the crypto extensions | Impl | Blocked | T-083 | 0004, 0031 |
 
 ## Details
 
@@ -433,15 +438,18 @@ ADR-0005.
 - **Acceptance:** `docs/research/cpu-jit-scheduling.md` with evidence levels; ADR-0005's
   RECALL sentence updated to cite it.
 
-### T-040 — Full A64 decode table and coverage tool
-Populate the decoder's description table (T-033) to the v8.0–v8.5 feature set ADR-0004
-requires (LSE, CAS/CASP, LDAPR, PAC, MTE, …), from Arm's public specification, and build
-`lince-a64-coverage`, a Rust tool that decodes executables through the C API (ADR-0031) and
-lists every encoding the table lacks. Decoding an encoding is not implementing it: the
-interpreter only gains what the next phase's programs need.
-- **Acceptance:** differential decode tests per instruction class; the coverage tool runs on
-  the T-029 programs in CI and reports zero unknown encodings; it can be pointed at a
-  user-supplied executable without any of its content entering the repository (LEGAL-50).
+### T-040 — Decoder index and coverage tool
+First of the steps that populate the description table (T-033) to the v8.0–v8.5 feature set
+ADR-0004 requires (maintainer, 2026-11-16: one PR per class, T-083 to T-087). This step makes
+the table able to grow: the decoder files each pattern under its op0 group (bits 28:25) so a
+decode and the compile-time overlap check stay within one group; `UDF` joins the table; and
+`tools/lince-a64-coverage` decodes an executable's code through the C API (ADR-0031) and
+lists every encoding the table lacks, skipping the literal-pool words that literal loads read.
+Decoding an encoding is not implementing it: the interpreter only gains what the next phase's
+programs need.
+- **Acceptance:** the coverage tool runs on the T-029 programs in CI and reports zero unknown
+  encodings; it can be pointed at a user-supplied executable without any of its content
+  entering the repository (LEGAL-50). NSO input comes with T-073.
 - **B3 (T-067):** part of B3; starts once T-069 accepts the B3 scope of ADR-0004.
 
 ### T-041 — SetMemoryPermission on part of a region
@@ -708,6 +716,16 @@ object, with the exact CMIF layouts (ADR-0024). Real titles need them (`am`); th
 need not use them.
 - **Acceptance:** each domain message tested through the IPC framework; a session converted
   to a domain serves two objects; unknown domain commands are logged by name.
+
+### T-083 to T-087 — Decode table by instruction class
+Each task adds one class of the Arm ARM chapter C4 encoding index to `insns.inc` (T-083
+branches, exception generation and system; T-084 data processing; T-085 loads and stores;
+T-086 scalar FP; T-087 AdvSIMD and crypto), with the v8.1–v8.5 forms of that class. Names
+follow the manual's instruction titles; reserved field values stay unknown.
+- **Acceptance:** differential decode tests for the class: a team-written assembly corpus,
+  assembled by clang in `cargo xtask` (as the test programs are), lists each instruction with
+  the form it must decode to, and every word decodes to that form; the coverage tool still
+  reports zero unknown encodings on the test programs. T-083 adds the corpus harness.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the

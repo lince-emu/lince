@@ -138,6 +138,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lince-a64-coverage"
+version = "0.0.0"
+dependencies = [
+ "lince-cpu-a64",
+ "lince-loader",
+]
+
+[[package]]
 name = "lince-app"
 version = "0.0.0"
 dependencies = [

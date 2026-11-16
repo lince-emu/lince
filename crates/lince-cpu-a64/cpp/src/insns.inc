@@ -14,7 +14,11 @@
 // Encodings come from the Arm Architecture Reference Manual for A-profile (public, LEGAL-11),
 // chapter C4 "A64 Instruction Set Encoding"; names follow the manual's instruction titles.
 // B1 and B2 scope: the forms the linked test programs use (tests/homebrew/*.nro; the linker
-// relaxes some ADRP + ADD pairs into NOP + ADR); T-040 completes the table.
+// relaxes some ADRP + ADD pairs into NOP + ADR); T-083 to T-087 complete the table.
+
+// Reserved group (op0 = 0b0000): UDF, permanently undefined; it also decodes the zero words
+// that pad a code segment, which the interpreter treats like any undefined encoding.
+LCA_INSN(UDF, "0000000000000000 xxxxxxxxxxxxxxxx")
 
 // Branches, exception generation and system
 LCA_INSN(B, "000101 xxxxxxxxxxxxxxxxxxxxxxxxxx")
