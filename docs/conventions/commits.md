@@ -18,7 +18,7 @@ with the project-specific types, scopes and footers defined here.
 | `type` | One of the types in §2. Lowercase. |
 | `scope` | One of the scopes in §3. Lowercase. Required, except for `chore`, `build` and `revert` when the change is repository-wide. |
 | `!` | Marks a breaking change (§5). Must be paired with a `BREAKING CHANGE:` footer. |
-| `description` | Imperative mood ("add", not "added"/"adds"), starts lowercase, no trailing period, header ≤ 72 characters in total. |
+| `description` | Imperative mood ("add", not "added"/"adds"), starts lowercase, no trailing period, header ≤ 100 characters in total. |
 | `body` | Explains **why** and any non-obvious **how**. Wrap at 72 columns. Mention threads affected when a render-critical path changes. |
 | `footers` | `Token: value` lines (§4). |
 
@@ -184,12 +184,12 @@ The header is checked against:
 ^(feat|fix|perf|refactor|test|docs|build|ci|chore|revert)(\([a-z0-9][a-z0-9-]*\))?!?: [a-z0-9].{0,}$
 ```
 
-plus: total header length ≤ 72, no trailing period, scope present unless the type is `chore`,
+plus: total header length ≤ 100, no trailing period, scope present unless the type is `chore`,
 `build` or `revert`, a `BREAKING CHANGE:` footer when `!` is used. Merge commits created by
 GitHub and `fixup!`/`squash!` commits on feature branches are allowed by the local hook but
 never reach `main`.
 
 The same rules run in two places: the `.githooks/commit-msg` hook on every local commit, and
 `cargo xtask ci`, which checks every commit from `--base` (default `origin/main`) to `HEAD`
-and, in CI, the pull-request title (`--pr-title`), which may be at most 66 characters so the
-squash commit stays within 72 after GitHub appends ` (#NN)`. A test keeps the two in agreement.
+and, in CI, the pull-request title (`--pr-title`), which may be at most 92 characters so the
+squash commit stays within 100 after GitHub appends ` (#NNNN)`. A test keeps the two in agreement.

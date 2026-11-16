@@ -13,7 +13,7 @@ allowed-tools: Bash(git push -u origin lince/*) Bash(git push origin lince/*) Ba
    (`git log --format=%B origin/main..HEAD`). Fix messages before pushing if needed (ask the
    maintainer before rewriting history that was already pushed).
 4. **Title:** one Conventional Commit header summarizing the PR, e.g.
-   `feat(cache): add memory-mapped open-addressing index` (≤ 66 characters, no task id:
+   `feat(cache): add memory-mapped open-addressing index` (≤ 92 characters, no task id:
    GitHub appends ` (#NN)` when squashing). Validate it with the rule CI applies:
    `cargo xtask pr-title "<header>"`.
 5. `git push -u origin <branch>`.

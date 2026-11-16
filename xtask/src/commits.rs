@@ -29,9 +29,9 @@ const TYPES: [&str; 10] = [
 ];
 /// Types whose scope may be omitted for repository-wide changes.
 const SCOPE_OPTIONAL: [&str; 3] = ["chore", "build", "revert"];
-const MAX_HEADER: usize = 72;
-/// GitHub appends ` (#NNNNN)` to the PR title in the squash commit; this leaves room for it.
-const MAX_PR_TITLE: usize = 66;
+const MAX_HEADER: usize = 100;
+/// GitHub appends ` (#NNNN)` to the PR title in the squash commit; this leaves room for it.
+const MAX_PR_TITLE: usize = 92;
 /// Headers the hook lets through: GitHub merges and fixup commits on feature branches.
 const EXEMPT_PREFIXES: [&str; 4] = ["Merge ", "fixup! ", "squash! ", "amend! "];
 /// Description openings that are not in the imperative mood.
@@ -105,7 +105,7 @@ pub(crate) fn validate_pr_title(title: &str) -> Result<(), String> {
     let length = title.chars().count();
     if length > MAX_PR_TITLE {
         return Err(format!(
-            "title is {length} characters; the limit is {MAX_PR_TITLE}, leaving room for \" (#NN)\""
+            "title is {length} characters; the limit is {MAX_PR_TITLE}, leaving room for \" (#NNNN)\""
         ));
     }
     Ok(())
@@ -207,7 +207,7 @@ mod tests {
         ("feat(cache): add body without gap\nbody\n", false),
         ("feat(cache):missing space\n", false),
         (
-            "feat(cache): add a description that is far too long for the seventy-two limit\n",
+            "feat(cache): add a description that is far too long for the one-hundred character limit on any header\n",
             false,
         ),
     ];
@@ -220,13 +220,21 @@ mod tests {
     }
 
     #[test]
-    fn a_pull_request_title_is_checked_as_a_header_of_at_most_66_characters() {
+    fn a_pull_request_title_is_checked_as_a_header_of_at_most_92_characters() {
         assert!(validate_pr_title("feat(poc-6): checksum payloads with xxh3-64").is_ok());
         assert!(validate_pr_title("Update stuff").is_err());
-        let title_66 = format!("docs(backlog): {}", "a".repeat(51));
-        assert_eq!(title_66.chars().count(), 66);
-        assert!(validate_pr_title(&title_66).is_ok());
-        assert!(validate_pr_title(&format!("{title_66}b")).is_err());
+        let title_92 = format!("docs(backlog): {}", "a".repeat(77));
+        assert_eq!(title_92.chars().count(), 92);
+        assert!(validate_pr_title(&title_92).is_ok());
+        assert!(validate_pr_title(&format!("{title_92}b")).is_err());
+    }
+
+    #[test]
+    fn a_commit_header_is_at_most_100_characters() {
+        let header_100 = format!("docs(backlog): {}", "a".repeat(85));
+        assert_eq!(header_100.chars().count(), 100);
+        assert!(validate(&header_100).is_ok());
+        assert!(validate(&format!("{header_100}b")).is_err());
     }
 
     /// The hook and this module must agree on every case, so CI and local commits never
