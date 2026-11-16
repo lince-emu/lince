@@ -3,7 +3,7 @@
 
 //! `lince run [--coverage] [--sd <dir> [--sd-writable]] <file.nro>`: runs a homebrew NRO and
 //! prints its debug output; with `--coverage`, also the unimplemented SVCs and IPC commands it
-//! reached, on stderr (T-055); with `--sd`, the guest's SD card is that host directory,
+//! reached and the requests that failed on the host, on stderr (T-055, T-066); with `--sd`, the guest's SD card is that host directory,
 //! read-only unless `--sd-writable` is given too (T-064).
 #![expect(
     clippy::print_stderr,

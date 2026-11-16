@@ -247,3 +247,32 @@ fn a_host_io_failure_is_recorded_once_per_object_command_and_error() {
     );
     assert_eq!(trace.unknown_command(&drained.records[0].event), None);
 }
+
+#[test]
+fn the_failure_list_is_sorted_once_per_failure_and_named() {
+    let mut trace = Trace::new(16);
+    let file = trace.name("fsp-srv.IFile").unwrap();
+    let fs = trace.name("fsp-srv.IFileSystem").unwrap();
+    let mut first = trace.recorder(ThreadRole::Other);
+    let mut second = trace.recorder(ThreadRole::Other);
+    first.host_io_failed(fs, 7, HostIoError::NotFound);
+    second.host_io_failed(fs, 7, HostIoError::NotFound);
+    second.host_io_failed(file, 1, HostIoError::StorageFull);
+    second.host_io_failed(file, 0, HostIoError::Unknown(40));
+    first.stub(file);
+
+    let drained = trace.drain();
+    let names: Vec<String> = trace
+        .host_io_failures(&drained)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "fsp-srv.IFile command 0: error class 40",
+            "fsp-srv.IFile command 1: storage full",
+            "fsp-srv.IFileSystem command 7: not found",
+        ]
+    );
+}

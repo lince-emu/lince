@@ -6,7 +6,7 @@
 
 use std::fmt;
 
-use crate::event::EventKind;
+use crate::event::{EventKind, HostIoError};
 use crate::trace::{Drained, Trace};
 
 /// A call a run reached that has no implementation.
@@ -32,7 +32,58 @@ impl fmt::Display for Unimplemented {
     }
 }
 
+/// A request a run sent that failed on the host (T-065), by object, command and error class.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HostIoFailure {
+    /// The object's name.
+    pub object: &'static str,
+    /// The command id.
+    pub command: u16,
+    /// Why it failed.
+    pub error: HostIoError,
+}
+
+impl fmt::Display for HostIoFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let why = match self.error {
+            HostIoError::NotFound => "not found",
+            HostIoError::PermissionDenied => "permission denied",
+            HostIoError::OutsideRoot => "outside the root",
+            HostIoError::WrongType => "wrong entry type",
+            HostIoError::StorageFull => "storage full",
+            HostIoError::GuestMemory => "guest memory",
+            HostIoError::Other => "other host error",
+            HostIoError::Unknown(raw) => {
+                return write!(
+                    f,
+                    "{} command {}: error class {raw}",
+                    self.object, self.command
+                );
+            }
+        };
+        write!(f, "{} command {}: {why}", self.object, self.command)
+    }
+}
+
 impl Trace {
+    /// The host I/O failures in `drained`, sorted, each listed once even when several threads
+    /// recorded it. Other records are ignored.
+    pub fn host_io_failures(&self, drained: &Drained) -> Vec<HostIoFailure> {
+        let mut list: Vec<_> = drained
+            .records
+            .iter()
+            .filter_map(|record| self.host_io_failure(&record.event))
+            .map(|(object, command, error)| HostIoFailure {
+                object,
+                command,
+                error,
+            })
+            .collect();
+        list.sort_unstable();
+        list.dedup();
+        list
+    }
+
     /// The unimplemented calls in `drained`, sorted, each listed once even when several
     /// threads recorded it. Other records are ignored.
     pub fn unimplemented(&self, drained: &Drained) -> Vec<Unimplemented> {
