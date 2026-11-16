@@ -4,6 +4,7 @@
 //! `fsp-srv` through the IPC framework, on a scratch host directory. The fake sessions run each
 //! deferred work at once, in place of the service-I/O thread.
 
+use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -11,7 +12,8 @@ use std::sync::Arc;
 use lince_common::GuestVa;
 use lince_kernel::{DeferredReply, IpcMessage, SessionObject, UnknownCommand};
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
-use lince_trace::Trace;
+use lince_trace::{HostIoError, ThreadRole, Trace};
+use parking_lot::Mutex;
 
 use super::{FileSystem, FspSrv, OUT_OF_RANGE, PATH_NOT_FOUND, SdCard, Shared};
 use crate::cmif::{self, Header, IN_MAGIC, OUT_MAGIC};
@@ -40,6 +42,7 @@ struct Scratch {
     base: PathBuf,
     shared: Arc<Shared>,
     mem: Arc<AddressSpace>,
+    trace: RefCell<Trace>,
 }
 
 impl Drop for Scratch {
@@ -83,11 +86,28 @@ fn scratch_with(test: &str, writable: bool) -> Scratch {
         file: trace.name("fsp-srv.IFile").expect("name"),
         directory: trace.name("fsp-srv.IDirectory").expect("name"),
         set_current_process: trace.name("fsp-srv.SetCurrentProcess").expect("name"),
+        failures: Mutex::new(trace.recorder(ThreadRole::Other)),
     });
-    Scratch { base, shared, mem }
+    Scratch {
+        base,
+        shared,
+        mem,
+        trace: RefCell::new(trace),
+    }
 }
 
 impl Scratch {
+    /// The host I/O failures recorded since the last call: object, command and class.
+    fn failures(&self) -> Vec<(&'static str, u16, HostIoError)> {
+        let mut trace = self.trace.borrow_mut();
+        let drained = trace.drain();
+        drained
+            .records
+            .iter()
+            .filter_map(|record| trace.host_io_failure(&record.event))
+            .collect()
+    }
+
     fn root(&self) -> &Path {
         &self.shared.root
     }
@@ -759,4 +779,209 @@ fn a_symbolic_link_out_of_the_root_is_not_listed() {
         .map(|(name, _, _)| name)
         .collect();
     assert_eq!(names, ["data.bin", "dir"]);
+}
+
+/// A `Read` of 8 bytes at offset 0 through `file` into a receive buffer at `at`.
+fn read_into(file: &mut dyn SessionObject, at: u64) -> u32 {
+    let mut params = vec![0u8; 16];
+    params.extend(8u64.to_le_bytes());
+    let parts = Parts {
+        tag: TYPE_REQUEST_OLD,
+        receives: &[Map {
+            address: at,
+            size: 8,
+            attribute: 0,
+        }],
+        ..Parts::default()
+    };
+    let header = Header {
+        magic: IN_MAGIC,
+        value: READ,
+        ..Header::default()
+    };
+    let mut message = [0; MESSAGE_SIZE];
+    cmif::write(&mut message, &parts, &header, &params).expect("fits");
+    call(file, &mut FakeSessions::default(), message).0.0
+}
+
+#[test]
+fn a_missing_path_is_recorded_once_as_not_found() {
+    let s = scratch("fail-missing");
+    assert_eq!(entry_type(&s, b"nope").0, PATH_NOT_FOUND);
+    assert_eq!(
+        entry_type(&s, b"nope").0,
+        PATH_NOT_FOUND,
+        "same result again"
+    );
+    assert_eq!(
+        s.failures(),
+        [(
+            "fsp-srv.IFileSystem",
+            u16::try_from(GET_ENTRY_TYPE).expect("small"),
+            HostIoError::NotFound
+        )],
+        "once per object, command and class"
+    );
+}
+
+#[test]
+fn opening_the_wrong_kind_of_entry_is_recorded_as_wrong_type() {
+    let s = scratch("fail-type");
+    for (command, path, params) in [
+        (OPEN_FILE, &b"dir"[..], 1u64),
+        (OPEN_DIRECTORY, b"data.bin", 3),
+    ] {
+        let message = s.request(command, &params.to_le_bytes(), Some(path), 0);
+        let ((result, _, _), released) =
+            call(&mut *s.file_system(), &mut FakeSessions::default(), message);
+        assert_eq!((result, released), (PATH_NOT_FOUND, true));
+    }
+    assert_eq!(
+        s.failures(),
+        [
+            (
+                "fsp-srv.IFileSystem",
+                u16::try_from(OPEN_FILE).expect("small"),
+                HostIoError::WrongType
+            ),
+            (
+                "fsp-srv.IFileSystem",
+                u16::try_from(OPEN_DIRECTORY).expect("small"),
+                HostIoError::WrongType
+            ),
+        ]
+    );
+}
+
+#[test]
+fn a_bad_guest_buffer_is_recorded_apart_from_a_missing_file() {
+    let s = scratch_with("fail-memory", true);
+    let unmapped = 0x50_0000;
+    let mut file = open(&s, b"data.bin", 3);
+    assert_eq!(read_into(&mut *file, unmapped), super::BAD_BUFFER);
+    assert_eq!(write_from(&mut *file, unmapped, 8, 8), super::BAD_BUFFER);
+    let mut directory = open_dir(&s, b"", 3);
+    let parts = Parts {
+        tag: TYPE_REQUEST_OLD,
+        receives: &[Map {
+            address: unmapped,
+            size: ENTRY_SIZE,
+            attribute: 0,
+        }],
+        ..Parts::default()
+    };
+    let header = Header {
+        magic: IN_MAGIC,
+        value: READ_DIRECTORY,
+        ..Header::default()
+    };
+    let mut message = [0; MESSAGE_SIZE];
+    cmif::write(&mut message, &parts, &header, &[]).expect("fits");
+    let ((result, _, _), _) = call(&mut *directory, &mut FakeSessions::default(), message);
+    assert_eq!(result, super::BAD_BUFFER);
+
+    fs::remove_file(s.root().join("data.bin")).expect("remove data");
+    assert_eq!(read_into(&mut *file, OUT_AT), PATH_NOT_FOUND);
+    assert_eq!(
+        s.failures(),
+        [
+            (
+                "fsp-srv.IFile",
+                u16::try_from(READ).expect("small"),
+                HostIoError::GuestMemory
+            ),
+            (
+                "fsp-srv.IFile",
+                u16::try_from(WRITE).expect("small"),
+                HostIoError::GuestMemory
+            ),
+            (
+                "fsp-srv.IDirectory",
+                u16::try_from(READ_DIRECTORY).expect("small"),
+                HostIoError::GuestMemory
+            ),
+            (
+                "fsp-srv.IFile",
+                u16::try_from(READ).expect("small"),
+                HostIoError::NotFound
+            ),
+        ]
+    );
+}
+
+#[test]
+fn a_symbolic_link_out_of_the_root_is_recorded_as_outside_the_root() {
+    let s = scratch("fail-outside");
+    let target = s.root().parent().expect("base").join("outside.txt");
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(&target, s.root().join("link"));
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_file(&target, s.root().join("link"));
+    // Creating a link needs a privilege some Windows hosts lack; then there is nothing to test.
+    if linked.is_err() {
+        return;
+    }
+    assert_eq!(entry_type(&s, b"link").0, PATH_NOT_FOUND);
+    assert_eq!(
+        s.failures(),
+        [(
+            "fsp-srv.IFileSystem",
+            u16::try_from(GET_ENTRY_TYPE).expect("small"),
+            HostIoError::OutsideRoot
+        )]
+    );
+}
+
+#[test]
+fn a_host_file_the_user_made_read_only_is_recorded_as_permission_denied() {
+    let s = scratch_with("fail-permission", true);
+    let mut file = open(&s, b"data.bin", 2);
+    let path = s.root().join("data.bin");
+    let original = fs::metadata(&path).expect("metadata").permissions();
+    let mut read_only = original.clone();
+    read_only.set_readonly(true);
+    fs::set_permissions(&path, read_only).expect("make read-only");
+    let result = write(&s, &mut *file, 0, b"x", 0);
+    fs::set_permissions(&path, original).expect("restore the permissions");
+    // A Unix superuser writes to read-only files; then there is nothing to test.
+    if result == 0 {
+        return;
+    }
+    assert_eq!(result, PATH_NOT_FOUND);
+    assert_eq!(
+        s.failures(),
+        [(
+            "fsp-srv.IFile",
+            u16::try_from(WRITE).expect("small"),
+            HostIoError::PermissionDenied
+        )]
+    );
+}
+
+#[test]
+fn host_errors_are_classified_without_their_text() {
+    use std::io::{Error, ErrorKind};
+    for (error, class) in [
+        (Error::from(ErrorKind::NotFound), HostIoError::NotFound),
+        (
+            Error::from(ErrorKind::PermissionDenied),
+            HostIoError::PermissionDenied,
+        ),
+        (
+            Error::new(ErrorKind::PermissionDenied, super::OutsideRoot),
+            HostIoError::OutsideRoot,
+        ),
+        (
+            Error::from(ErrorKind::NotADirectory),
+            HostIoError::WrongType,
+        ),
+        (Error::from(ErrorKind::IsADirectory), HostIoError::WrongType),
+        (
+            Error::from(ErrorKind::StorageFull),
+            HostIoError::StorageFull,
+        ),
+        (Error::from(ErrorKind::UnexpectedEof), HostIoError::Other),
+    ] {
+        assert_eq!(super::classify(&error), class, "{error}");
+    }
 }

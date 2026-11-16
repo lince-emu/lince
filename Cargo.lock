@@ -178,6 +178,7 @@ dependencies = [
  "lince-kernel",
  "lince-mem",
  "lince-trace",
+ "parking_lot",
  "thiserror",
 ]
 

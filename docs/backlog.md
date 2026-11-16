@@ -73,8 +73,8 @@ Rules:
 | T-061 | `lince-kernel` + `lince-sched`: Horizon-faithful preemption (sliced-priority table, prompt preemption, kernel timer thread) | Impl | Done | T-051 | 0017, 0024, 0032 |
 | T-062 | Research: `fsp-srv` IFileSystem and IFile parameters and the path buffer (public sources) | Research | Done | T-054 | 0024 |
 | T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | Done | T-057 | 0017, 0024 |
-| T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | In progress | T-062, T-063 | 0017, 0024 |
-| T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | Blocked | T-064 | 0024, 0027 |
+| T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Done | T-062, T-063 | 0017, 0024 |
+| T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | In progress | T-064 | 0024, 0027 |
 
 ## Details
 

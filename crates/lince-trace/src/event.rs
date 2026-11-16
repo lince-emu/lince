@@ -71,8 +71,64 @@ pub enum EventKind {
     /// A session received a command its object has no behavior for. `arg`: the object's
     /// [`NameId`](crate::NameId) in the high 32 bits, the command id in the low 32 bits.
     UnknownCommand,
+    /// A request served on the service-I/O thread failed on the host. `arg`: the object's
+    /// [`NameId`](crate::NameId) in the high 32 bits, the command id in bits 16 to 31, the
+    /// [`HostIoError`] in the low 16 bits.
+    HostIoFailed,
     /// A kind this build does not know.
     Unknown(u16),
+}
+
+/// Why a host I/O request failed: the class of the host error, never its text or path
+/// (PAT-07). Raw values are part of the dump format; unknown values are kept (PAT-03).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum HostIoError {
+    /// The host path does not exist.
+    NotFound,
+    /// The host refused access.
+    PermissionDenied,
+    /// The path resolves outside the directory the guest may reach, through a symbolic link.
+    OutsideRoot,
+    /// The path is a directory where a file was needed, or the other way round.
+    WrongType,
+    /// The host disk is full.
+    StorageFull,
+    /// Guest memory could not be read or written: the guest's buffer, not the host.
+    GuestMemory,
+    /// Any other host error.
+    Other,
+    /// A value this build does not know.
+    Unknown(u16),
+}
+
+impl HostIoError {
+    /// Raw value used in the encoding.
+    pub fn to_raw(self) -> u16 {
+        match self {
+            Self::NotFound => 0,
+            Self::PermissionDenied => 1,
+            Self::OutsideRoot => 2,
+            Self::WrongType => 3,
+            Self::StorageFull => 4,
+            Self::GuestMemory => 5,
+            Self::Other => 6,
+            Self::Unknown(raw) => raw,
+        }
+    }
+
+    /// Decodes a raw value; unknown values are preserved.
+    pub fn from_raw(raw: u16) -> Self {
+        match raw {
+            0 => Self::NotFound,
+            1 => Self::PermissionDenied,
+            2 => Self::OutsideRoot,
+            3 => Self::WrongType,
+            4 => Self::StorageFull,
+            5 => Self::GuestMemory,
+            6 => Self::Other,
+            other => Self::Unknown(other),
+        }
+    }
 }
 
 impl EventKind {
@@ -106,6 +162,7 @@ impl EventKind {
             Self::KernelLockHeld => 24,
             Self::PreemptLatency => 25,
             Self::UnknownCommand => 26,
+            Self::HostIoFailed => 27,
             Self::Unknown(raw) => raw,
         }
     }
@@ -140,6 +197,7 @@ impl EventKind {
             24 => Self::KernelLockHeld,
             25 => Self::PreemptLatency,
             26 => Self::UnknownCommand,
+            27 => Self::HostIoFailed,
             other => Self::Unknown(other),
         }
     }
@@ -234,11 +292,17 @@ impl Event {
 
 #[cfg(test)]
 mod tests {
-    use super::{Event, EventKind, ThreadRole};
+    use super::{Event, EventKind, HostIoError, ThreadRole};
 
     #[test]
     fn every_known_kind_and_role_round_trips() {
-        for raw in 0..=26 {
+        for raw in 0..=6 {
+            let error = HostIoError::from_raw(raw);
+            assert!(!matches!(error, HostIoError::Unknown(_)), "raw {raw}");
+            assert_eq!(error.to_raw(), raw);
+        }
+        assert_eq!(HostIoError::from_raw(99), HostIoError::Unknown(99));
+        for raw in 0..=27 {
             let kind = EventKind::from_raw(raw);
             assert!(!matches!(kind, EventKind::Unknown(_)), "raw {raw}");
             assert_eq!(kind.to_raw(), raw);
