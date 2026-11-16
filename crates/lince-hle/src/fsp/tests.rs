@@ -29,6 +29,10 @@ const WRITE: u32 = 1;
 const FLUSH: u32 = 2;
 const SET_SIZE: u32 = 3;
 const GET_SIZE: u32 = 4;
+const OPEN_DIRECTORY: u32 = 9;
+const READ_DIRECTORY: u32 = 0;
+const GET_ENTRY_COUNT: u32 = 1;
+const ENTRY_SIZE: u64 = 0x310;
 
 /// A scratch directory holding the SD-card root (`data.bin` with bytes 0 to 99, an empty
 /// directory `dir`) and, beside the root, `outside.txt`, which the guest must never reach.
@@ -77,6 +81,7 @@ fn scratch_with(test: &str, writable: bool) -> Scratch {
         fsp: trace.name("fsp-srv").expect("name"),
         file_system: trace.name("fsp-srv.IFileSystem").expect("name"),
         file: trace.name("fsp-srv.IFile").expect("name"),
+        directory: trace.name("fsp-srv.IDirectory").expect("name"),
         set_current_process: trace.name("fsp-srv.SetCurrentProcess").expect("name"),
     });
     Scratch { base, shared, mem }
@@ -311,7 +316,7 @@ fn a_read_only_sd_card_refuses_writing_modes_without_touching_the_host() {
 }
 
 #[test]
-fn unknown_modes_and_directories_are_unknown_commands_for_now() {
+fn unknown_modes_and_filters_are_unknown_commands() {
     let s = scratch("unknown");
     let mut sessions = FakeSessions {
         run_deferred: true,
@@ -322,11 +327,12 @@ fn unknown_modes_and_directories_are_unknown_commands_for_now() {
         s.file_system().handle_request(&mut sessions, &mut message),
         Err(UnknownCommand { command: OPEN_FILE })
     );
-    let mut message = s.request(9, &[], Some(b"dir"), 0);
+    let mut message = s.request(OPEN_DIRECTORY, &4u64.to_le_bytes(), Some(b"dir"), 0);
     assert_eq!(
         s.file_system().handle_request(&mut sessions, &mut message),
-        Err(UnknownCommand { command: 9 }),
-        "OpenDirectory comes with step 3b"
+        Err(UnknownCommand {
+            command: OPEN_DIRECTORY
+        })
     );
     assert!(sessions.objects.is_empty() && sessions.deferred.is_empty());
 }
@@ -601,4 +607,156 @@ fn a_read_into_an_unmapped_buffer_is_a_bad_buffer() {
     cmif::write(&mut message, &parts, &header, &params).expect("fits");
     let ((result, _, _), _) = call(&mut *file, &mut FakeSessions::default(), message);
     assert_eq!(result, super::BAD_BUFFER);
+}
+
+/// Opens the directory `path` with `filter`; panics unless it succeeds.
+fn open_dir(s: &Scratch, path: &[u8], filter: u64) -> Box<dyn SessionObject> {
+    let mut sessions = FakeSessions::default();
+    let message = s.request(OPEN_DIRECTORY, &filter.to_le_bytes(), Some(path), 0);
+    let ((result, handles, _), released) = call(&mut *s.file_system(), &mut sessions, message);
+    assert_eq!((result, handles, released), (0, vec![0x100], false));
+    let directory = sessions.objects.remove(0);
+    assert_eq!(directory.name(), "fsp-srv.IDirectory");
+    directory
+}
+
+/// An `IDirectory` `Read` into a buffer of `room` entries at `OUT_AT`: the result and the
+/// (name, type, size) of each entry read.
+fn read_dir(
+    directory: &mut dyn SessionObject,
+    s: &Scratch,
+    room: u64,
+) -> (u32, Vec<(String, u8, u64)>) {
+    let message = s.request(READ_DIRECTORY, &[], None, room * ENTRY_SIZE);
+    let ((result, _, count), _) = call(directory, &mut FakeSessions::default(), message);
+    let entries = (0..count)
+        .map(|i| {
+            let mut raw = [0u8; 0x310];
+            s.mem
+                .read_bytes(GuestVa::new(OUT_AT + i * ENTRY_SIZE), &mut raw)
+                .expect("read back");
+            let end = raw.iter().position(|&b| b == 0).expect("NUL-terminated");
+            let name = String::from_utf8(raw[..end].to_vec()).expect("UTF-8");
+            let size = u64::from_le_bytes(raw[0x308..].try_into().expect("8 bytes"));
+            (name, raw[0x304], size)
+        })
+        .collect();
+    (result, entries)
+}
+
+fn entry_count(directory: &mut dyn SessionObject, s: &Scratch) -> (u32, u64) {
+    let message = s.request(GET_ENTRY_COUNT, &[], None, 0);
+    let ((result, _, count), _) = call(directory, &mut FakeSessions::default(), message);
+    (result, count)
+}
+
+#[test]
+fn a_directory_lists_its_entries_by_name_a_buffer_at_a_time() {
+    let s = scratch("list");
+    fs::write(s.root().join("a.txt"), b"abc").expect("write a.txt");
+    fs::write(s.root().join("dir").join("inner.txt"), b"x").expect("write inner");
+    let mut directory = open_dir(&s, b"/", 3);
+    assert_eq!(entry_count(&mut *directory, &s), (0, 3));
+    let (result, first) = read_dir(&mut *directory, &s, 2);
+    assert_eq!(result, 0);
+    assert_eq!(
+        first,
+        vec![("a.txt".into(), 1, 3), ("data.bin".into(), 1, 100)]
+    );
+    let (_, rest) = read_dir(&mut *directory, &s, 2);
+    assert_eq!(rest, vec![("dir".into(), 0, 0)], "a directory has size 0");
+    assert_eq!(read_dir(&mut *directory, &s, 2), (0, vec![]), "none left");
+    assert_eq!(entry_count(&mut *directory, &s), (0, 3), "the total");
+
+    let mut inner = open_dir(&s, b"dir", 3);
+    assert_eq!(
+        read_dir(&mut *inner, &s, 4).1,
+        vec![("inner.txt".into(), 1, 1)]
+    );
+}
+
+#[test]
+fn the_filter_picks_files_directories_and_hides_sizes() {
+    let s = scratch("filter");
+    let mut files = open_dir(&s, b"", 2);
+    assert_eq!(
+        read_dir(&mut *files, &s, 4).1,
+        vec![("data.bin".into(), 1, 100)]
+    );
+    let mut dirs = open_dir(&s, b"", 1);
+    assert_eq!(read_dir(&mut *dirs, &s, 4).1, vec![("dir".into(), 0, 0)]);
+    let mut sizeless = open_dir(&s, b"", 0x8000_0002);
+    assert_eq!(
+        read_dir(&mut *sizeless, &s, 4).1,
+        vec![("data.bin".into(), 1, 0)]
+    );
+}
+
+#[test]
+fn opening_a_missing_directory_or_a_file_as_one_releases_its_session() {
+    let s = scratch("missing-dir");
+    for path in [&b"nope"[..], b"data.bin"] {
+        let message = s.request(OPEN_DIRECTORY, &3u64.to_le_bytes(), Some(path), 0);
+        let ((result, handles, _), released) =
+            call(&mut *s.file_system(), &mut FakeSessions::default(), message);
+        assert_eq!((result, handles, released), (PATH_NOT_FOUND, vec![], true));
+    }
+    let mut sessions = FakeSessions::default();
+    let message = s.request(OPEN_DIRECTORY, &3u64.to_le_bytes(), Some(b".."), 0);
+    let (reply, _) = call(&mut *s.file_system(), &mut sessions, message);
+    assert_eq!(reply.0, PATH_NOT_FOUND);
+    assert!(sessions.objects.is_empty() && sessions.deferred.is_empty());
+}
+
+#[test]
+fn a_directory_read_into_a_bad_buffer_fails_and_keeps_its_place() {
+    let s = scratch("bad-dir-read");
+    let mut directory = open_dir(&s, b"", 3);
+    let message = s.request(READ_DIRECTORY, &[], None, 0);
+    let ((result, _, _), _) = call(&mut *directory, &mut FakeSessions::default(), message);
+    assert_eq!(result, super::BAD_BUFFER, "no buffer");
+    let parts = Parts {
+        tag: TYPE_REQUEST_OLD,
+        receives: &[Map {
+            address: 0x50_0000,
+            size: ENTRY_SIZE,
+            attribute: 0,
+        }],
+        ..Parts::default()
+    };
+    let header = Header {
+        magic: IN_MAGIC,
+        value: READ_DIRECTORY,
+        ..Header::default()
+    };
+    let mut message = [0; MESSAGE_SIZE];
+    cmif::write(&mut message, &parts, &header, &[]).expect("fits");
+    let ((result, _, _), _) = call(&mut *directory, &mut FakeSessions::default(), message);
+    assert_eq!(result, super::BAD_BUFFER, "an unmapped buffer");
+    assert_eq!(
+        read_dir(&mut *directory, &s, 4).1.len(),
+        2,
+        "the failed reads moved nothing"
+    );
+}
+
+#[test]
+fn a_symbolic_link_out_of_the_root_is_not_listed() {
+    let s = scratch("symlink-list");
+    let target = s.root().parent().expect("base").join("outside.txt");
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(&target, s.root().join("link"));
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_file(&target, s.root().join("link"));
+    // Creating a link needs a privilege some Windows hosts lack; then there is nothing to test.
+    if linked.is_err() {
+        return;
+    }
+    let mut directory = open_dir(&s, b"", 3);
+    let names: Vec<String> = read_dir(&mut *directory, &s, 4)
+        .1
+        .into_iter()
+        .map(|(name, _, _)| name)
+        .collect();
+    assert_eq!(names, ["data.bin", "dir"]);
 }

@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Lince contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! `fsp-srv` on a host directory (T-064 step 2, read-only), from
+//! `fsp-srv` on a host directory (T-064), from
 //! docs/research/fsp-srv-filesystem-protocol.md (Switch 1 knowledge; assumed unchanged on
 //! Switch 2, doc 08).
 //!
 //! `OpenSdCardFileSystem` hands out an `IFileSystem` rooted at a directory the user chose
-//! ([`SdCard`]). It answers `GetEntryType` and `OpenFile`; the `IFile` answers `Read`, `Write`,
-//! `Flush`, `SetSize` and `GetSize`. Opening for writing or appending needs an SD card the user
-//! made writable ([`SdCard::writable`]); otherwise it fails. Directories are T-064 step 3b.
+//! ([`SdCard`]). It answers `GetEntryType`, `OpenFile` and `OpenDirectory`; the `IFile` answers
+//! `Read`, `Write`, `Flush`, `SetSize` and `GetSize`, the `IDirectory` `Read` and
+//! `GetEntryCount`. Opening for writing or appending needs an SD card the user made writable
+//! ([`SdCard::writable`]); otherwise it fails.
 //!
 //! # Threads
 //! Every host file-system access runs on the service-I/O thread through a deferred reply
@@ -29,6 +30,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use lince_common::GuestVa;
 use lince_kernel::{
@@ -67,11 +69,24 @@ const IO_CHUNK: usize = 64 * 1024;
 /// `GetEntryType` values (note §3).
 const ENTRY_DIRECTORY: u32 = 0;
 const ENTRY_FILE: u32 = 1;
+/// `OpenDirectory` filter bits (note §3): list directories, list files, report every file
+/// size as 0.
+const LIST_DIRECTORIES: u32 = 1;
+const LIST_FILES: u32 = 2;
+const NO_FILE_SIZE: u32 = 0x8000_0000;
+/// A `DirectoryEntry`: name at 0 (0x301 bytes, NUL included), type `s8` at 0x304, size `u64`
+/// at 0x308 (note §3; 0x310 is the naturally aligned size libnx implies).
+const ENTRY_SIZE: usize = 0x310;
+const ENTRY_TYPE_AT: usize = 0x304;
+const ENTRY_SIZE_AT: usize = 0x308;
 
 const SET_CURRENT_PROCESS: u32 = 1;
 const OPEN_SD_CARD_FILE_SYSTEM: u32 = 18;
 const GET_ENTRY_TYPE: u32 = 7;
 const OPEN_FILE: u32 = 8;
+const OPEN_DIRECTORY: u32 = 9;
+const READ_DIRECTORY: u32 = 0;
+const GET_ENTRY_COUNT: u32 = 1;
 const READ: u32 = 0;
 const WRITE: u32 = 1;
 const FLUSH: u32 = 2;
@@ -122,6 +137,7 @@ struct Shared {
     fsp: NameId,
     file_system: NameId,
     file: NameId,
+    directory: NameId,
     set_current_process: NameId,
 }
 
@@ -138,6 +154,7 @@ pub(crate) fn register(
         fsp: trace.name("fsp-srv")?,
         file_system: trace.name("fsp-srv.IFileSystem")?,
         file: trace.name("fsp-srv.IFile")?,
+        directory: trace.name("fsp-srv.IDirectory")?,
         set_current_process: trace.name("fsp-srv.SetCurrentProcess")?,
     });
     Ok(registry.register(
@@ -202,11 +219,17 @@ impl SessionObject for FileSystem {
     ) -> Result<(), UnknownCommand> {
         let (msg, command, params) = read_request(message)?;
         let unknown = UnknownCommand { command };
-        if command != GET_ENTRY_TYPE && command != OPEN_FILE {
+        if ![GET_ENTRY_TYPE, OPEN_FILE, OPEN_DIRECTORY].contains(&command) {
             return Err(unknown);
         }
         let mode = word(params, 0).unwrap_or(0);
         if command == OPEN_FILE && mode & !(MODE_READ | MODE_WRITE | MODE_APPEND) != 0 {
+            return Err(unknown);
+        }
+        // The `OpenDirectory` filter is a u64; only the three bits the note names are known.
+        let filter = dword(params, 0).unwrap_or(0);
+        let known = u64::from(LIST_DIRECTORIES | LIST_FILES | NO_FILE_SIZE);
+        if command == OPEN_DIRECTORY && filter & !known != 0 {
             return Err(unknown);
         }
         if command == OPEN_FILE && mode & (MODE_WRITE | MODE_APPEND) != 0 && !self.0.writable {
@@ -220,6 +243,20 @@ impl SessionObject for FileSystem {
         if command == GET_ENTRY_TYPE {
             let work = Box::new(move || entry_type(&root, &path));
             return defer(sessions, "fsp-srv.GetEntryType", work, unknown);
+        }
+        if command == OPEN_DIRECTORY {
+            let directory = Box::new(OpenedDirectory {
+                shared: Arc::clone(&self.0),
+                path: Arc::new(path.clone()),
+                // Only known bits remain, all below 2^32.
+                filter: u32::try_from(filter & known).unwrap_or(0),
+                cursor: Arc::new(AtomicU64::new(0)),
+            });
+            let Some(handle) = sessions.open_session(directory) else {
+                return reply_now(message, OUT_OF_SESSIONS, unknown);
+            };
+            let work = Box::new(move || open_directory(&root, &path, handle));
+            return defer(sessions, "fsp-srv.OpenDirectory", work, unknown);
         }
         let file = Box::new(OpenedFile {
             shared: Arc::clone(&self.0),
@@ -325,6 +362,173 @@ impl SessionObject for OpenedFile {
             _ => Err(unknown),
         }
     }
+}
+
+/// An opened `IDirectory`. Like [`OpenedFile`] it keeps no host handle: each command lists the
+/// directory again, sorted by name so that `cursor`, the entries already read, stays
+/// meaningful between commands.
+struct OpenedDirectory {
+    shared: Arc<Shared>,
+    path: Arc<PathBuf>,
+    filter: u32,
+    /// Only the service-I/O thread reads or writes it, one deferred request at a time, so a
+    /// relaxed load and store never race.
+    cursor: Arc<AtomicU64>,
+}
+
+impl SessionObject for OpenedDirectory {
+    fn name(&self) -> &'static str {
+        "fsp-srv.IDirectory"
+    }
+
+    fn trace_name(&self) -> NameId {
+        self.shared.directory
+    }
+
+    fn handle_request(
+        &mut self,
+        sessions: &mut dyn Sessions,
+        message: &mut IpcMessage,
+    ) -> Result<(), UnknownCommand> {
+        let (msg, command, _) = read_request(message)?;
+        let unknown = UnknownCommand { command };
+        let listing = Listing {
+            root: self.shared.root.clone(),
+            path: Arc::clone(&self.path),
+            filter: self.filter,
+        };
+        match command {
+            GET_ENTRY_COUNT => {
+                let work = Box::new(move || entry_count(&listing));
+                defer(sessions, "fsp-srv.IDirectory.GetEntryCount", work, unknown)
+            }
+            READ_DIRECTORY => {
+                // The entries go to the first receive buffer (note §3).
+                let Some(buffer) = msg.receives().next() else {
+                    return reply_now(message, BAD_BUFFER, unknown);
+                };
+                let mem = Arc::clone(&self.shared.mem);
+                let cursor = Arc::clone(&self.cursor);
+                let room = buffer.size / ENTRY_SIZE as u64;
+                let at = GuestVa::new(buffer.address);
+                let work = Box::new(move || read_directory(&mem, &listing, &cursor, room, at));
+                defer(sessions, "fsp-srv.IDirectory.Read", work, unknown)
+            }
+            _ => Err(unknown),
+        }
+    }
+}
+
+/// What an `IDirectory` lists: `path` under `root`, filtered by the `OpenDirectory` bits.
+struct Listing {
+    root: PathBuf,
+    path: Arc<PathBuf>,
+    filter: u32,
+}
+
+/// One listed entry: its name, whether it is a directory, and its size (0 for a directory).
+struct Entry {
+    name: String,
+    directory: bool,
+    size: u64,
+}
+
+impl Listing {
+    /// The entries the filter keeps, sorted by name. Service-I/O thread only. An entry whose
+    /// name is not UTF-8 or does not fit the 0x301-byte field, or that is a symbolic link out
+    /// of the root, is left out.
+    // GUESS: the note gives no rule for names a guest could not hold; leaving them out keeps
+    // every listed name one `OpenFile` accepts.
+    fn entries(&self) -> io::Result<Vec<Entry>> {
+        let dir = confined(&self.root, &self.path)?;
+        let mut entries = Vec::new();
+        for item in dir.read_dir()? {
+            let item = item?;
+            let Ok(name) = item.file_name().into_string() else {
+                continue;
+            };
+            let Ok(meta) = confined(&self.root, &item.path()).and_then(|real| real.metadata())
+            else {
+                continue;
+            };
+            let directory = meta.is_dir();
+            let wanted = if directory {
+                LIST_DIRECTORIES
+            } else {
+                LIST_FILES
+            };
+            if name.len() >= PATH_SIZE || self.filter & wanted == 0 {
+                continue;
+            }
+            let size = if directory || self.filter & NO_FILE_SIZE != 0 {
+                0
+            } else {
+                meta.len()
+            };
+            entries.push(Entry {
+                name,
+                directory,
+                size,
+            });
+        }
+        entries.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+        Ok(entries)
+    }
+}
+
+/// `OpenDirectory` on the service-I/O thread: hands out `handle` if `path` is a directory;
+/// otherwise the kernel closes that session, which the guest never learns.
+fn open_directory(root: &Path, path: &Path, handle: u32) -> DeferredReply {
+    match confined(root, path).and_then(|path| path.metadata()) {
+        Ok(meta) if meta.is_dir() => DeferredReply::Keep(reply(SUCCESS, Some(handle), &[])),
+        _ => DeferredReply::Release(reply(PATH_NOT_FOUND, None, &[])),
+    }
+}
+
+/// `IDirectory` `GetEntryCount` on the service-I/O thread: every entry the filter keeps.
+// GUESS: the total, not the entries left to read (libnx calls it the total entry count).
+fn entry_count(listing: &Listing) -> DeferredReply {
+    DeferredReply::Keep(match listing.entries() {
+        Ok(entries) => reply(SUCCESS, None, &(entries.len() as u64).to_le_bytes()),
+        Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+    })
+}
+
+/// `IDirectory` `Read` on the service-I/O thread: the next entries after `cursor`, at most
+/// `room` of them, written to guest memory at `at`; replies with the count, 0 when none
+/// remain (note §3). The cursor moves only when every entry reached the guest.
+fn read_directory(
+    mem: &AddressSpace,
+    listing: &Listing,
+    cursor: &AtomicU64,
+    room: u64,
+    at: GuestVa,
+) -> DeferredReply {
+    let Ok(entries) = listing.entries() else {
+        return DeferredReply::Keep(reply(PATH_NOT_FOUND, None, &[]));
+    };
+    let start = cursor.load(Ordering::Relaxed);
+    let mut count = 0u64;
+    let mut raw = [0u8; ENTRY_SIZE];
+    for entry in entries
+        .iter()
+        .skip(usize::try_from(start).unwrap_or(usize::MAX))
+        .take(usize::try_from(room).unwrap_or(usize::MAX))
+    {
+        raw.fill(0);
+        raw[..entry.name.len()].copy_from_slice(entry.name.as_bytes());
+        raw[ENTRY_TYPE_AT] = u8::from(!entry.directory);
+        raw[ENTRY_SIZE_AT..].copy_from_slice(&entry.size.to_le_bytes());
+        if mem
+            .write_bytes(at.wrapping_add(count * ENTRY_SIZE as u64), &raw)
+            .is_err()
+        {
+            return DeferredReply::Keep(reply(BAD_BUFFER, None, &[]));
+        }
+        count += 1;
+    }
+    cursor.store(start + count, Ordering::Relaxed);
+    DeferredReply::Keep(reply(SUCCESS, None, &count.to_le_bytes()))
 }
 
 /// `GetEntryType` on the service-I/O thread: 0 for a directory, 1 for a file.
