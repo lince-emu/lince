@@ -76,8 +76,8 @@ Rules:
 | T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Done | T-062, T-063 | 0017, 0024 |
 | T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | Done | T-064 | 0024, 0027 |
 | T-066 | `lince-trace` + `lince-app`: list host I/O failures in the `lince run --coverage` report | Impl | Done | T-065 | 0027 |
-| T-067 | Break B3 into tasks | Docs | In progress | T-056 | 0024, 0025 |
-| T-068 | Mark the **B3 scope** in ADR-0004, 0019, 0024 and 0025 | Docs | Ready | T-067 | 0004, 0019, 0024, 0025 |
+| T-067 | Break B3 into tasks | Docs | Done | T-056 | 0024, 0025 |
+| T-068 | Mark the **B3 scope** in ADR-0004, 0019, 0024 and 0025 | Docs | In progress | T-067 | 0004, 0019, 0024, 0025 |
 | T-069 | Review the B3 ADRs for acceptance (B3 scope of 0004, 0019, 0024, 0025; the `lz4_flex` dependency) | Maintainer | Blocked | T-068 | 0004, 0019, 0024, 0025 |
 | T-070 | Research: ExeFS, NPDM, NSO, the rtld/subsdk module chain and RomFS (public sources) | Research | Ready | — | 0024, 0025 |
 | T-071 | Research: the services and calls a title makes before its first GPU submission (`am`/applet, `nvdrv`, `vi`, Switch 2-only services) | Research | Ready | — | 0024, 0025 |

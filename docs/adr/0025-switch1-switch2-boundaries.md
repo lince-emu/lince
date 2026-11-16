@@ -22,6 +22,10 @@ separate: GPU classes (Maxwell vs Ampere), macro engines (MME vs MME64), SASS fr
 NVN2 services, memory layouts. Seams: SASS front-end → IR; class engines → packet format;
 service registry per system generation.
 
+**B3 scope:** the whole decision above. In B3 it shows as the per-generation service
+registry: the shared services in `lince-hle`, the Switch 2-only ones in `lince-hle-nx2`
+(T-078), and the registry a process gets chosen by its title's system generation.
+
 ## Technical justification
 These seams already exist in the architecture for other reasons, so Switch 1 costs nothing now.
 

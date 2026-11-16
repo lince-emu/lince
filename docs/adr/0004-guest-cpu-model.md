@@ -56,6 +56,13 @@ emulated by compare-and-swap with one reservation per core, and the counter regi
 from the host monotonic clock. The deterministic clock mode, the full v8.0–v8.5 table and
 PAC/MTE stay out; the interpreter gains only what the B2 test program uses (T-050).
 
+**B3 scope:** the full v8.0–v8.5 decode table and `lince-a64-coverage` (T-040), so a user's
+own title reports every encoding it uses that the table lacks; the interpreter gains the FP
+and AdvSIMD instructions the B3 test title uses (T-079), each with differential tests. PAC
+and MTE encodings are decoded with the identity / zero-tag behavior above. The deterministic
+clock mode stays out; the rest of the ISA a real title needs is added one class at a time
+from the coverage report.
+
 ## Technical justification
 A single decode table removes divergence between execution tiers. Features are bounded by the
 real core, not open-ended.
