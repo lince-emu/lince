@@ -48,7 +48,7 @@ Rules:
 | T-043 | `lince-cpu-a64`: interpreter throughput benchmark on the B1 programs | Impl | Done | T-042 | 0005 |
 | T-034 | `lince-kernel`: SVC dispatch for memory, exit and `OutputDebugString` | Impl | Done | T-027, T-028 | 0024 |
 | T-035 | `lince-app`: `lince run <file>` prints the test NRO's "hello" (B1 exit) | Impl | Done | T-029–T-034, T-042 | 0001 |
-| T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033 | 0004, 0031 |
+| T-040 | `lince-cpu-a64`: full v8.0–v8.5 decode table and `lince-a64-coverage` | Impl | Blocked | T-033, T-069 | 0004, 0031 |
 | T-037 | Study: host core budget (6 guest cores + role threads + workers on 6–8-core hosts) | Research | Done | — | 0017, 0005 |
 | T-038 | Design: LCIR v1 (minimal CPU IR for Tier B) | Docs | Done | T-039 | 0005 |
 | T-039 | Research: how other JITs schedule compilation (clean-room, cited) | Research | Done | — | 0005 |
@@ -75,7 +75,22 @@ Rules:
 | T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | Done | T-057 | 0017, 0024 |
 | T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | Done | T-062, T-063 | 0017, 0024 |
 | T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | Done | T-064 | 0024, 0027 |
-| T-066 | `lince-trace` + `lince-app`: list host I/O failures in the `lince run --coverage` report | Impl | In progress | T-065 | 0027 |
+| T-066 | `lince-trace` + `lince-app`: list host I/O failures in the `lince run --coverage` report | Impl | Done | T-065 | 0027 |
+| T-067 | Break B3 into tasks | Docs | In progress | T-056 | 0024, 0025 |
+| T-068 | Mark the **B3 scope** in ADR-0004, 0019, 0024 and 0025 | Docs | Ready | T-067 | 0004, 0019, 0024, 0025 |
+| T-069 | Review the B3 ADRs for acceptance (B3 scope of 0004, 0019, 0024, 0025; the `lz4_flex` dependency) | Maintainer | Blocked | T-068 | 0004, 0019, 0024, 0025 |
+| T-070 | Research: ExeFS, NPDM, NSO, the rtld/subsdk module chain and RomFS (public sources) | Research | Ready | — | 0024, 0025 |
+| T-071 | Research: the services and calls a title makes before its first GPU submission (`am`/applet, `nvdrv`, `vi`, Switch 2-only services) | Research | Ready | — | 0024, 0025 |
+| T-072 | Test title: a team-written ExeFS (NPDM, a loader-stub NSO, main NSO, one subsdk) and a RomFS directory, built by `xtask` | Impl | Blocked | T-070 | 0001, 0002 |
+| T-073 | `lince-loader`: NPDM and NSO (segments, LZ4, permissions, `.bss`), modules loaded in ExeFS order | Impl | Blocked | T-069, T-070 | 0019, 0024, 0025 |
+| T-074 | `lince-kernel`: create the process from the NPDM (address-space type, main thread, capabilities B3 needs) | Impl | Blocked | T-073 | 0019, 0024 |
+| T-075 | `lince-hle`: RomFS served from a user-supplied extracted directory | Impl | Blocked | T-069, T-070 | 0024 |
+| T-076 | `lince-hle`: `am`/applet lifecycle stubs that log, to the depth T-071 finds | Impl | Blocked | T-069, T-071 | 0024, 0025 |
+| T-077 | `lince-hle`: `nvdrv` and `vi` skeletons; the first GPU submission stops the run and is reported | Impl | Blocked | T-069, T-071 | 0024, 0025 |
+| T-078 | `lince-hle-nx2`: the Switch 2 service registry skeleton (per-generation registry seam) | Impl | Blocked | T-069, T-071 | 0024, 0025 |
+| T-079 | `lince-cpu-a64`: the FP/AdvSIMD instructions the B3 test title uses | Impl | Blocked | T-069, T-072 | 0004, 0005, 0031 |
+| T-080 | `lince run <exefs-dir> [--romfs <dir>]` runs the test title to its first GPU submission (B3 exit in CI) | Impl | Blocked | T-072–T-079 | 0001, 0024 |
+| T-081 | Run the B3 exit on a title dumped from a game you own, locally (never in CI) | Maintainer | Blocked | T-080 | 0029 |
 
 ## Details
 
@@ -426,6 +441,7 @@ interpreter only gains what the next phase's programs need.
 - **Acceptance:** differential decode tests per instruction class; the coverage tool runs on
   the T-029 programs in CI and reports zero unknown encodings; it can be pointed at a
   user-supplied executable without any of its content entering the repository (LEGAL-50).
+- **B3 (T-067):** part of B3; starts once T-069 accepts the B3 scope of ADR-0004.
 
 ### T-041 — SetMemoryPermission on part of a region
 `AddressSpace::protect` only changes a whole mapped region, so SetMemoryPermission (T-034)
@@ -567,6 +583,118 @@ the report on stderr lists each object, command and error class that failed, onc
 the unimplemented calls (maintainer, 2026-11-16).
 - **Acceptance:** `Trace::host_io_failures` lists them sorted and once each; the report
   prints them; a clean run prints nothing new.
+
+### T-067 — Break B3 into tasks
+B2 is complete (T-056: the multi-threaded program talks to services over IPC; `--coverage`
+lists the gaps). Turn doc 07's B3 phase (commercial loader) into backlog tasks shaped like
+B2's (maintainer, 2026-11-16).
+- **Acceptance:** B3 rows and details below; T-040 is placed in B3.
+- **Notes:** a title is always an already-decrypted dump the user made from a game they own
+  (ADR-0029); Lince reads the extracted ExeFS and RomFS directories and never an NSP/XCI.
+  No title content enters the repository or CI (LEGAL-50), so CI proves B3 on a team-written
+  test title (T-072, T-080) and the maintainer proves it on a real one (T-081). T-040 (full
+  A64 decode table and coverage tool) becomes B3 work: real titles use encodings the test
+  programs do not, and its coverage tool runs on a user's executable without its content
+  entering the repository.
+
+### T-068 — Mark the B3 scope in the ADRs
+As T-046 did for B2, add a **B3 scope** line to each ADR B3 needs, naming the part to accept:
+ADR-0004 (the full v8.0–v8.5 decode table, T-040; FP/AdvSIMD in the interpreter), ADR-0019
+(code regions: NSO segments mapped with their own permissions, the address-space layout the
+NPDM selects), ADR-0024 (process creation from the NPDM, `am`/applet, `nvdrv`, `vi`, RomFS
+through `fsp-srv`) and ADR-0025 (its whole decision: what is shared across generations and
+the per-generation service registry). No decision changes; a scope that needs one is listed
+for T-069.
+- **Acceptance:** each ADR states its B3 scope; open questions listed in the PR, including
+  the `lz4_flex` dependency NSO decompression needs (doc 04 §6 names it).
+
+### T-069 — B3 ADR review (maintainer)
+Accept the B3 scope marked by T-068, or send it back with questions; decide on `lz4_flex`.
+- **Acceptance:** each ADR's status line states what is accepted; the B3 `Impl` tasks can
+  start.
+
+### T-070 — Research: ExeFS, NPDM, NSO, the module chain and RomFS
+From public sources only (LEGAL-16, LEGAL-52): the ExeFS file names; the NPDM fields B3 needs
+(address-space type, main thread priority, core and stack size, kernel capabilities); the NSO
+header, segment layout, LZ4 compression and `.bss`; the order and addresses at which the
+modules (`rtld`, `main`, `subsdk*`, `sdk`) are loaded and where execution starts; the RomFS
+image layout a title reads through `fsp-srv`. Switch 1 knowledge; what is known or unknown for
+Switch 2 goes to doc 08.
+- **Acceptance:** a note in `docs/research/` with pinned citations and evidence levels; open
+  items marked GUESS or UNKNOWN for T-072 to T-075.
+
+### T-071 — Research: what a title calls before its first GPU submission
+From public sources only: the SVCs and service commands a title typically makes from entry
+to its first GPU submission (`am`/applet lifecycle, `nvdrv` open and ioctls, `vi` display and
+layer, settings, time, `hid`), and the Switch 2-only services public sources name. Which of
+them must return data and which may only log.
+- **Acceptance:** a note in `docs/research/` that T-076 to T-078 implement from, with each
+  command's evidence level.
+
+### T-072 — B3 test title
+A team-written, Rust `aarch64-unknown-none` title packed by `xtask` as an ExeFS directory:
+an NPDM, a small loader-stub NSO standing where `rtld` stands (it only passes control on),
+`main`, and one `subsdk` that `main` calls; plus a RomFS directory it reads a file from. It
+walks the T-071 path up to a GPU submission and prints its progress with
+`OutputDebugString`. No byte comparison with any real title.
+- **Acceptance:** `cargo xtask ci` builds it; an `.expected` file lists its output.
+
+### T-073 — NPDM and NSO loading
+`lince-loader` parses the NPDM and loads each NSO of the ExeFS (segments, LZ4 decompression,
+segment permissions, zeroed `.bss`) at consecutive addresses in the order T-070 gives,
+rejecting malformed input with a typed error. Reads only already-decrypted files (ADR-0029).
+- **Acceptance:** unit tests on team-made NPDM/NSO bytes; fuzz-style malformed-input tests;
+  loading T-072's ExeFS maps every segment with its permissions.
+
+### T-074 — Process creation from the NPDM
+`lince-kernel` creates the process the NPDM describes: address-space type and layout, main
+thread priority, core and stack size, and the kernel capabilities B3 needs; anything else in
+the NPDM is logged, not silently dropped.
+- **Acceptance:** tests through the kernel API; T-072's main thread starts as its NPDM says.
+
+### T-075 — RomFS from an extracted directory
+`fsp-srv` serves the title's RomFS from a directory the user extracted, through the commands
+T-070 and T-071 name (such as opening the current process's data storage), on the
+service-I/O thread like the SD card (T-064), confined to that directory.
+- **Acceptance:** each command tested through the IPC framework; T-072 reads its RomFS file.
+
+### T-076 — `am`/applet lifecycle
+The `am`/applet services a title opens at start, as stubs that log by name (T-054 style) or
+return the data T-071 shows a title needs to keep going.
+- **Acceptance:** T-072 passes its applet steps; every stub is listed by `--coverage`.
+
+### T-077 — `nvdrv` and `vi` skeletons
+`nvdrv` (open, ioctls by name) and `vi` (display and layer) to the depth T-071 shows. The
+first GPU submission ends the run cleanly and is reported: it is the B3 exit point (B4 starts
+there).
+- **Acceptance:** T-072 reaches its submission; the run reports it and exits successfully.
+
+### T-078 — `lince-hle-nx2` skeleton
+The `lince-hle-nx2` crate (doc 04) with the per-generation service registry ADR-0025 asks
+for: Switch 2-only services T-071 names, registered as stubs that log, chosen by the title's
+system generation.
+- **Acceptance:** a Switch 2 title's registry contains them, a Switch 1 title's does not;
+  tests through the IPC framework.
+
+### T-079 — FP/AdvSIMD for the B3 test title
+`lince-cpu-a64` interprets the FP and AdvSIMD instructions T-072's code uses (the Rust
+toolchain emits them for ordinary code), each with differential tests (ADR-0005 Tier A). The
+rest of the ISA a real title needs is reached through T-040's decode table and the coverage
+tool, one class at a time.
+- **Acceptance:** differential tests per instruction; T-072 runs without unknown encodings.
+
+### T-080 — B3 exit in CI
+`lince run <exefs-dir> [--romfs <dir>]` loads an ExeFS (T-073, T-074) and runs it to its
+first GPU submission (T-077), with every stub logged by name and listed by `--coverage`.
+- **Acceptance:** an end-to-end test runs T-072 and compares its output with the expected
+  file.
+
+### T-081 — B3 exit on a real title (maintainer)
+Run `lince run` on the ExeFS and RomFS of a title dumped from a game you own, on your machine
+only. Nothing from the title, its output or its logs beyond service and command names enters
+the repository (LEGAL-50).
+- **Acceptance:** the title runs its own code to its first GPU submission (doc 07 B3 exit);
+  the `--coverage` list of what it reached becomes the B4 task input.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the
