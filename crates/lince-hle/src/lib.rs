@@ -26,6 +26,7 @@
 
 pub mod cmif;
 mod error;
+pub mod fsp;
 pub mod hipc;
 pub mod sm;
 pub mod stubs;
