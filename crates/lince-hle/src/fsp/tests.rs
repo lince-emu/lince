@@ -13,7 +13,7 @@ use lince_kernel::{DeferredReply, IpcMessage, SessionObject, UnknownCommand};
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE, Permission, SpaceConfig};
 use lince_trace::Trace;
 
-use super::{FileSystem, FspSrv, PATH_NOT_FOUND, SdCard, Shared};
+use super::{FileSystem, FspSrv, OUT_OF_RANGE, PATH_NOT_FOUND, SdCard, Shared};
 use crate::cmif::{self, Header, IN_MAGIC, OUT_MAGIC};
 use crate::hipc::{MESSAGE_SIZE, Map, Message, Parts, Pointer};
 use crate::sm::service_name;
@@ -25,6 +25,9 @@ const OUT_AT: u64 = 0x1_1000;
 const GET_ENTRY_TYPE: u32 = 7;
 const OPEN_FILE: u32 = 8;
 const READ: u32 = 0;
+const WRITE: u32 = 1;
+const FLUSH: u32 = 2;
+const SET_SIZE: u32 = 3;
 const GET_SIZE: u32 = 4;
 
 /// A scratch directory holding the SD-card root (`data.bin` with bytes 0 to 99, an empty
@@ -42,6 +45,11 @@ impl Drop for Scratch {
 }
 
 fn scratch(test: &str) -> Scratch {
+    scratch_with(test, false)
+}
+
+/// A scratch SD card the guest may write to when `writable`.
+fn scratch_with(test: &str, writable: bool) -> Scratch {
     let base = std::env::temp_dir().join(format!("lince-fsp-{}-{test}", std::process::id()));
     if base.exists() {
         fs::remove_dir_all(&base).expect("clear the scratch directory");
@@ -65,6 +73,7 @@ fn scratch(test: &str) -> Scratch {
     let shared = Arc::new(Shared {
         root: sd.root,
         mem: sd.mem,
+        writable,
         fsp: trace.name("fsp-srv").expect("name"),
         file_system: trace.name("fsp-srv.IFileSystem").expect("name"),
         file: trace.name("fsp-srv.IFile").expect("name"),
@@ -288,13 +297,27 @@ fn opening_a_missing_file_releases_its_session() {
 }
 
 #[test]
-fn writing_modes_and_other_commands_are_unknown_for_now() {
+fn a_read_only_sd_card_refuses_writing_modes_without_touching_the_host() {
+    let s = scratch("read-only");
+    for mode in [2u32, 3, 4, 7] {
+        let mut sessions = FakeSessions::default();
+        let message = s.request(OPEN_FILE, &mode.to_le_bytes(), Some(b"data.bin"), 0);
+        let ((result, handles, _), _) = call(&mut *s.file_system(), &mut sessions, message);
+        assert_eq!((result, handles), (PATH_NOT_FOUND, vec![]), "mode {mode}");
+        assert!(sessions.objects.is_empty() && sessions.deferred.is_empty());
+    }
+    let data = fs::read(s.root().join("data.bin")).expect("read data");
+    assert_eq!(data, (0u8..100).collect::<Vec<_>>(), "unchanged");
+}
+
+#[test]
+fn unknown_modes_and_directories_are_unknown_commands_for_now() {
     let s = scratch("unknown");
     let mut sessions = FakeSessions {
         run_deferred: true,
         ..FakeSessions::default()
     };
-    let mut message = s.request(OPEN_FILE, &2u32.to_le_bytes(), Some(b"data.bin"), 0);
+    let mut message = s.request(OPEN_FILE, &8u32.to_le_bytes(), Some(b"data.bin"), 0);
     assert_eq!(
         s.file_system().handle_request(&mut sessions, &mut message),
         Err(UnknownCommand { command: OPEN_FILE })
@@ -303,7 +326,7 @@ fn writing_modes_and_other_commands_are_unknown_for_now() {
     assert_eq!(
         s.file_system().handle_request(&mut sessions, &mut message),
         Err(UnknownCommand { command: 9 }),
-        "OpenDirectory comes with step 3"
+        "OpenDirectory comes with step 3b"
     );
     assert!(sessions.objects.is_empty() && sessions.deferred.is_empty());
 }
@@ -403,4 +426,179 @@ fn a_read_larger_than_one_chunk_arrives_whole() {
         .read_bytes(GuestVa::new(BIG_AT), &mut data)
         .expect("read back");
     assert_eq!(data, content[1000..151_000]);
+}
+
+/// Opens `name` on `s` with `mode` and returns the `IFile`.
+fn open(s: &Scratch, name: &[u8], mode: u32) -> Box<dyn SessionObject> {
+    let mut sessions = FakeSessions::default();
+    let message = s.request(OPEN_FILE, &mode.to_le_bytes(), Some(name), 0);
+    let ((result, _, _), _) = call(&mut *s.file_system(), &mut sessions, message);
+    assert_eq!(result, 0, "open");
+    sessions.objects.remove(0)
+}
+
+/// Writes `data` at `offset` through `file` with `option`, from guest memory at `OUT_AT`.
+fn write(s: &Scratch, file: &mut dyn SessionObject, offset: u64, data: &[u8], option: u32) -> u32 {
+    s.mem
+        .write_bytes(GuestVa::new(OUT_AT), data)
+        .expect("stage the data");
+    let mut params = option.to_le_bytes().to_vec();
+    params.extend([0; 4]);
+    params.extend(offset.to_le_bytes());
+    params.extend((data.len() as u64).to_le_bytes());
+    let parts = Parts {
+        tag: TYPE_REQUEST_OLD,
+        sends: &[Map {
+            address: OUT_AT,
+            size: data.len() as u64,
+            attribute: 0,
+        }],
+        ..Parts::default()
+    };
+    let header = Header {
+        magic: IN_MAGIC,
+        value: WRITE,
+        ..Header::default()
+    };
+    let mut message = [0; MESSAGE_SIZE];
+    cmif::write(&mut message, &parts, &header, &params).expect("fits");
+    call(file, &mut FakeSessions::default(), message).0.0
+}
+
+fn simple(s: &Scratch, file: &mut dyn SessionObject, command: u32, params: &[u8]) -> u32 {
+    let message = s.request(command, params, None, 0);
+    call(file, &mut FakeSessions::default(), message).0.0
+}
+
+#[test]
+fn a_writable_sd_card_writes_inside_the_file() {
+    let s = scratch_with("write", true);
+    let mut file = open(&s, b"data.bin", 3);
+    assert_eq!(write(&s, &mut *file, 10, b"hello", 0), 0);
+    assert_eq!(write(&s, &mut *file, 0, b"!", 1), 0, "with a flush");
+    assert_eq!(simple(&s, &mut *file, FLUSH, &[]), 0);
+    let data = fs::read(s.root().join("data.bin")).expect("read data");
+    assert_eq!(
+        (&data[10..15], data[0], data.len()),
+        (&b"hello"[..], b'!', 100)
+    );
+}
+
+#[test]
+fn a_write_past_the_end_needs_the_append_bit() {
+    let s = scratch_with("append", true);
+    let mut file = open(&s, b"data.bin", 2);
+    assert_eq!(write(&s, &mut *file, 98, b"abcd", 0), OUT_OF_RANGE);
+    assert_eq!(
+        fs::read(s.root().join("data.bin")).expect("read").len(),
+        100,
+        "nothing written"
+    );
+    let mut file = open(&s, b"data.bin", 2 | 4);
+    assert_eq!(write(&s, &mut *file, 98, b"abcd", 0), 0);
+    let data = fs::read(s.root().join("data.bin")).expect("read");
+    assert_eq!((data.len(), &data[98..]), (102, &b"abcd"[..]));
+}
+
+#[test]
+fn set_size_truncates_and_extends_a_file_opened_for_writing() {
+    let s = scratch_with("set-size", true);
+    let mut file = open(&s, b"data.bin", 2);
+    assert_eq!(simple(&s, &mut *file, SET_SIZE, &40u64.to_le_bytes()), 0);
+    assert_eq!(
+        fs::metadata(s.root().join("data.bin")).expect("meta").len(),
+        40
+    );
+    assert_eq!(simple(&s, &mut *file, SET_SIZE, &60u64.to_le_bytes()), 0);
+    let data = fs::read(s.root().join("data.bin")).expect("read");
+    assert_eq!((data.len(), data[39], data[40]), (60, 39, 0));
+}
+
+#[test]
+fn the_open_mode_limits_what_a_file_may_do() {
+    let s = scratch_with("modes", true);
+    let mut reader = open(&s, b"data.bin", 1);
+    assert_eq!(write(&s, &mut *reader, 0, b"x", 0), PATH_NOT_FOUND);
+    assert_eq!(
+        simple(&s, &mut *reader, SET_SIZE, &1u64.to_le_bytes()),
+        PATH_NOT_FOUND
+    );
+    assert_eq!(simple(&s, &mut *reader, FLUSH, &[]), 0, "nothing to flush");
+    let mut writer = open(&s, b"data.bin", 2);
+    let mut params = vec![0u8; 8];
+    params.extend(0u64.to_le_bytes());
+    params.extend(4u64.to_le_bytes());
+    let message = s.request(READ, &params, None, 16);
+    let ((result, _, _), _) = call(&mut *writer, &mut FakeSessions::default(), message);
+    assert_eq!(result, PATH_NOT_FOUND, "a write-only file cannot be read");
+    let data = fs::read(s.root().join("data.bin")).expect("read");
+    assert_eq!(data, (0u8..100).collect::<Vec<_>>(), "unchanged");
+}
+
+/// A `Write` of `size` bytes at file offset 0 from guest memory at `at`, a send buffer of
+/// `buffer` bytes.
+fn write_from(file: &mut dyn SessionObject, at: u64, buffer: u64, size: u64) -> u32 {
+    let mut params = vec![0u8; 16];
+    params.extend(size.to_le_bytes());
+    let parts = Parts {
+        tag: TYPE_REQUEST_OLD,
+        sends: &[Map {
+            address: at,
+            size: buffer,
+            attribute: 0,
+        }],
+        ..Parts::default()
+    };
+    let header = Header {
+        magic: IN_MAGIC,
+        value: WRITE,
+        ..Header::default()
+    };
+    let mut message = [0; MESSAGE_SIZE];
+    cmif::write(&mut message, &parts, &header, &params).expect("fits");
+    call(file, &mut FakeSessions::default(), message).0.0
+}
+
+#[test]
+fn a_bad_source_buffer_fails_before_the_file_is_touched() {
+    let s = scratch_with("bad-buffer", true);
+    let mut file = open(&s, b"data.bin", 2);
+    let unmapped = 0x50_0000;
+    assert_eq!(write_from(&mut *file, unmapped, 8, 8), super::BAD_BUFFER);
+    // Starts in the mapped page at OUT_AT and runs into the unmapped one after it.
+    let straddling = OUT_AT + GUEST_PAGE_SIZE - 4;
+    assert_eq!(write_from(&mut *file, straddling, 8, 8), super::BAD_BUFFER);
+    assert_eq!(
+        write_from(&mut *file, OUT_AT, 4, 8),
+        super::BAD_BUFFER,
+        "more than the buffer holds"
+    );
+    let data = fs::read(s.root().join("data.bin")).expect("read");
+    assert_eq!(data, (0u8..100).collect::<Vec<_>>(), "unchanged");
+}
+
+#[test]
+fn a_read_into_an_unmapped_buffer_is_a_bad_buffer() {
+    let s = scratch("bad-read");
+    let mut file = open(&s, b"data.bin", 1);
+    let mut params = vec![0u8; 16];
+    params.extend(8u64.to_le_bytes());
+    let parts = Parts {
+        tag: TYPE_REQUEST_OLD,
+        receives: &[Map {
+            address: 0x50_0000,
+            size: 8,
+            attribute: 0,
+        }],
+        ..Parts::default()
+    };
+    let header = Header {
+        magic: IN_MAGIC,
+        value: READ,
+        ..Header::default()
+    };
+    let mut message = [0; MESSAGE_SIZE];
+    cmif::write(&mut message, &parts, &header, &params).expect("fits");
+    let ((result, _, _), _) = call(&mut *file, &mut FakeSessions::default(), message);
+    assert_eq!(result, super::BAD_BUFFER);
 }

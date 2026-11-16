@@ -544,7 +544,9 @@ documents, through T-063's deferred replies. No game content enters the reposito
 Lands in steps (QUAL-62): (1) a deferred reply can release the sessions its request opened,
 so a failed `OpenFile` leaves no session the guest cannot name (also when the waiter is
 gone); (2) read-only `fsp-srv`: path sandbox, GetEntryType, OpenFile, IFile Read and GetSize,
-and `lince run --sd <dir>`; (3) IFile Write, Flush and SetSize, OpenDirectory and IDirectory.
+and `lince run --sd <dir>`; (3a) IFile Write, Flush and SetSize, only with
+`--sd-writable` (maintainer, 2026-11-16: writes are opt-in; without the flag a writing open
+fails with an error result); (3b) OpenDirectory and IDirectory.
 
 ### T-065 — Record host I/O failures
 Found by invariant-reviewer on #79: `fsp-srv` maps every host failure (missing file, path

@@ -6,8 +6,9 @@
 //! Switch 2, doc 08).
 //!
 //! `OpenSdCardFileSystem` hands out an `IFileSystem` rooted at a directory the user chose
-//! ([`SdCard`]). It answers `GetEntryType` and `OpenFile` (read mode); the `IFile` answers `Read` and
-//! `GetSize`. Writes and directories are step 3: those commands are unknown commands for now.
+//! ([`SdCard`]). It answers `GetEntryType` and `OpenFile`; the `IFile` answers `Read`, `Write`,
+//! `Flush`, `SetSize` and `GetSize`. Opening for writing or appending needs an SD card the user
+//! made writable ([`SdCard::writable`]); otherwise it fails. Directories are T-064 step 3b.
 //!
 //! # Threads
 //! Every host file-system access runs on the service-I/O thread through a deferred reply
@@ -20,12 +21,12 @@
 //! `..` component, backslash or colon rejects it; on the service-I/O thread the joined path is
 //! canonicalized and must still start with the canonical root, which stops symbolic links
 //! that point outside. Each command opens the path again after that check; a link swapped in
-//! between by another host process could still escape. The guest cannot create links (this
-//! step is read-only), so only the user's own host processes could, which Lince does not
+//! between by another host process could still escape. The guest cannot create links (no
+//! command makes one), so only the user's own host processes could, which Lince does not
 //! defend against.
 
-use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::fs::{File, OpenOptions};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -33,7 +34,7 @@ use lince_common::GuestVa;
 use lince_kernel::{
     DeferredReply, IPC_MESSAGE_SIZE, IpcMessage, SessionObject, Sessions, UnknownCommand,
 };
-use lince_mem::AddressSpace;
+use lince_mem::{AddressSpace, GUEST_PAGE_SIZE};
 use lince_trace::{NameId, Trace, TraceError};
 
 use crate::hipc::Message;
@@ -47,10 +48,22 @@ const SUCCESS: u32 = 0;
 pub const PATH_NOT_FOUND: u32 = 0x202;
 /// The path buffer: 0x301 bytes, NUL included (note §2).
 const PATH_SIZE: usize = 0x301;
-/// `OpenFile` mode bit 0; bits 1 (write) and 2 (append) come with step 3.
+/// `OpenFile` mode bits (note §3): read, write, append (a write may grow the file).
 const MODE_READ: u32 = 1;
-/// Bytes a `Read` copies through the host per step.
-const READ_CHUNK: usize = 64 * 1024;
+const MODE_WRITE: u32 = 2;
+const MODE_APPEND: u32 = 4;
+/// `Write` option bit 0: flush after writing (note §3).
+const WRITE_OPTION_FLUSH: u32 = 1;
+/// A write past the end of a file opened without the append bit (note §3: module 2,
+/// description 0x3839).
+pub const OUT_OF_RANGE: u32 = 0x0030_7202;
+/// A data buffer the guest cannot read or write (`Read`/`Write`), or smaller than the size
+/// asked for (`Write`).
+// GUESS: the kernel's invalid-address result; the note gives no `fsp-srv` result for a bad
+// buffer (§4).
+pub const BAD_BUFFER: u32 = 0xE601;
+/// Bytes a `Read` or `Write` copies through the host per step.
+const IO_CHUNK: usize = 64 * 1024;
 /// `GetEntryType` values (note §3).
 const ENTRY_DIRECTORY: u32 = 0;
 const ENTRY_FILE: u32 = 1;
@@ -60,12 +73,16 @@ const OPEN_SD_CARD_FILE_SYSTEM: u32 = 18;
 const GET_ENTRY_TYPE: u32 = 7;
 const OPEN_FILE: u32 = 8;
 const READ: u32 = 0;
+const WRITE: u32 = 1;
+const FLUSH: u32 = 2;
+const SET_SIZE: u32 = 3;
 const GET_SIZE: u32 = 4;
 
-/// The host directory the guest's SD card is.
+/// The host directory the guest's SD card is. Read-only unless [`SdCard::writable`].
 pub struct SdCard {
     root: PathBuf,
     mem: Arc<AddressSpace>,
+    writable: bool,
 }
 
 impl SdCard {
@@ -82,13 +99,26 @@ impl SdCard {
                 format!("{} is not a directory", root.display()),
             ));
         }
-        Ok(Self { root, mem })
+        Ok(Self {
+            root,
+            mem,
+            writable: false,
+        })
+    }
+
+    /// Lets the guest change the files under the root: open them for writing or appending,
+    /// write, flush and resize them. Off unless the user asks (maintainer, 2026-11-16).
+    #[must_use]
+    pub fn writable(mut self) -> Self {
+        self.writable = true;
+        self
     }
 }
 
 struct Shared {
     root: PathBuf,
     mem: Arc<AddressSpace>,
+    writable: bool,
     fsp: NameId,
     file_system: NameId,
     file: NameId,
@@ -104,6 +134,7 @@ pub(crate) fn register(
     let shared = Arc::new(Shared {
         root: sd.root,
         mem: sd.mem,
+        writable: sd.writable,
         fsp: trace.name("fsp-srv")?,
         file_system: trace.name("fsp-srv.IFileSystem")?,
         file: trace.name("fsp-srv.IFile")?,
@@ -174,10 +205,13 @@ impl SessionObject for FileSystem {
         if command != GET_ENTRY_TYPE && command != OPEN_FILE {
             return Err(unknown);
         }
-        let mode = word(params, 0);
-        if command == OPEN_FILE && mode.is_some_and(|mode| mode & !MODE_READ != 0) {
-            // Writing and appending come with T-064 step 3.
+        let mode = word(params, 0).unwrap_or(0);
+        if command == OPEN_FILE && mode & !(MODE_READ | MODE_WRITE | MODE_APPEND) != 0 {
             return Err(unknown);
+        }
+        if command == OPEN_FILE && mode & (MODE_WRITE | MODE_APPEND) != 0 && !self.0.writable {
+            // GUESS: the note gives no result for a write-protected file system (§4).
+            return reply_now(message, PATH_NOT_FOUND, unknown);
         }
         let Some(path) = guest_path(&self.0, &msg) else {
             return reply_now(message, PATH_NOT_FOUND, unknown);
@@ -187,7 +221,11 @@ impl SessionObject for FileSystem {
             let work = Box::new(move || entry_type(&root, &path));
             return defer(sessions, "fsp-srv.GetEntryType", work, unknown);
         }
-        let file = Box::new(OpenedFile(Arc::clone(&self.0), Arc::new(path.clone())));
+        let file = Box::new(OpenedFile {
+            shared: Arc::clone(&self.0),
+            path: Arc::new(path.clone()),
+            mode,
+        });
         let Some(handle) = sessions.open_session(file) else {
             return reply_now(message, OUT_OF_SESSIONS, unknown);
         };
@@ -196,9 +234,13 @@ impl SessionObject for FileSystem {
     }
 }
 
-/// An `IFile` opened for reading. It keeps the path, not a host handle: each command opens the
-/// file again on the service-I/O thread.
-struct OpenedFile(Arc<Shared>, Arc<PathBuf>);
+/// An opened `IFile`. It keeps the path and the `OpenFile` mode, not a host handle: each
+/// command opens the file again on the service-I/O thread.
+struct OpenedFile {
+    shared: Arc<Shared>,
+    path: Arc<PathBuf>,
+    mode: u32,
+}
 
 impl SessionObject for OpenedFile {
     fn name(&self) -> &'static str {
@@ -206,7 +248,7 @@ impl SessionObject for OpenedFile {
     }
 
     fn trace_name(&self) -> NameId {
-        self.0.file
+        self.shared.file
     }
 
     fn handle_request(
@@ -216,26 +258,69 @@ impl SessionObject for OpenedFile {
     ) -> Result<(), UnknownCommand> {
         let (msg, command, params) = read_request(message)?;
         let unknown = UnknownCommand { command };
-        let (root, path) = (self.0.root.clone(), Arc::clone(&self.1));
+        let (root, path) = (self.shared.root.clone(), Arc::clone(&self.path));
+        let may_write = self.mode & (MODE_WRITE | MODE_APPEND) != 0;
+        // GUESS: a command the open mode does not allow fails like a missing path; the note
+        // gives no result for it (§4).
         match command {
             GET_SIZE => {
                 let work = Box::new(move || file_size(&root, &path));
                 defer(sessions, "fsp-srv.IFile.GetSize", work, unknown)
             }
-            READ => {
-                // Option u32, padding u32, offset s64, size u64; data to the first receive
-                // buffer (note §3).
-                let (Some(offset), Some(size), Some(out)) =
-                    (dword(params, 8), dword(params, 16), msg.receives().next())
-                else {
+            FLUSH => {
+                let work = Box::new(move || flush_file(&root, &path, may_write));
+                defer(sessions, "fsp-srv.IFile.Flush", work, unknown)
+            }
+            SET_SIZE => {
+                let Some(size) = dword(params, 0).filter(|_| may_write) else {
                     return reply_now(message, PATH_NOT_FOUND, unknown);
                 };
-                let mem = Arc::clone(&self.0.mem);
-                let at = GuestVa::new(out.address);
-                let len = size.min(out.size);
-                let range = ReadRange { offset, len, at };
-                let work = Box::new(move || read_file(&mem, &root, &path, range));
-                defer(sessions, "fsp-srv.IFile.Read", work, unknown)
+                let work = Box::new(move || set_size(&root, &path, size));
+                defer(sessions, "fsp-srv.IFile.SetSize", work, unknown)
+            }
+            READ | WRITE => {
+                // Option u32, padding u32, offset s64, size u64; the data is in the first
+                // receive (Read) or send (Write) buffer (note §3).
+                let buffer = if command == READ {
+                    msg.receives().next()
+                } else {
+                    msg.sends().next()
+                };
+                let allowed = if command == READ {
+                    self.mode & MODE_READ != 0
+                } else {
+                    may_write
+                };
+                let (Some(option), Some(offset), Some(size), Some(buffer), true) = (
+                    word(params, 0),
+                    dword(params, 8),
+                    dword(params, 16),
+                    buffer,
+                    allowed,
+                ) else {
+                    return reply_now(message, PATH_NOT_FOUND, unknown);
+                };
+                if command == WRITE && size > buffer.size {
+                    // Writing less than asked while reporting success would lose data.
+                    return reply_now(message, BAD_BUFFER, unknown);
+                }
+                let mem = Arc::clone(&self.shared.mem);
+                // GUESS: a `Read` larger than its buffer reads only what fits (note §4).
+                let range = Transfer {
+                    offset,
+                    len: size.min(buffer.size),
+                    at: GuestVa::new(buffer.address),
+                };
+                if command == READ {
+                    let work = Box::new(move || read_file(&mem, &root, &path, range));
+                    return defer(sessions, "fsp-srv.IFile.Read", work, unknown);
+                }
+                let write = WriteFlags {
+                    append: self.mode & MODE_APPEND != 0,
+                    flush: option & WRITE_OPTION_FLUSH != 0,
+                };
+                let work = Box::new(move || write_file(&mem, &root, &path, range, write));
+                defer(sessions, "fsp-srv.IFile.Write", work, unknown)
             }
             _ => Err(unknown),
         }
@@ -272,10 +357,10 @@ fn file_size(root: &Path, path: &Path) -> DeferredReply {
     )
 }
 
-/// What an `IFile` `Read` asks for: up to `len` bytes from `offset`, into guest memory at
-/// `at`.
+/// What an `IFile` `Read` or `Write` moves: up to `len` bytes at file `offset`, from or to
+/// guest memory at `at`.
 #[derive(Clone, Copy)]
-struct ReadRange {
+struct Transfer {
     offset: u64,
     len: u64,
     at: GuestVa,
@@ -284,10 +369,126 @@ struct ReadRange {
 /// `IFile` `Read` on the service-I/O thread: the bytes `range` asks for, written to guest
 /// memory, replying with the count. The calling guest thread waits meanwhile, so its buffer
 /// is not in use (ADR-0019 shares guest memory between threads).
-fn read_file(mem: &AddressSpace, root: &Path, path: &Path, range: ReadRange) -> DeferredReply {
+fn read_file(mem: &AddressSpace, root: &Path, path: &Path, range: Transfer) -> DeferredReply {
     let read = confined(root, path).and_then(|path| read_into(mem, &path, range));
+    // GUESS: every host failure is `PathNotFound`; T-065 records which one it was.
     DeferredReply::Keep(match read {
-        Ok(count) => reply(SUCCESS, None, &count.to_le_bytes()),
+        Ok(Some(count)) => reply(SUCCESS, None, &count.to_le_bytes()),
+        Ok(None) => reply(BAD_BUFFER, None, &[]),
+        Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+    })
+}
+
+/// How an `IFile` `Write` may change the file.
+#[derive(Clone, Copy)]
+struct WriteFlags {
+    /// Opened with the append bit: a write may grow the file.
+    append: bool,
+    /// The write option asked for a flush afterwards.
+    flush: bool,
+}
+
+/// `IFile` `Write` on the service-I/O thread: copies `range.len` bytes from guest memory to the
+/// file, [`IO_CHUNK`] bytes at a time. Without the append bit a write past the end fails with
+/// [`OUT_OF_RANGE`] and changes nothing (note §3). A source buffer the guest cannot read
+/// fails with [`BAD_BUFFER`] before the file is touched; only another guest thread unmapping
+/// it during the copy can still leave the file partly written, and that too is reported as
+/// [`BAD_BUFFER`]. With the append bit, an offset past the end grows the file and zero-fills
+/// the gap, as the guest asked of its own SD card.
+fn write_file(
+    mem: &AddressSpace,
+    root: &Path,
+    path: &Path,
+    range: Transfer,
+    flags: WriteFlags,
+) -> DeferredReply {
+    let written = if readable(mem, range) {
+        confined(root, path).and_then(|path| write_into(mem, &path, range, flags))
+    } else {
+        Ok(BAD_BUFFER)
+    };
+    // GUESS: every host failure (a full disk, a permission) is `PathNotFound`; T-065 records
+    // which one it was.
+    DeferredReply::Keep(reply(written.unwrap_or(PATH_NOT_FOUND), None, &[]))
+}
+
+/// The write itself, on a confined path; returns the result code for the guest.
+fn write_into(
+    mem: &AddressSpace,
+    path: &Path,
+    range: Transfer,
+    flags: WriteFlags,
+) -> io::Result<u32> {
+    let mut file = OpenOptions::new().write(true).open(path)?;
+    let end = range
+        .offset
+        .checked_add(range.len)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "the write ends past 2^64"))?;
+    if !flags.append && end > file.metadata()?.len() {
+        return Ok(OUT_OF_RANGE);
+    }
+    file.seek(SeekFrom::Start(range.offset))?;
+    let mut chunk = vec![0u8; chunk_len(range.len)];
+    let mut done = 0u64;
+    while done < range.len {
+        let n = chunk_len(range.len - done);
+        if mem
+            .read_bytes(range.at.wrapping_add(done), &mut chunk[..n])
+            .is_err()
+        {
+            return Ok(BAD_BUFFER);
+        }
+        file.write_all(&chunk[..n])?;
+        done += n as u64;
+    }
+    if flags.flush {
+        file.sync_data()?;
+    }
+    Ok(SUCCESS)
+}
+
+/// Whether the guest can read every page of `range`: one byte per page, so a bad buffer is
+/// found before a write touches the file.
+fn readable(mem: &AddressSpace, range: Transfer) -> bool {
+    if range.len == 0 {
+        return true;
+    }
+    let mut byte = [0u8];
+    let first_page = range.at.get() / GUEST_PAGE_SIZE;
+    let last = range.at.get().saturating_add(range.len - 1);
+    (first_page..=last / GUEST_PAGE_SIZE).all(|page| {
+        let at = (page * GUEST_PAGE_SIZE).max(range.at.get());
+        mem.read_bytes(GuestVa::new(at), &mut byte).is_ok()
+    })
+}
+
+/// Bytes the next copy step moves when `left` remain: at most [`IO_CHUNK`].
+fn chunk_len(left: u64) -> usize {
+    usize::try_from(left).map_or(IO_CHUNK, |left| left.min(IO_CHUNK))
+}
+
+/// `IFile` `Flush` on the service-I/O thread: syncs the file's data to the host disk. Nothing
+/// to flush on a file not opened for writing.
+// GUESS: flushing a read-only file succeeds (note §4 has no result for it).
+fn flush_file(root: &Path, path: &Path, may_write: bool) -> DeferredReply {
+    let flushed = confined(root, path).and_then(|path| {
+        if may_write {
+            OpenOptions::new().write(true).open(path)?.sync_data()?;
+        }
+        Ok(())
+    });
+    DeferredReply::Keep(match flushed {
+        Ok(()) => reply(SUCCESS, None, &[]),
+        Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+    })
+}
+
+/// `IFile` `SetSize` on the service-I/O thread: truncates or zero-extends the file.
+fn set_size(root: &Path, path: &Path, size: u64) -> DeferredReply {
+    let resized = confined(root, path)
+        .and_then(|path| OpenOptions::new().write(true).open(path)?.set_len(size));
+    DeferredReply::Keep(match resized {
+        Ok(()) => reply(SUCCESS, None, &[]),
         Err(_) => reply(PATH_NOT_FOUND, None, &[]),
     })
 }
@@ -340,26 +541,29 @@ fn confined(root: &Path, path: &Path) -> io::Result<PathBuf> {
 }
 
 /// Copies up to `range.len` bytes of `path` from `range.offset` into guest memory at
-/// `range.at`, [`READ_CHUNK`] bytes at a time, so a large read never buffers more than one
-/// chunk on the host. Returns the count: fewer at the end of the file, none past it.
+/// `range.at`, [`IO_CHUNK`] bytes at a time, so a large read never buffers more than one
+/// chunk on the host. Returns the count: fewer at the end of the file, none past it; `None`
+/// when the guest buffer cannot be written.
 // GUESS: a short read at the end of the file succeeds with the shorter count (note §4).
-fn read_into(mem: &AddressSpace, path: &Path, range: ReadRange) -> io::Result<u64> {
+fn read_into(mem: &AddressSpace, path: &Path, range: Transfer) -> io::Result<Option<u64>> {
     let mut file = File::open(path)?;
     file.seek(SeekFrom::Start(range.offset))?;
-    let mut chunk = vec![0u8; READ_CHUNK];
+    let mut chunk = vec![0u8; chunk_len(range.len)];
     let mut done = 0u64;
     while done < range.len {
-        let want =
-            usize::try_from(range.len - done).map_or(READ_CHUNK, |left| left.min(READ_CHUNK));
-        let got = file.read(&mut chunk[..want])?;
+        let got = file.read(&mut chunk[..chunk_len(range.len - done)])?;
         if got == 0 {
             break;
         }
-        mem.write_bytes(range.at.wrapping_add(done), &chunk[..got])
-            .map_err(|e| io::Error::other(e.to_string()))?;
+        if mem
+            .write_bytes(range.at.wrapping_add(done), &chunk[..got])
+            .is_err()
+        {
+            return Ok(None);
+        }
         done += got as u64;
     }
-    Ok(done)
+    Ok(Some(done))
 }
 
 /// Defers `work`; without a service-I/O thread the request is an unknown command, so the

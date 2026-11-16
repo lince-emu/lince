@@ -63,6 +63,15 @@ fn wrong_arguments_print_the_usage() {
         &["run", "x.nro", "y.nro"],
         &["run", "--coverage", "--coverage", "x.nro"],
         &["run", "--verbose", "x.nro"],
+        &["run", "--sd-writable", "x.nro"],
+        &[
+            "run",
+            "--sd",
+            "d",
+            "--sd-writable",
+            "--sd-writable",
+            "x.nro",
+        ],
     ] {
         let output = lince(args);
         assert_eq!(output.status.code(), Some(2), "{args:?}");
@@ -162,4 +171,14 @@ fn a_missing_sd_directory_is_reported_before_the_run() {
         String::from_utf8_lossy(&output.stderr).contains("as the SD card"),
         "{output:?}"
     );
+}
+
+#[test]
+fn the_b2_program_passes_with_a_writable_host_sd_card() {
+    let sd = std::env::temp_dir().join(format!("lince-run-sd-rw-{}", std::process::id()));
+    std::fs::create_dir_all(&sd).expect("create the SD directory");
+    let path = sd.to_string_lossy().into_owned();
+    let output = lince(&["run", "--sd", &path, "--sd-writable", &homebrew("b2.nro")]);
+    std::fs::remove_dir_all(&sd).expect("remove the SD directory");
+    assert!(output.status.success(), "{output:?}");
 }
