@@ -88,9 +88,12 @@ pub struct Options {
     /// Coverage mode: an unknown SVC or IPC command returns an error to the guest instead of
     /// stopping the run ([`Kernel::set_keep_going`]).
     pub coverage: bool,
-    /// A host directory `fsp-srv` serves as the SD card (read-only, T-064); without it the
-    /// SD card is a stub with no commands.
+    /// A host directory `fsp-srv` serves as the SD card (T-064); without it the SD card is a
+    /// stub with no commands.
     pub sd: Option<PathBuf>,
+    /// Lets the guest change files in [`sd`](Self::sd); read-only otherwise (maintainer,
+    /// 2026-11-16).
+    pub sd_writable: bool,
 }
 
 /// What a run that reached its exit reports.
@@ -136,14 +139,20 @@ pub fn run_nro(file: &[u8], out: &mut impl Write, options: &Options) -> Result<R
     let mut kernel = Kernel::new(&mut trace)?;
     kernel.set_keep_going(options.coverage);
     let sd = match &options.sd {
-        Some(path) => {
-            Some(
-                SdCard::new(path, Arc::clone(&mem)).map_err(|source| AppError::SdCard {
+        Some(path) => Some(
+            SdCard::new(path, Arc::clone(&mem))
+                .map(|sd| {
+                    if options.sd_writable {
+                        sd.writable()
+                    } else {
+                        sd
+                    }
+                })
+                .map_err(|source| AppError::SdCard {
                     path: path.clone(),
                     source,
                 })?,
-            )
-        }
+        ),
         None => None,
     };
     if sd.is_some() {
