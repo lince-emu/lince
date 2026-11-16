@@ -25,8 +25,8 @@ The PR title **is** the final commit header after squash merging, so it follows
 feat(cache): add memory-mapped open-addressing index
 ```
 
-The task id goes in the body (`Refs: T-xxx`), not in the title. The title is at most **66**
-characters: GitHub appends ` (#NN)` to it in the squash commit, which must stay ≤ 72
+The task id goes in the body (`Refs: T-xxx`), not in the title. The title is at most **92**
+characters: GitHub appends ` (#NNNN)` to it in the squash commit, which must stay ≤ 100
 (`cargo xtask ci --pr-title` checks it).
 
 ## 3. Pull request body
