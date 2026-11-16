@@ -5,7 +5,7 @@
 
 use std::thread;
 
-use lince_trace::{EventKind, ThreadRole, Trace};
+use lince_trace::{EventKind, HostIoError, ThreadRole, Trace};
 
 #[test]
 fn a_stub_is_recorded_only_the_first_time_it_runs() {
@@ -218,4 +218,32 @@ fn a_run_without_unknown_calls_has_an_empty_coverage_list() {
     trace.recorder(ThreadRole::GuestCore).stub(stub);
     let drained = trace.drain();
     assert_eq!(trace.unimplemented(&drained), []);
+}
+
+#[test]
+fn a_host_io_failure_is_recorded_once_per_object_command_and_error() {
+    let mut trace = Trace::new(16);
+    let file = trace.name("fsp-srv.IFile").unwrap();
+    let mut recorder = trace.recorder(ThreadRole::Other);
+
+    assert!(recorder.host_io_failed(file, 0, HostIoError::NotFound));
+    assert!(!recorder.host_io_failed(file, 0, HostIoError::NotFound));
+    assert!(recorder.host_io_failed(file, 0, HostIoError::GuestMemory));
+    assert!(recorder.host_io_failed(file, 1, HostIoError::NotFound));
+
+    let drained = trace.drain();
+    let failures: Vec<_> = drained
+        .records
+        .iter()
+        .filter_map(|r| trace.host_io_failure(&r.event))
+        .collect();
+    assert_eq!(
+        failures,
+        [
+            ("fsp-srv.IFile", 0, HostIoError::NotFound),
+            ("fsp-srv.IFile", 0, HostIoError::GuestMemory),
+            ("fsp-srv.IFile", 1, HostIoError::NotFound),
+        ]
+    );
+    assert_eq!(trace.unknown_command(&drained.records[0].event), None);
 }

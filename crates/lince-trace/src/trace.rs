@@ -16,7 +16,7 @@ use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError, sync_cha
 use std::time::Instant;
 
 use crate::error::{Result, TraceError};
-use crate::event::{Event, EventKind, ThreadRole};
+use crate::event::{Event, EventKind, HostIoError, ThreadRole};
 
 /// A registered name; the argument of [`EventKind::Stub`] events (payloads hold no strings,
 /// PAT-07).
@@ -116,6 +116,18 @@ impl Trace {
         Some((self.names.get(index).copied()?, command))
     }
 
+    /// The object name, command id and error class an [`EventKind::HostIoFailed`] event
+    /// refers to; `None` for other kinds.
+    pub fn host_io_failure(&self, event: &Event) -> Option<(&'static str, u16, HostIoError)> {
+        if event.kind != EventKind::HostIoFailed {
+            return None;
+        }
+        let index = usize::try_from(event.arg >> 32).ok()?;
+        let command = u16::try_from(event.arg >> 16 & 0xFFFF).ok()?;
+        let error = HostIoError::from_raw(u16::try_from(event.arg & 0xFFFF).ok()?);
+        Some((self.names.get(index).copied()?, command, error))
+    }
+
     /// A recorder for one thread with the given role. Move it to that thread.
     pub fn recorder(&mut self, role: ThreadRole) -> Recorder {
         let (tx, rx) = sync_channel(self.capacity);
@@ -177,6 +189,16 @@ impl Recorder {
         self.once(
             EventKind::UnknownCommand,
             u64::from(name.0) << 32 | u64::from(command),
+        )
+    }
+
+    /// Records that `command` of object `name` failed on the host with `error`, the first
+    /// time only for that triple, so a guest probing missing files does not flood the buffer.
+    /// Returns whether it was recorded.
+    pub fn host_io_failed(&mut self, name: NameId, command: u16, error: HostIoError) -> bool {
+        self.once(
+            EventKind::HostIoFailed,
+            u64::from(name.0) << 32 | u64::from(command) << 16 | u64::from(error.to_raw()),
         )
     }
 

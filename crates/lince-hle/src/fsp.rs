@@ -17,6 +17,11 @@
 //! from guest memory and check it lexically (invariant 3). If no service-I/O thread runs, the
 //! request is an unknown command rather than I/O on the guest core.
 //!
+//! # Failures
+//! A request that fails on the service-I/O thread is recorded in `lince-trace` as a
+//! `HostIoFailed` event naming the object, the command and the class of the error (T-065),
+//! once per triple. The guest's result does not depend on the class.
+//!
 //! # Confinement
 //! A guest path never reaches outside the root: on the guest core it is split on `/` and any
 //! `..` component, backslash or colon rejects it; on the service-I/O thread the joined path is
@@ -26,6 +31,7 @@
 //! command makes one), so only the user's own host processes could, which Lince does not
 //! defend against.
 
+use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -37,7 +43,8 @@ use lince_kernel::{
     DeferredReply, IPC_MESSAGE_SIZE, IpcMessage, SessionObject, Sessions, UnknownCommand,
 };
 use lince_mem::{AddressSpace, GUEST_PAGE_SIZE};
-use lince_trace::{NameId, Trace, TraceError};
+use lince_trace::{HostIoError, NameId, Recorder, ThreadRole, Trace, TraceError};
+use parking_lot::Mutex;
 
 use crate::hipc::Message;
 use crate::sm::{OUT_OF_SESSIONS, ServiceRegistry};
@@ -139,6 +146,9 @@ struct Shared {
     file: NameId,
     directory: NameId,
     set_current_process: NameId,
+    /// Records why a request failed on the host. Only the service-I/O thread locks it, so it
+    /// is never contended and the guest core never waits for it.
+    failures: Mutex<Recorder>,
 }
 
 /// Registers `fsp-srv` serving `sd`. `false` if a service of that name is already there.
@@ -156,6 +166,7 @@ pub(crate) fn register(
         file: trace.name("fsp-srv.IFile")?,
         directory: trace.name("fsp-srv.IDirectory")?,
         set_current_process: trace.name("fsp-srv.SetCurrentProcess")?,
+        failures: Mutex::new(trace.recorder(ThreadRole::Other)),
     });
     Ok(registry.register(
         "fsp-srv",
@@ -239,9 +250,9 @@ impl SessionObject for FileSystem {
         let Some(path) = guest_path(&self.0, &msg) else {
             return reply_now(message, PATH_NOT_FOUND, unknown);
         };
-        let root = self.0.root.clone();
+        let op = Op::new(&self.0, self.0.file_system, command);
         if command == GET_ENTRY_TYPE {
-            let work = Box::new(move || entry_type(&root, &path));
+            let work = Box::new(move || entry_type(&op, &path));
             return defer(sessions, "fsp-srv.GetEntryType", work, unknown);
         }
         if command == OPEN_DIRECTORY {
@@ -255,7 +266,7 @@ impl SessionObject for FileSystem {
             let Some(handle) = sessions.open_session(directory) else {
                 return reply_now(message, OUT_OF_SESSIONS, unknown);
             };
-            let work = Box::new(move || open_directory(&root, &path, handle));
+            let work = Box::new(move || open_directory(&op, &path, handle));
             return defer(sessions, "fsp-srv.OpenDirectory", work, unknown);
         }
         let file = Box::new(OpenedFile {
@@ -266,7 +277,7 @@ impl SessionObject for FileSystem {
         let Some(handle) = sessions.open_session(file) else {
             return reply_now(message, OUT_OF_SESSIONS, unknown);
         };
-        let work = Box::new(move || open_file(&root, &path, handle));
+        let work = Box::new(move || open_file(&op, &path, handle));
         defer(sessions, "fsp-srv.OpenFile", work, unknown)
     }
 }
@@ -295,24 +306,25 @@ impl SessionObject for OpenedFile {
     ) -> Result<(), UnknownCommand> {
         let (msg, command, params) = read_request(message)?;
         let unknown = UnknownCommand { command };
-        let (root, path) = (self.shared.root.clone(), Arc::clone(&self.path));
+        let op = Op::new(&self.shared, self.shared.file, command);
+        let path = Arc::clone(&self.path);
         let may_write = self.mode & (MODE_WRITE | MODE_APPEND) != 0;
         // GUESS: a command the open mode does not allow fails like a missing path; the note
         // gives no result for it (§4).
         match command {
             GET_SIZE => {
-                let work = Box::new(move || file_size(&root, &path));
+                let work = Box::new(move || file_size(&op, &path));
                 defer(sessions, "fsp-srv.IFile.GetSize", work, unknown)
             }
             FLUSH => {
-                let work = Box::new(move || flush_file(&root, &path, may_write));
+                let work = Box::new(move || flush_file(&op, &path, may_write));
                 defer(sessions, "fsp-srv.IFile.Flush", work, unknown)
             }
             SET_SIZE => {
                 let Some(size) = dword(params, 0).filter(|_| may_write) else {
                     return reply_now(message, PATH_NOT_FOUND, unknown);
                 };
-                let work = Box::new(move || set_size(&root, &path, size));
+                let work = Box::new(move || set_size(&op, &path, size));
                 defer(sessions, "fsp-srv.IFile.SetSize", work, unknown)
             }
             READ | WRITE => {
@@ -341,7 +353,6 @@ impl SessionObject for OpenedFile {
                     // Writing less than asked while reporting success would lose data.
                     return reply_now(message, BAD_BUFFER, unknown);
                 }
-                let mem = Arc::clone(&self.shared.mem);
                 // GUESS: a `Read` larger than its buffer reads only what fits (note §4).
                 let range = Transfer {
                     offset,
@@ -349,14 +360,14 @@ impl SessionObject for OpenedFile {
                     at: GuestVa::new(buffer.address),
                 };
                 if command == READ {
-                    let work = Box::new(move || read_file(&mem, &root, &path, range));
+                    let work = Box::new(move || read_file(&op, &path, range));
                     return defer(sessions, "fsp-srv.IFile.Read", work, unknown);
                 }
                 let write = WriteFlags {
                     append: self.mode & MODE_APPEND != 0,
                     flush: option & WRITE_OPTION_FLUSH != 0,
                 };
-                let work = Box::new(move || write_file(&mem, &root, &path, range, write));
+                let work = Box::new(move || write_file(&op, &path, range, write));
                 defer(sessions, "fsp-srv.IFile.Write", work, unknown)
             }
             _ => Err(unknown),
@@ -393,7 +404,7 @@ impl SessionObject for OpenedDirectory {
         let (msg, command, _) = read_request(message)?;
         let unknown = UnknownCommand { command };
         let listing = Listing {
-            root: self.shared.root.clone(),
+            op: Op::new(&self.shared, self.shared.directory, command),
             path: Arc::clone(&self.path),
             filter: self.filter,
         };
@@ -407,11 +418,10 @@ impl SessionObject for OpenedDirectory {
                 let Some(buffer) = msg.receives().next() else {
                     return reply_now(message, BAD_BUFFER, unknown);
                 };
-                let mem = Arc::clone(&self.shared.mem);
                 let cursor = Arc::clone(&self.cursor);
                 let room = buffer.size / ENTRY_SIZE as u64;
                 let at = GuestVa::new(buffer.address);
-                let work = Box::new(move || read_directory(&mem, &listing, &cursor, room, at));
+                let work = Box::new(move || read_directory(&listing, &cursor, room, at));
                 defer(sessions, "fsp-srv.IDirectory.Read", work, unknown)
             }
             _ => Err(unknown),
@@ -419,9 +429,77 @@ impl SessionObject for OpenedDirectory {
     }
 }
 
-/// What an `IDirectory` lists: `path` under `root`, filtered by the `OpenDirectory` bits.
+/// The object and command a deferred request came from, so the service-I/O thread can record
+/// why it failed (T-065).
+struct Op {
+    shared: Arc<Shared>,
+    object: NameId,
+    command: u16,
+}
+
+impl Op {
+    fn new(shared: &Arc<Shared>, object: NameId, command: u32) -> Self {
+        Self {
+            shared: Arc::clone(shared),
+            object,
+            // Every command an object defers is below 0x100.
+            command: u16::try_from(command).unwrap_or(u16::MAX),
+        }
+    }
+
+    fn root(&self) -> &Path {
+        &self.shared.root
+    }
+
+    fn mem(&self) -> &AddressSpace {
+        &self.shared.mem
+    }
+
+    /// Records `error` once per object, command and class, and builds the reply `code`: the
+    /// guest gets the same result whatever the class.
+    fn fail(&self, error: HostIoError, code: u32) -> IpcMessage {
+        self.shared
+            .failures
+            .lock()
+            .host_io_failed(self.object, self.command, error);
+        reply(code, None, &[])
+    }
+
+    /// A host error, recorded by class; the guest sees `PathNotFound`.
+    // GUESS: every host failure is `PathNotFound` to the guest; the note gives no
+    // per-cause result (§4).
+    fn host(&self, error: &io::Error) -> IpcMessage {
+        self.fail(classify(error), PATH_NOT_FOUND)
+    }
+}
+
+/// The class of each host error kind [`classify`] tells apart. `io::ErrorKind` grows with
+/// Rust releases; a kind not listed here is `Other`.
+const CLASSES: [(io::ErrorKind, HostIoError); 5] = [
+    (io::ErrorKind::NotFound, HostIoError::NotFound),
+    (
+        io::ErrorKind::PermissionDenied,
+        HostIoError::PermissionDenied,
+    ),
+    (io::ErrorKind::NotADirectory, HostIoError::WrongType),
+    (io::ErrorKind::IsADirectory, HostIoError::WrongType),
+    (io::ErrorKind::StorageFull, HostIoError::StorageFull),
+];
+
+/// The class of a host error, for the trace; never its text or path (PAT-07).
+fn classify(error: &io::Error) -> HostIoError {
+    if matches!(error.get_ref(), Some(inner) if inner.is::<OutsideRoot>()) {
+        return HostIoError::OutsideRoot;
+    }
+    CLASSES
+        .iter()
+        .find(|(kind, _)| *kind == error.kind())
+        .map_or(HostIoError::Other, |&(_, class)| class)
+}
+
+/// What an `IDirectory` lists: `path` under the root, filtered by the `OpenDirectory` bits.
 struct Listing {
-    root: PathBuf,
+    op: Op,
     path: Arc<PathBuf>,
     filter: u32,
 }
@@ -440,14 +518,14 @@ impl Listing {
     // GUESS: the note gives no rule for names a guest could not hold; leaving them out keeps
     // every listed name one `OpenFile` accepts.
     fn entries(&self) -> io::Result<Vec<Entry>> {
-        let dir = confined(&self.root, &self.path)?;
+        let dir = confined(self.op.root(), &self.path)?;
         let mut entries = Vec::new();
         for item in dir.read_dir()? {
             let item = item?;
             let Ok(name) = item.file_name().into_string() else {
                 continue;
             };
-            let Ok(meta) = confined(&self.root, &item.path()).and_then(|real| real.metadata())
+            let Ok(meta) = confined(self.op.root(), &item.path()).and_then(|real| real.metadata())
             else {
                 continue;
             };
@@ -478,10 +556,11 @@ impl Listing {
 
 /// `OpenDirectory` on the service-I/O thread: hands out `handle` if `path` is a directory;
 /// otherwise the kernel closes that session, which the guest never learns.
-fn open_directory(root: &Path, path: &Path, handle: u32) -> DeferredReply {
-    match confined(root, path).and_then(|path| path.metadata()) {
+fn open_directory(op: &Op, path: &Path, handle: u32) -> DeferredReply {
+    match confined(op.root(), path).and_then(|path| path.metadata()) {
         Ok(meta) if meta.is_dir() => DeferredReply::Keep(reply(SUCCESS, Some(handle), &[])),
-        _ => DeferredReply::Release(reply(PATH_NOT_FOUND, None, &[])),
+        Ok(_) => DeferredReply::Release(op.fail(HostIoError::WrongType, PATH_NOT_FOUND)),
+        Err(error) => DeferredReply::Release(op.host(&error)),
     }
 }
 
@@ -490,22 +569,17 @@ fn open_directory(root: &Path, path: &Path, handle: u32) -> DeferredReply {
 fn entry_count(listing: &Listing) -> DeferredReply {
     DeferredReply::Keep(match listing.entries() {
         Ok(entries) => reply(SUCCESS, None, &(entries.len() as u64).to_le_bytes()),
-        Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+        Err(error) => listing.op.host(&error),
     })
 }
 
 /// `IDirectory` `Read` on the service-I/O thread: the next entries after `cursor`, at most
 /// `room` of them, written to guest memory at `at`; replies with the count, 0 when none
 /// remain (note §3). The cursor moves only when every entry reached the guest.
-fn read_directory(
-    mem: &AddressSpace,
-    listing: &Listing,
-    cursor: &AtomicU64,
-    room: u64,
-    at: GuestVa,
-) -> DeferredReply {
-    let Ok(entries) = listing.entries() else {
-        return DeferredReply::Keep(reply(PATH_NOT_FOUND, None, &[]));
+fn read_directory(listing: &Listing, cursor: &AtomicU64, room: u64, at: GuestVa) -> DeferredReply {
+    let entries = match listing.entries() {
+        Ok(entries) => entries,
+        Err(error) => return DeferredReply::Keep(listing.op.host(&error)),
     };
     let start = cursor.load(Ordering::Relaxed);
     let mut count = 0u64;
@@ -519,11 +593,9 @@ fn read_directory(
         raw[..entry.name.len()].copy_from_slice(entry.name.as_bytes());
         raw[ENTRY_TYPE_AT] = u8::from(!entry.directory);
         raw[ENTRY_SIZE_AT..].copy_from_slice(&entry.size.to_le_bytes());
-        if mem
-            .write_bytes(at.wrapping_add(count * ENTRY_SIZE as u64), &raw)
-            .is_err()
-        {
-            return DeferredReply::Keep(reply(BAD_BUFFER, None, &[]));
+        let to = at.wrapping_add(count * ENTRY_SIZE as u64);
+        if listing.op.mem().write_bytes(to, &raw).is_err() {
+            return DeferredReply::Keep(listing.op.fail(HostIoError::GuestMemory, BAD_BUFFER));
         }
         count += 1;
     }
@@ -532,31 +604,32 @@ fn read_directory(
 }
 
 /// `GetEntryType` on the service-I/O thread: 0 for a directory, 1 for a file.
-fn entry_type(root: &Path, path: &Path) -> DeferredReply {
+fn entry_type(op: &Op, path: &Path) -> DeferredReply {
     DeferredReply::Keep(
-        match confined(root, path).and_then(|path| path.metadata()) {
+        match confined(op.root(), path).and_then(|path| path.metadata()) {
             Ok(meta) if meta.is_dir() => reply(SUCCESS, None, &ENTRY_DIRECTORY.to_le_bytes()),
             Ok(_) => reply(SUCCESS, None, &ENTRY_FILE.to_le_bytes()),
-            Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+            Err(error) => op.host(&error),
         },
     )
 }
 
 /// `OpenFile` on the service-I/O thread: hands out `handle` if `path` is a file; otherwise the
 /// kernel closes that session, which the guest never learns.
-fn open_file(root: &Path, path: &Path, handle: u32) -> DeferredReply {
-    match confined(root, path).and_then(|path| path.metadata()) {
+fn open_file(op: &Op, path: &Path, handle: u32) -> DeferredReply {
+    match confined(op.root(), path).and_then(|path| path.metadata()) {
         Ok(meta) if meta.is_file() => DeferredReply::Keep(reply(SUCCESS, Some(handle), &[])),
-        _ => DeferredReply::Release(reply(PATH_NOT_FOUND, None, &[])),
+        Ok(_) => DeferredReply::Release(op.fail(HostIoError::WrongType, PATH_NOT_FOUND)),
+        Err(error) => DeferredReply::Release(op.host(&error)),
     }
 }
 
 /// `IFile` `GetSize` on the service-I/O thread.
-fn file_size(root: &Path, path: &Path) -> DeferredReply {
+fn file_size(op: &Op, path: &Path) -> DeferredReply {
     DeferredReply::Keep(
-        match confined(root, path).and_then(|path| path.metadata()) {
+        match confined(op.root(), path).and_then(|path| path.metadata()) {
             Ok(meta) => reply(SUCCESS, None, &meta.len().to_le_bytes()),
-            Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+            Err(error) => op.host(&error),
         },
     )
 }
@@ -573,13 +646,12 @@ struct Transfer {
 /// `IFile` `Read` on the service-I/O thread: the bytes `range` asks for, written to guest
 /// memory, replying with the count. The calling guest thread waits meanwhile, so its buffer
 /// is not in use (ADR-0019 shares guest memory between threads).
-fn read_file(mem: &AddressSpace, root: &Path, path: &Path, range: Transfer) -> DeferredReply {
-    let read = confined(root, path).and_then(|path| read_into(mem, &path, range));
-    // GUESS: every host failure is `PathNotFound`; T-065 records which one it was.
+fn read_file(op: &Op, path: &Path, range: Transfer) -> DeferredReply {
+    let read = confined(op.root(), path).and_then(|path| read_into(op.mem(), &path, range));
     DeferredReply::Keep(match read {
         Ok(Some(count)) => reply(SUCCESS, None, &count.to_le_bytes()),
-        Ok(None) => reply(BAD_BUFFER, None, &[]),
-        Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+        Ok(None) => op.fail(HostIoError::GuestMemory, BAD_BUFFER),
+        Err(error) => op.host(&error),
     })
 }
 
@@ -599,21 +671,17 @@ struct WriteFlags {
 /// it during the copy can still leave the file partly written, and that too is reported as
 /// [`BAD_BUFFER`]. With the append bit, an offset past the end grows the file and zero-fills
 /// the gap, as the guest asked of its own SD card.
-fn write_file(
-    mem: &AddressSpace,
-    root: &Path,
-    path: &Path,
-    range: Transfer,
-    flags: WriteFlags,
-) -> DeferredReply {
-    let written = if readable(mem, range) {
-        confined(root, path).and_then(|path| write_into(mem, &path, range, flags))
+fn write_file(op: &Op, path: &Path, range: Transfer, flags: WriteFlags) -> DeferredReply {
+    let written = if readable(op.mem(), range) {
+        confined(op.root(), path).and_then(|path| write_into(op.mem(), &path, range, flags))
     } else {
         Ok(BAD_BUFFER)
     };
-    // GUESS: every host failure (a full disk, a permission) is `PathNotFound`; T-065 records
-    // which one it was.
-    DeferredReply::Keep(reply(written.unwrap_or(PATH_NOT_FOUND), None, &[]))
+    DeferredReply::Keep(match written {
+        Ok(BAD_BUFFER) => op.fail(HostIoError::GuestMemory, BAD_BUFFER),
+        Ok(code) => reply(code, None, &[]),
+        Err(error) => op.host(&error),
+    })
 }
 
 /// The write itself, on a confined path; returns the result code for the guest.
@@ -674,8 +742,8 @@ fn chunk_len(left: u64) -> usize {
 /// `IFile` `Flush` on the service-I/O thread: syncs the file's data to the host disk. Nothing
 /// to flush on a file not opened for writing.
 // GUESS: flushing a read-only file succeeds (note §4 has no result for it).
-fn flush_file(root: &Path, path: &Path, may_write: bool) -> DeferredReply {
-    let flushed = confined(root, path).and_then(|path| {
+fn flush_file(op: &Op, path: &Path, may_write: bool) -> DeferredReply {
+    let flushed = confined(op.root(), path).and_then(|path| {
         if may_write {
             OpenOptions::new().write(true).open(path)?.sync_data()?;
         }
@@ -683,17 +751,17 @@ fn flush_file(root: &Path, path: &Path, may_write: bool) -> DeferredReply {
     });
     DeferredReply::Keep(match flushed {
         Ok(()) => reply(SUCCESS, None, &[]),
-        Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+        Err(error) => op.host(&error),
     })
 }
 
 /// `IFile` `SetSize` on the service-I/O thread: truncates or zero-extends the file.
-fn set_size(root: &Path, path: &Path, size: u64) -> DeferredReply {
-    let resized = confined(root, path)
+fn set_size(op: &Op, path: &Path, size: u64) -> DeferredReply {
+    let resized = confined(op.root(), path)
         .and_then(|path| OpenOptions::new().write(true).open(path)?.set_len(size));
     DeferredReply::Keep(match resized {
         Ok(()) => reply(SUCCESS, None, &[]),
-        Err(_) => reply(PATH_NOT_FOUND, None, &[]),
+        Err(error) => op.host(&error),
     })
 }
 
@@ -737,12 +805,22 @@ fn confined(root: &Path, path: &Path) -> io::Result<PathBuf> {
     if real.starts_with(root) {
         Ok(real)
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "the path leaves the SD-card root",
-        ))
+        Err(io::Error::new(io::ErrorKind::PermissionDenied, OutsideRoot))
     }
 }
+
+/// The error [`confined`] returns for a path that resolves outside the root, so [`classify`]
+/// can tell it from any other refused access.
+#[derive(Debug)]
+struct OutsideRoot;
+
+impl fmt::Display for OutsideRoot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("the path leaves the SD-card root")
+    }
+}
+
+impl std::error::Error for OutsideRoot {}
 
 /// Copies up to `range.len` bytes of `path` from `range.offset` into guest memory at
 /// `range.at`, [`IO_CHUNK`] bytes at a time, so a large read never buffers more than one
