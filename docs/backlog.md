@@ -77,9 +77,9 @@ Rules:
 | T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | Done | T-064 | 0024, 0027 |
 | T-066 | `lince-trace` + `lince-app`: list host I/O failures in the `lince run --coverage` report | Impl | Done | T-065 | 0027 |
 | T-067 | Break B3 into tasks | Docs | Done | T-056 | 0024, 0025 |
-| T-068 | Mark the **B3 scope** in ADR-0004, 0019, 0024 and 0025 | Docs | In progress | T-067 | 0004, 0019, 0024, 0025 |
+| T-068 | Mark the **B3 scope** in ADR-0004, 0019, 0024 and 0025 | Docs | Done | T-067 | 0004, 0019, 0024, 0025 |
 | T-069 | Review the B3 ADRs for acceptance (B3 scope of 0004, 0019, 0024, 0025; the `lz4_flex` dependency) | Maintainer | Done | T-068 | 0004, 0019, 0024, 0025 |
-| T-070 | Research: ExeFS, NPDM, NSO, the rtld/subsdk module chain and RomFS (public sources) | Research | Ready | — | 0024, 0025 |
+| T-070 | Research: ExeFS, NPDM, NSO, the rtld/subsdk module chain and RomFS (public sources) | Research | In progress | — | 0024, 0025 |
 | T-071 | Research: the services and calls a title makes before its first GPU submission (`am`/applet, `nvdrv`, `vi`, Switch 2-only services) | Research | Ready | — | 0024, 0025 |
 | T-072 | Test title: a team-written ExeFS (NPDM, a loader-stub NSO, main NSO, one subsdk) and a RomFS directory, built by `xtask` | Impl | Blocked | T-070 | 0001, 0002 |
 | T-073 | `lince-loader`: NPDM and NSO (segments, LZ4, permissions, `.bss`), modules loaded in ExeFS order | Impl | Blocked | T-069, T-070 | 0019, 0024, 0025 |

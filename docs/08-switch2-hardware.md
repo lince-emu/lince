@@ -77,6 +77,9 @@ projects (Lichii `NX2_NOTES.md` "Prioritized next steps" item 3 lists guesses st
 - Which guest priority each of the six cores time slices, and the length of the quantum; the
   Switch 1 kernel slices 59 on cores 0 to N-2 and 63 on the last core every 10 ms
   (`docs/research/ryujinx-kernel-scheduler.md`; ADR-0032 keeps it a configurable table).
+- Whether the ExeFS, NPDM and NSO formats are unchanged from Switch 1, and whether Switch 2
+  titles compress NSO segments with LZ4 or with the zstd-based codec of NSO flag bit 7
+  (`docs/research/exefs-npdm-nso-romfs.md` §Switch 2).
 
 ## 5. Implications for Lince
 
