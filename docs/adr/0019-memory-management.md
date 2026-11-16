@@ -1,7 +1,7 @@
 # ADR-0019: Guest and host memory management
 
 - **Status:** Partially accepted. **B1 scope** and **B2 scope** accepted (maintainer,
-  2026-11-14); the rest stays Proposed.
+  2026-11-14); **B3 scope** accepted (maintainer, 2026-11-16); the rest stays Proposed.
 - **Date:** 2026-11-13
 - **Related:** doc 01 E13, doc 04 §4; ADR-0021, ADR-0022
 
@@ -45,8 +45,9 @@ are read and written without that lock, through atomics where the guest asks for
 permissions (text read-execute, rodata read-only, data and zeroed `.bss` read-write), the
 modules placed at consecutive addresses in ExeFS order (T-073), and the address-space layout
 the NPDM selects (T-074). Only the 39-bit layout is supported; an NPDM asking for another is
-rejected with a typed error. A write to a read-only or execute-only region is a reported
-guest fault, never a silent success. Fastmem, write tracking and the GPU page table stay out.
+rejected with a typed error and listed by `--coverage`; the other layouts come with Switch 1
+(maintainer, 2026-11-16). A write to a read-only or execute-only region is a reported guest
+fault, never a silent success. Fastmem, write tracking and the GPU page table stay out.
 
 **Keep native execution possible.** The guest address-space layout must not rule out native
 execution on ARM64 hosts later (ADR-0005 option 4): the guest space is reserved as one

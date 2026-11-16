@@ -1,7 +1,7 @@
 # ADR-0024: HLE architecture
 
 - **Status:** Partially accepted. **B1 scope** and **B2 scope** accepted (maintainer,
-  2026-11-14); the rest stays Proposed.
+  2026-11-14); **B3 scope** accepted (maintainer, 2026-11-16); the rest stays Proposed.
 - **Date:** 2026-11-13
 - **Related:** doc 08 §3; doc 09; ADR-0017
 
@@ -49,8 +49,12 @@ is logged, never dropped silently; T-074); the `am`/applet services a title open
 (T-076); `nvdrv` and `vi` to their first GPU submission, which ends the run and is reported
 (T-077); and the title's RomFS served by `fsp-srv` from a directory the user extracted, on
 the service-I/O role thread and confined to that directory (T-075). New services follow the
-B2 rules: stubs log by name and are listed by `--coverage`; the ledger event, the debug
-auto-stub mode and CMIF domains stay out.
+B2 rules: stubs log by name and are listed by `--coverage`; the ledger event and the debug
+auto-stub mode stay out. CMIF domains come into B3 (T-082), because real titles convert
+sessions such as `am`'s to domains and the B3 exit runs a real title (T-081). NSO segments are
+decompressed with `lz4_flex` in its safe-decode mode (doc 04 §6); a zstd-compressed NSO is
+rejected with a typed error until a title shows it is needed, and then a pure-Rust decoder is
+preferred over the C `zstd` (maintainer, 2026-11-16).
 
 ## Technical justification
 Declarative descriptions make protocol differences between Switch 1 and 2 explicit and testable;

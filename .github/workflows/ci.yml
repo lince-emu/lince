@@ -3,6 +3,9 @@ name: CI
 
 on:
   pull_request:
+    # `edited` re-checks the title (`--pr-title`) after a rename. It also fires on body edits;
+    # the jobs still run then, because a skipped job would report success over a failed run.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
