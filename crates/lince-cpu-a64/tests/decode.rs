@@ -103,7 +103,7 @@ fn decode_finds_the_form_when_the_word_is_a_b1_load_or_store() {
 #[test]
 fn decode_reports_unknown_when_a_field_holds_a_reserved_value() {
     let cases = [
-        (0x0000_0000, "udf #0 (permanently undefined)"),
+        (0x0001_0000, "reserved group (op0 = 0b0000) outside UDF"),
         (0x8bc0_0000, "ADD (shifted register) with shift = 0b11"),
         (0x0b00_8000, "32-bit ADD (shifted register) with imm6 = 32"),
         (0x2a00_8000, "32-bit ORR (shifted register) with imm6 = 32"),
@@ -139,4 +139,34 @@ fn insn_formats_as_its_name() {
 
     assert_eq!(insn.to_string(), "RET");
     assert_eq!(format!("{insn:?}"), "RET");
+}
+
+#[test]
+fn decode_finds_udf_for_the_permanently_undefined_words_of_the_reserved_group() {
+    // Arm ARM C6.2 UDF: op0 = 0b0000 with bits 31:16 zero; the zero words that pad a code
+    // segment are UDF #0.
+    assert_eq!(name_of(0x0000_0000).as_deref(), Some("UDF"), "udf #0");
+    assert_eq!(name_of(0x0000_ffff).as_deref(), Some("UDF"), "udf #0xffff");
+    assert_eq!(
+        name_of(0x0001_0000),
+        None,
+        "reserved group with bits 31:16 nonzero"
+    );
+}
+
+#[test]
+fn decode_matches_every_group_a_pattern_spans_when_its_op0_bits_vary() {
+    // CBZ fixes bits 30:25 = 0b011010, so it lives in op0 group 0b1010 only; B leaves bit 25
+    // as an imm26 bit, so its pattern spans groups 0b1010 and 0b1011.
+    assert_eq!(
+        name_of(0x1400_0001).as_deref(),
+        Some("B"),
+        "b, imm26 bit 25 clear"
+    );
+    assert_eq!(
+        name_of(0x1600_0000).as_deref(),
+        Some("B"),
+        "b, imm26 bit 25 set"
+    );
+    assert_eq!(name_of(0xb400_0193).as_deref(), Some("CBZ"), "cbz x19");
 }

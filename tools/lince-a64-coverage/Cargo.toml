@@ -1,0 +1,15 @@
+[package]
+name = "lince-a64-coverage"
+description = "Lists the A64 encodings an executable uses that the decoder's table lacks (ADR-0004, T-040)"
+license = "GPL-3.0-or-later"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+lince-cpu-a64 = { path = "../../crates/lince-cpu-a64", version = "0.0.0" }
+lince-loader = { path = "../../crates/lince-loader", version = "0.0.0" }
+
+[lints]
+workspace = true

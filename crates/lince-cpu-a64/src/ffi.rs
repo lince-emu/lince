@@ -313,6 +313,7 @@ mod tests {
 
     #[test]
     fn decode_returns_none_when_the_word_is_unknown() {
-        assert_eq!(decode(0), None);
+        // Reserved group (op0 = 0b0000) with bits 31:16 nonzero: not UDF, not allocated.
+        assert_eq!(decode(0x0001_0000), None);
     }
 }
