@@ -74,6 +74,7 @@ Rules:
 | T-062 | Research: `fsp-srv` IFileSystem and IFile parameters and the path buffer (public sources) | Research | Done | T-054 | 0024 |
 | T-063 | `lince-kernel`: deferred IPC replies completed on the service-I/O thread | Impl | Done | T-057 | 0017, 0024 |
 | T-064 | `lince-hle`: `fsp-srv` file system on a host directory, served on the service-I/O thread | Impl | In progress | T-062, T-063 | 0017, 0024 |
+| T-065 | `lince-trace` + `lince-hle`: record why a host I/O request failed | Impl | Blocked | T-064 | 0024, 0027 |
 
 ## Details
 
@@ -544,6 +545,18 @@ Lands in steps (QUAL-62): (1) a deferred reply can release the sessions its requ
 so a failed `OpenFile` leaves no session the guest cannot name (also when the waiter is
 gone); (2) read-only `fsp-srv`: path sandbox, GetEntryType, OpenFile, IFile Read and GetSize,
 and `lince run --sd <dir>`; (3) IFile Write, Flush and SetSize, OpenDirectory and IDirectory.
+
+### T-065 — Record host I/O failures
+Found by invariant-reviewer on #79: `fsp-srv` maps every host failure (missing file, path
+outside the root, permission, read error, a guest-memory write that failed) to `PathNotFound`
+and drops the `io::Error`, so nothing tells the user or a developer what went wrong. Record
+each failure on the service-I/O thread through `lince-trace` (ADR-0027): a new event kind
+whose argument names the command and the host error kind, once per pair so a guest probing
+missing files does not flood the buffer. Payloads hold no strings or paths (PAT-07, and no
+user paths in logs). Start after T-064 step 3, so writes and directories record theirs too.
+- **Acceptance:** a test per failure class shows its event after the drain; the guest still
+  gets the same result code; a guest-memory write failure is distinguishable from a missing
+  file.
 
 ### T-055 — SVC and IPC coverage tool
 A run records every SVC and IPC command it reaches that has no implementation, and prints the
